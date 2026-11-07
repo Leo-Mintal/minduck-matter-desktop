@@ -1,5 +1,12 @@
 # Unexpected Errors
 
+## 2026-11-07 - Preview name broke the main Matter page
+
+- The task-local launcher set `app.setName('Minduck Matter 浏览器开发预览')`. Electron included the non-Latin app name in its default User-Agent; the protocol request adapter then threw `TypeError: Cannot convert argument to a ByteString` (character value 27983) before the bundled frontend handler could serve the document, producing `ERR_UNEXPECTED` and the unavailable page.
+- Process liveness and the browser settings controller's `等待登录` state did not prove that the Matter page had loaded. The previous startup report missed this distinction.
+- Stopped only that faulty preview and started the actual project with `node_modules/.bin/electron .` from the repository. Corrected the inactive temporary launcher's name to ASCII to avoid repeating the issue. Kept the existing development profile, login data and service origin intact; no production-code change, rebuild or reinstall was needed.
+- Verified the running standard-entry window through native accessibility: `Minduck Matter`, URL `http://127.0.0.1:8080/`, visible `欢迎登录` heading, email/password fields and login button. The bundled frontend's real Electron routes/assets/auth POST/upload/SSE/media/share smoke also passed; the new startup log has no ByteString or ERR_UNEXPECTED failure.
+
 ## 2026-11-07 - Native browser integration validation
 
 - The development-preview restart stopped its exact parent, then a `ps` lookup raced a terminating child and returned exit 1. The new preview still started; rechecked with exit-tolerant process reads, confirmed exactly one running preview and its waiting-login settings state, and restricted its log to 0600.
