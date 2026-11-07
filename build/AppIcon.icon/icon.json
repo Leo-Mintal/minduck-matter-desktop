@@ -1,0 +1,18 @@
+{
+  "groups" : [
+    {
+      "name" : "Duck",
+      "layers" : [
+        {
+          "name" : "Duck",
+          "image-name" : "Duck.png"
+        }
+      ]
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}

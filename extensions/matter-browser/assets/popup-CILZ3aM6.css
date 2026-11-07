@@ -1,0 +1,183 @@
+:root {
+  color-scheme: light;
+  --fg: #1c1c1e;
+  --fg-dim: #6b6b70;
+  --line: #e3e3e6;
+  --surface: #fff;
+  --surface2: #f6f6f7;
+  --brand: #ff9500;
+  --ok: #34c759;
+  --warn: #ff9f0a;
+  --risk: #ff3b30;
+  --mute: #c7c7cc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 360px;
+  font:
+    13px/1.55 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  color: var(--fg);
+  background: var(--surface);
+}
+
+.wrap {
+  padding: 14px 16px 16px;
+}
+
+h1 {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sub {
+  color: var(--fg-dim);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mute);
+  flex: none;
+}
+.dot.on {
+  background: var(--ok);
+}
+.dot.off {
+  background: var(--mute);
+}
+.dot.bad {
+  background: var(--risk);
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin: 10px 0 4px;
+}
+
+input[type='text'],
+textarea {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+  background: var(--surface);
+  color: var(--fg);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 56px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+button.danger {
+  color: var(--risk);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.err {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #fff1f0;
+  color: #a8251c;
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.log {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.log h2 {
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-weight: 500;
+  margin: 0 0 6px;
+}
+
+.entry {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 0;
+  color: var(--fg-dim);
+}
+
+.entry b {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.entry.bad b {
+  color: var(--risk);
+}
+
+.empty {
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+/* 「有新版」提示。用 warn 而不是 risk：旧版本能用，只是没跟上，不是故障。 */
+.notice {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: #fff8ec;
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.6;
+}

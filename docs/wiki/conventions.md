@@ -1,0 +1,11 @@
+# Conventions
+
+- Keep the shell minimal and do not add business logic that belongs to the web application.
+- Do not expose Node.js APIs to the remote renderer.
+- The local browser shell uses an allow-listed preload IPC bridge; arbitrary browser tabs and the Matter renderer do not have a preload bridge.
+- Right-side browser pages are created only by `ElectronBrowserHost`; keep their partition, navigation guards, webview attachment rejection, login handling, and native view teardown in that host instead of adding ad hoc tab logic to `main.cjs`.
+- Run project scripts and unit tests with Node `^20.19.0 || >=22.12.0` (declared in `package.json` `engines`, `.nvmrc` selects 24), matching the shared Web build's Vite requirement. Under Node 18, `pnpm test` hangs in `companion-actions` and fails the ESM figure import in `companion-suit-pose`; pnpm only warns about the engine mismatch and does not block scripts.
+- Development Electron runs use a separate `minduck-matter-desktop-dev` user-data directory by default, so they cannot share extension service workers or browser data with an installed application. Set `MINDUCK_USER_DATA_DIR` only when an explicit development profile is needed.
+- Treat only the exact resolved Matter origin as trusted. The default is `https://matter.minduck.com`; saved custom deployments must use HTTPS, while HTTP is allowed only for `localhost`, `127.0.0.1`, `[::1]`, or the exact test origin `http://192.168.11.70:3001`. Never use prefix matching for Matter navigation checks.
+- Agent Browser extensions must be bundled with the application. The Xiaohongshu extension is host-limited and must not collect credentials, drafts, or uploaded files. The user-provided Matter Browser extension has explicit broad permissions (`<all_urls>`, `tabs`, `scripting`, and `debugger`) to operate browser tabs; do not broaden those permissions further without review. Electron 44 does not expose `chrome.debugger` or `chrome.tabGroups` to extensions, so test browser automation through the provided `test:extension` command after upgrades.
+- macOS Full Disk Access is a user-controlled TCC permission. The desktop app may open the related System Settings page and use the protected TCC database as a local startup probe to avoid repeating a prompt after the user has granted access; it still cannot grant the permission itself.

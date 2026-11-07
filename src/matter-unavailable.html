@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Matter 页面暂时无法加载</title>
+    <style>
+      :root { color-scheme: light dark; font-family: "PingFang SC", "Inter", "Noto Sans SC", system-ui, sans-serif; --page: #f7f7f8; --surface: #fff; --text: #161719; --muted: #6f7278; --line: #dedfe3; --accent: #ff8a1f; }
+      @media (prefers-color-scheme: dark) { :root { --page: #030303; --surface: #161719; --text: #fff; --muted: #c9cbd1; --line: rgb(255 255 255 / 12%); --accent: #ff9500; } }
+      body { display: grid; min-height: 100vh; margin: 0; place-items: center; background: var(--page); color: var(--text); }
+      main { width: min(460px, calc(100vw - 48px)); padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 20px 50px rgb(0 0 0 / 18%); }
+      h1 { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
+      p { margin: 8px 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+      code { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+      button { height: 38px; margin-top: 14px; padding: 0 16px; border: 0; border-radius: 9px; background: var(--accent); color: #181818; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: filter 150ms ease, transform 100ms ease; }
+      button:hover { filter: brightness(1.06); }
+      button:active { transform: translateY(1px); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Matter 页面暂时无法加载</h1>
+      <p>当前业务服务：<code id="origin">未知地址</code>。</p>
+      <p>请重试加载本地页面；如果仍然失败，请重启或重新安装客户端。</p>
+      <button id="retry" type="button">重新加载</button>
+    </main>
+    <script>
+      const value = new URLSearchParams(location.search).get('origin') || 'https://matter.minduck.com'
+      let origin = 'https://matter.minduck.com'
+      try { origin = new URL(value).origin } catch {}
+      document.querySelector('#origin').textContent = origin
+      document.querySelector('#retry').addEventListener('click', () => location.assign(origin + '/'))
+    </script>
+  </body>
+</html>

@@ -1,0 +1,121 @@
+{
+  "name": "minduck-matter-desktop",
+  "version": "0.1.3",
+  "private": true,
+  "description": "Electron desktop app bundling the shared Matter web frontend.",
+  "main": "src/main.cjs",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "icon": "scripts/build-icon.sh",
+    "build:web": "node scripts/build-web.cjs",
+    "build:companion-qa": "node scripts/build-companion-qa.cjs",
+    "prestart": "pnpm run check:companion && pnpm run build:web",
+    "start": "electron .",
+    "test": "node --test scripts/*.test.cjs",
+    "test:local-exec": "node scripts/local-exec-smoke.cjs",
+    "test:bundled-frontend": "node scripts/bundled-frontend-smoke.cjs",
+    "test:extension": "electron scripts/matter-browser-extension-smoke.cjs",
+    "test:extension-bridge": "electron scripts/extension-bridge-probe.cjs",
+    "test:extension-compatibility": "electron scripts/matter-browser-extension-compatibility-smoke.cjs",
+    "dist:mac": "scripts/package-macos.sh",
+    "release:mac": "node scripts/release-macos.cjs",
+    "chromium:download": "bash minduck-matter-chromium/scripts/download-chromium-macos.sh",
+    "chromium:start": "node minduck-matter-chromium/scripts/launch.cjs",
+    "chromium:smoke": "node minduck-matter-chromium/scripts/extension-smoke.cjs",
+    "chromium:dist:mac": "bash minduck-matter-chromium/scripts/package-macos.sh",
+    "check:companion": "node scripts/check-companion.cjs",
+    "test:companion": "node scripts/companion-smoke.cjs",
+    "test:browser-chrome": "electron scripts/browser-chrome-smoke.cjs",
+    "test:matter-service-settings": "electron scripts/matter-service-settings-smoke.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "com.minduck.matter",
+    "productName": "Minduck Matter",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**",
+      "web-dist/**",
+      "extensions/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/AppIcon.icns",
+        "to": "AppIcon.icns"
+      },
+      {
+        "from": "build/Assets.car",
+        "to": "Assets.car"
+      },
+      {
+        "from": "vendor/coopanion/runtime",
+        "to": "companion-runtime",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "vendor/coopanion/LICENSE",
+        "to": "companion-notices/LICENSE"
+      },
+      {
+        "from": "vendor/coopanion/UPSTREAM.json",
+        "to": "companion-notices/UPSTREAM.json"
+      },
+      {
+        "from": "vendor/coopanion/README.md",
+        "to": "companion-notices/README.md"
+      },
+      {
+        "from": "src/companion/figures",
+        "to": "companion-figures"
+      },
+      {
+        "from": "vendor/coopanion/runtime/node_modules",
+        "to": "companion-runtime/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "src/local-exec/file-worker.cjs",
+      "extensions/**"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/AppIcon.icns",
+      "artifactName": "MinduckMatter-${version}-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "extendInfo": {
+        "CFBundleIconFile": "AppIcon",
+        "CFBundleIconName": "AppIcon",
+        "NSMicrophoneUsageDescription": "启用桌宠语音输入时使用麦克风，在本机识别语音。",
+        "NSDesktopFolderUsageDescription": "按你在 Matter 中提出的任务访问桌面文件；授权范围内的命令和文件操作可自动执行。",
+        "NSDocumentsFolderUsageDescription": "按你在 Matter 中提出的任务访问文稿文件；授权范围内的命令和文件操作可自动执行。",
+        "NSDownloadsFolderUsageDescription": "按你在 Matter 中提出的任务访问下载文件；授权范围内的命令和文件操作可自动执行。",
+        "NSAppleEventsUsageDescription": "在你授权桌宠操作电脑时切换应用。"
+      }
+    },
+    "afterPack": "scripts/verify-companion-package.cjs"
+  }
+}

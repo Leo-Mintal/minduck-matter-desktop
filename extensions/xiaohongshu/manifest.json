@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Minduck Xiaohongshu Agent",
+  "version": "0.1.0",
+  "description": "Bundled bridge for the Minduck Agent Browser on Xiaohongshu.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://*.xiaohongshu.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.xiaohongshu.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

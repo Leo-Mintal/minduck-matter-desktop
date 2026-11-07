@@ -1,0 +1,225 @@
+{
+  "project": "Coopanion",
+  "version": "0.2.16",
+  "source": "https://github.com/Pal-AI-Lab/Coopanion",
+  "importedFrom": "Coopanion 0.2.16 macOS distribution, Resources/app",
+  "license": "AGPL-3.0-or-later with upstream Steamworks additional permission",
+  "importedAt": "2026-11-02",
+  "figureZipSha256": "be48b168852a21e3c09c8f26db8dd4fe03cb13bac03d5971e87b1189229c633a",
+  "changes": [
+    {
+      "file": "core/seed.ts",
+      "upstreamSha256": "a4cd3a8abd298e047819dc311e3a15f9315b5a5dadbc5a8cefa18638f017f6ba",
+      "integratedSha256": "d4c241f078621fea09c2d548e6e0916dd54f24ac6eaa13a42d54d4ffe3244d6c"
+    },
+    {
+      "file": "core/seed.ts",
+      "upstreamSha256": "f846589b93d922ae6ffe8e57cdeb785df394a6cdf8cfd321866ce1c200fd4732",
+      "integratedSha256": "d4c241f078621fea09c2d548e6e0916dd54f24ac6eaa13a42d54d4ffe3244d6c",
+      "reason": "Fresh Minduck profiles select the bundled ordinary default duck (minduck-duck), with the user-optimized work SVG. Existing profile choices and explicit model/voice setup are preserved. Fresh installs explicitly enable the desktop window as well as the pet World, automatically showing the bundled default duck. Existing explicit visibility and figure choices remain untouched."
+    },
+    {
+      "file": "core/companion.ts",
+      "upstreamSha256": "0381573b84621b3dda5615e3c5465ae819e2391503f8f5789dd7c11485b80e3d",
+      "integratedSha256": "52e376096cf64b5faafc4cfcd0c519cf18c8fdb9b7784ae2737801d1d4681daa"
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/electron-main.cjs",
+      "upstreamSha256": "ff6c397f91e7f2af3013f6b546388fd2d5d211fd035fec79af3cd5632a2e501e",
+      "integratedSha256": "5b88cfd25e85a4a2be985a366db5bab6be38f260f5a6e540d513dc93278c6353",
+      "reason": "Request microphone access only when voice input is enabled. Allow two explicit Matter actions from the guarded pet renderer and forward them to the embedding host callback. Matter task output is received through the authenticated native bridge as normalized public text, separate from business credentials and the original figure. Each capsule supports a bounded conversation/turn target through guarded native IPC; hover/focus uses the system-theme Matter brand outline."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/figure-frame.js",
+      "upstreamSha256": "b90276c5ac811dc4bc54832b1c21c6a458b667293304e8bc35a1883e60204cd5",
+      "integratedSha256": "d0a06fc3a386258b3910e5e791d7118524d39fadb34439e05ae0bb5b45a107f0",
+      "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures. Shared action recovery retains interrupted work/ask until landing or dizzy recovery completes, without editing figure packs. Compose the automatic Matter activity controller inside the existing opaque figure sandbox; preserve manual flow recovery and idle thinking."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/idle.js",
+      "upstreamSha256": null,
+      "integratedSha256": "27a1345863baa47982560e3fcc27b1279b0cf23213415304d192094251336e60",
+      "reason": "Shared idle thought-bubble effect and direct short-click trigger. The persistent thoughtShown preference does not block the effect; the click replaces poke bounce/jump while preserving drag and original figure artwork. Stationary business states and pending action recovery suppress idle/click thinking. Automatic Matter activity, including terminal expressions, suppresses idle and click thinking."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/view.js",
+      "upstreamSha256": null,
+      "integratedSha256": "aeaf77c492e801c2efd0989d9ac89b6ea99e3f0fb0b119b255511cd9b5f7c8fc",
+      "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/artwork.js",
+      "upstreamSha256": null,
+      "integratedSha256": "46e18c5700a43d545129635682cd01ee64a312e828e91c411dd02268f6e13c52",
+      "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/effect.svg",
+      "upstreamSha256": null,
+      "integratedSha256": "96540da3bd9ef301f368d9690b46c499e438da9e7433e3f3b45d29bb46344dbb",
+      "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/source.svg",
+      "upstreamSha256": null,
+      "integratedSha256": "da94b2816a9d42319bcb649cfcd2b73885efaf8e859743ef39e6f635e547c638",
+      "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/README.md",
+      "upstreamSha256": null,
+      "integratedSha256": "133dfb9225bb76aa767482ebd72c25e36437031000b3aed5ea555d820fa43b0a",
+      "reason": "Shared idle thought-bubble effect and direct short-click trigger. The persistent thoughtShown preference does not block the effect; the click replaces poke bounce/jump while preserving drag and original figure artwork."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/kit/body.js",
+      "upstreamSha256": "9be695542ab8d706994f0376ccfa7fb294bc98a04b2118119711bda99a2e8f9d",
+      "integratedSha256": "ba485b1f6efb7e1558e5eb6e4546c133dc7a8ed845418de928f1db8d508eface",
+      "reason": "Support an optional reaction:false release flag that skips only the short-click poke bounce/jump. Pointer capture, drag/drop/throw physics and touch notification remain unchanged. Accumulate pet strokes only for continuous on-body pointer motion, never for pointer entry. Business state locks and success/failure expressions stop current walking; only idle can roam. The configured roaming preference and drag physics are preserved. Expose read-only active expression and gesture names so automatic transitions wait for actual animation completion rather than manifest guesses."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "f5f64c29c1e1e94b8c7bcb265923f96bfda6d6cb3cf804ecd7bdd1793a3aecae",
+      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet.html",
+      "upstreamSha256": "1badc5b2dcb87e71dff9c8b69fde1cebfc951c14ef7735871f56f583ce28126b",
+      "integratedSha256": "b9808473fa990b08c6c5e6b3478481803bdfddc9eba0bb14b520575c6df24f48",
+      "reason": "Load the isolated Minduck panel stylesheet; the settings preview keeps its upstream controls."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": null,
+      "integratedSha256": "089635dde16cee378861645de718220cc54ddabc21e69eb3c3bdccea1d30e7d1",
+      "reason": "Keep the existing QA and quick composer; retain active messages in a stable local queue, show one actionable card with up to two compact downward backing layers, and dismiss only the current hint to reveal the next without task cancellation or notification changes."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.css",
+      "upstreamSha256": null,
+      "integratedSha256": "3052f314f3144c00efc8c4d86f7b757fc553f051d75c9aaea1da502d9ba3a0cb",
+      "reason": "Preserve the figure, hover controls, QA and composer; add 6px downward backing-card offsets with 16px side insets, matching system light/dark panels, and keep tall QA internally scrollable."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/preload.cjs",
+      "upstreamSha256": "6f55f0f809533ec8cf5433270641213defa4d19a656f49202f063b5227c29050",
+      "integratedSha256": "57038ad911784af5d2f5073e6831691a59b6a8ff44afb39a2c6741576c4374f8",
+      "reason": "Expose the two explicit Matter actions through isolated IPC; no URLs, credentials or generic native APIs are exposed to the renderer. Matter task output is received through the authenticated native bridge as normalized public text, separate from business credentials and the original figure. Each capsule supports a bounded conversation/turn target through guarded native IPC; hover/focus uses the system-theme Matter brand outline."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-recovery.js",
+      "upstreamSha256": null,
+      "integratedSha256": "c9379b0df19be2833a6237bef7c70b45a0bd7f2f300a6071ea8ac2b159196f56",
+      "reason": "Shared sandbox wrapper preserves interrupted finite work/ask flows through dragging and complete landing recovery; newer commands replace or cancel pending recovery. Automatic Matter activity owns drag recovery using the latest lifecycle; manual recovery remains finite and cannot resurrect an obsolete automatic flow."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-activity.js",
+      "upstreamSha256": null,
+      "reason": "Loop real work/ask flows, finish current animations before switching, recover the latest activity after complete landing, play happy/sad terminal cues once, and allow roaming only when idle without changing figure packs.",
+      "integratedSha256": "b946b1f0471bb7cf9cc6301688c8480119c6bbe0086f955898afb6e48f92a12b"
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "579193dfb951d5b1b8c3122465d35e445df839ef0457f18b9b48340ad6b3bbcf",
+      "integratedSha256": "089635dde16cee378861645de718220cc54ddabc21e69eb3c3bdccea1d30e7d1",
+      "reason": "Keep the existing QA and quick composer; retain active messages in a stable local queue, show one actionable card with up to two compact downward backing layers, and dismiss only the current hint to reveal the next without task cancellation or notification changes."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.css",
+      "upstreamSha256": "b66a7f9d020bc834515b14bd4e5d1d8a6ef60dfaddcc57445cb16ff4c798889e",
+      "integratedSha256": "3052f314f3144c00efc8c4d86f7b757fc553f051d75c9aaea1da502d9ba3a0cb",
+      "reason": "Preserve the figure, hover controls, QA and composer; add 6px downward backing-card offsets with 16px side insets, matching system light/dark panels, and keep tall QA internally scrollable."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "ed09d4678bfd087d97ad6626398c25603780c62f96901885285f381e0659ace1",
+      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/electron-main.cjs",
+      "upstreamSha256": "0152b3a503c8a67520dc0faa0f33a002b5a01513b597f188da5240413a74695c",
+      "integratedSha256": "5b88cfd25e85a4a2be985a366db5bab6be38f260f5a6e540d513dc93278c6353",
+      "reason": "Preserve the guarded sender and original actions, adding bounded chat-context/chat-send/chat-upload result transport for the desktop inline composer; no arbitrary URLs or paths. Running cards follow the supplied 330x56 design; shared inline composer queues to its bound conversation and direct stop uses the existing authenticated API, with session/turn and attachment ownership checks."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "469bc5a74bba538662905cc5a5da1ae92f35a64bf8c95030ab6dfb6fccdef889",
+      "integratedSha256": "089635dde16cee378861645de718220cc54ddabc21e69eb3c3bdccea1d30e7d1",
+      "reason": "Keep the existing QA and quick composer; retain active messages in a stable local queue, show one actionable card with up to two compact downward backing layers, and dismiss only the current hint to reveal the next without task cancellation or notification changes. Running cards follow the supplied 330x56 design; shared inline composer queues to its bound conversation and direct stop uses the existing authenticated API, with session/turn and attachment ownership checks."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.css",
+      "upstreamSha256": "8bb7eaa08dd758bed2720b778792271239471716b4f1654e696573813b2881cd",
+      "integratedSha256": "3052f314f3144c00efc8c4d86f7b757fc553f051d75c9aaea1da502d9ba3a0cb",
+      "reason": "Preserve the figure, hover controls, QA and composer; add 6px downward backing-card offsets with 16px side insets, matching system light/dark panels, and keep tall QA internally scrollable. Running cards follow the supplied 330x56 design; shared inline composer queues to its bound conversation and direct stop uses the existing authenticated API, with session/turn and attachment ownership checks. QA answers stay 32px pill inputs with 12px/16px card padding; focused card editors use neutral outlines. Conversation-card hover/click/focus keep the neutral base edge; close visibility and routing stay unchanged, with neutral keyboard feedback on message buttons. Conversation cards now use content-driven height with 12px/16px padding, 20px text lines and an 8px title/subtitle gap; absent subtitles reserve no space. Input and button dimensions, neutral edges and all actions are preserved."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "4a12d31bfffe306e2acc5b9af15d70acbe7979f518c6d0988edf6c46a35b1132",
+      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-qa/view.js",
+      "upstreamSha256": null,
+      "integratedSha256": "496f292acbfbc9ae88e1f73fa499b5851c1d24b9b2a6881fd1e1e99279195faf",
+      "reason": "Keep shared Matter input/buttons and all QA/quick-chat actions; render a single question title and compact one-line option labels with circular/checkbox check indicators matching the installed main QA. Running cards follow the supplied 330x56 design; shared inline composer queues to its bound conversation and direct stop uses the existing authenticated API, with session/turn and attachment ownership checks. QA answers stay 32px pill inputs with 12px/16px card padding; focused card editors use neutral outlines. Custom QA answers render directly as a 32px option-aligned pill input with the shared QA edit icon and placeholder 其他我来说明. Preserve page drafts, explicit supplementary-input option keys, multi-choice semantics, IME, attachments and original submission targets. Single-choice other answers replace ordinary options on focus, typing or successful upload, including required-selection questions; ordinary choices clear custom content."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-qa/styles.js",
+      "upstreamSha256": null,
+      "integratedSha256": "cfd6750a53563c5e6dc29e6df0a77f010371247f313490db1649b5dfc5086436",
+      "reason": "Preserve 14px inline QA spacing and the 42px quick composer; match main QA neutral pill selection, light/dark check indicators and one-line ellipsis without changing action semantics. Running cards follow the supplied 330x56 design; shared inline composer queues to its bound conversation and direct stop uses the existing authenticated API, with session/turn and attachment ownership checks. QA answers stay 32px pill inputs with 12px/16px card padding; focused card editors use neutral outlines. Conversation cards now use content-driven height with 12px/16px padding, 20px text lines and an 8px title/subtitle gap; absent subtitles reserve no space. Input and button dimensions, neutral edges and all actions are preserved. Custom QA answers render directly as a 32px option-aligned pill input with the shared QA edit icon and placeholder 其他我来说明. Preserve page drafts, required/supplement selections, IME, attachments and original submission targets."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-qa/SOURCE.json",
+      "upstreamSha256": null,
+      "integratedSha256": "757c5ac300b81cfde262f0b9723ecacb97de533340ff51f67aca8f7fe1d8aa09",
+      "reason": "Record actual shared input/button/icons, desktop adapters and design-token provenance for the separately generated desktop-pet bundle. Running cards follow the supplied 330x56 design; shared inline composer queues to its bound conversation and direct stop uses the existing authenticated API, with session/turn and attachment ownership checks. QA answers stay 32px pill inputs with 12px/16px card padding; focused card editors use neutral outlines. Custom QA answers render directly as a 32px option-aligned pill input with the shared QA edit icon and placeholder 其他我来说明. Preserve page drafts, explicit supplementary-input option keys, multi-choice semantics, IME, attachments and original submission targets. Single-choice other answers replace ordinary options on focus, typing or successful upload, including required-selection questions; ordinary choices clear custom content."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-qa/LICENSES.txt",
+      "upstreamSha256": null,
+      "integratedSha256": "759f02b5afb6ca84446d9c811992e8a7709c4a9a145aad5544e84959a2aacfa0",
+      "reason": "Include the existing bundled React, React DOM and Scheduler MIT license notices."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "8a197af385810deff94083e6798150b2048702857edf1dbcfc0842791cc14b55",
+      "integratedSha256": "cbb1eae796c13d1dcf5a66f30d4df9c8e3cadac78743964afe37002ee33ba9c4",
+      "reason": "Minduck settings expose only habits and dress, default and hidden routes return to habits, ignore a stale advanced preference, and omit behavior/interaction, speech, computer-use and other sections."
+    },
+    {
+      "file": "core/console-theme.ts",
+      "upstreamSha256": "7fdc99e8152d8bca8098ac0445dee23577b3d93d8139b17415484d1996c4f353",
+      "integratedSha256": "e28db26be5abb0c0aa1ad1a813a4dde5a46905685870e4912d41ce6ba417ed36",
+      "reason": "Use DeepSeek whale Claude colours as the default for figures without a console palette, including the unchanged default duck. Preserve explicit independent palettes and light/dark mode."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.js",
+      "upstreamSha256": "2016762775edf46da5738806b6ae600184e12090d89c663d906a7cf8c6de54b2",
+      "integratedSha256": "950d0880db97f1ecbf20e4c69f9a76edd05368072021b9538caa7cbb393a136d",
+      "reason": "Hide Coo and DeepSeek whale choices in the Minduck dress picker while retaining packs, custom figure imports and the selected default duck."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "cbb1eae796c13d1dcf5a66f30d4df9c8e3cadac78743964afe37002ee33ba9c4",
+      "integratedSha256": "ba72bb60c2cfcc0c31f2fd8afd830a79b088a6101867528245af317b610e9fe4",
+      "reason": "Omit the settings sidebar branding container (both full wordmark and collapsed logo) and footer controls/profile. Keep habits/dress navigation and the titlebar sidebar toggle."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "ba72bb60c2cfcc0c31f2fd8afd830a79b088a6101867528245af317b610e9fe4",
+      "integratedSha256": "e8a1e3dbbeb3a49cbdcafe98eab2a0454cbce5b6ce2c70c77c8dd5ebf06e49e3",
+      "reason": "Omit usage statistics, sound channel, bubble size/speed, Coo name and user nickname rows from Minduck pet settings. Keep stored configuration and remaining controls unchanged."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "e8a1e3dbbeb3a49cbdcafe98eab2a0454cbce5b6ce2c70c77c8dd5ebf06e49e3",
+      "integratedSha256": "9a7c849c62aa382739bbc9c8c8ca87ef790c859aa6d5f06bbb364d0368e16063",
+      "reason": "Omit the upstream version/GitHub release group from the Minduck settings titlebar, including its separator and GitHub update links. Preserve navigation, sidebar toggle and appearance controls."
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'">
+<title>本机执行设置</title>
+<link rel="stylesheet" href="../../web-dist/desktop-shell/assets/shared.css">
+<link rel="stylesheet" href="../companion/ui/qa.css"><link rel="stylesheet" href="local-exec.css">
+</head><body><main class="local-card">
+<section class="pet-question permission-card" aria-labelledby="permission-title">
+<h1 class="pet-question-title" id="permission-title">允许 Matter 在这台电脑工作吗？</h1>
+<p class="pet-question-desc">开启后，Matter 可在会话目录、系统已允许访问的桌面/文稿/下载目录，以及你选择的其他文件夹内自动执行命令、读写文件，不再逐条询问。系统目录首次访问时由 macOS 请求授权；授权按本会话保存。命令输出与读取内容会回传 Matter 服务端。</p>
+<div class="pet-options">
+<label class="pet-option permission-option"><input id="enabled" type="checkbox"><span class="pet-option-label">允许本机执行<span class="option-description">仅限当前登录账号，随时可以关闭</span></span></label>
+<label class="pet-option permission-option"><input id="network" type="checkbox"><span class="pet-option-label">允许本机任务联网<span class="option-description">可选；联网命令仍须显式声明用途</span></span></label>
+</div>
+<p id="status" class="pet-status" role="status"></p><p id="error" class="pet-error" role="alert"></p>
+<p id="login-hint" class="muted">请先在 Matter 主窗口登录，再开启本机执行。</p>
+</section>
+<section class="pet-question permission-card" aria-labelledby="folder-title">
+<h2 class="pet-question-title" id="folder-title">文件夹访问</h2>
+<p class="pet-question-desc">首次访问桌面、文稿或下载时，由 macOS 显示“允许/不允许”系统授权；系统已允许时直接沿用。其他新目录使用系统文件夹选择器。目录范围按当前会话保存。</p>
+<p id="conversation" class="muted"></p><div id="grants"></div>
+<div class="pet-confirm-actions"><button class="b b-secondary b-pill b-md" data-action="add-folder">授权文件夹…</button><button class="b b-tertiary b-pill b-md" data-action="open-folder">在 Finder 中打开</button></div>
+<details><summary>默认工作目录</summary><p id="root"></p><button class="b b-tertiary b-pill b-md" data-action="root">更换根目录…</button></details>
+</section>
+<section class="pet-question permission-card">
+<h2 class="pet-question-title">macOS 系统权限</h2>
+<p class="pet-question-desc">系统授权需要你亲自确认，应用不能替你授予。当前命令与文件工具无需辅助功能、录屏或“允许所有 Shell”权限。完全磁盘访问也不会扩大 Matter 自己的授权目录。</p>
+<div class="pet-confirm-actions"><button class="b b-tertiary b-pill b-md" data-action="privacy-files">文件与文件夹权限…</button><button class="b b-tertiary b-pill b-md" data-action="privacy">完全磁盘访问设置…</button></div>
+<p class="muted">敏感凭证始终禁止访问。更换账号、关闭开关或断线会取消操作。文件工具仅支持 256KB 内的 UTF-8 文本。</p>
+</section>
+<div class="pet-confirm-actions"><button class="b b-tertiary b-pill b-md" data-action="revoke">断开并解除配对</button></div>
+</main><script src="settings-ui.js"></script></body></html>

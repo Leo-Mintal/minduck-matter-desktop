@@ -1,0 +1,30 @@
+{
+  "name": "coopanion",
+  "productName": "Coopanion",
+  "version": "0.2.16",
+  "description": "A desktop companion built on Cortico: a pet on your screen that talks, listens and can operate the computer",
+  "license": "AGPL-3.0-or-later",
+  "author": "Pal-AI-Lab",
+  "homepage": "https://github.com/Pal-AI-Lab/Coopanion",
+  "type": "module",
+  "main": "app/main.cjs",
+  "dependencies": {
+    "express": "^4.22.3",
+    "ws": "^8.18.0",
+    "undici": "7.29.1",
+    "tsx": "^4.23.15",
+    "pnpm": "11.28.6",
+    "electron-updater": "^6.8.9",
+    "fflate": "0.8.3",
+    "jpeg-js": "^0.4.4",
+    "koffi": "3.3.1",
+    "opencc-js": "^1.4.1",
+    "sherpa-onnx-node": "1.13.8",
+    "@anthropic-ai/sdk": "0.128.0",
+    "cortico-world-desktop-pet": "0.2.0",
+    "cortico-provider-coo": "0.3.1"
+  },
+  "coopanion": {
+    "channel": "github"
+  }
+}

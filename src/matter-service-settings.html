@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Matter 服务地址</title>
+    <link rel="stylesheet" href="../web-dist/desktop-shell/assets/shared.css" />
+    <style>
+      html, body { min-height: 100%; }
+      body { min-height: 100vh; background: var(--surface); color: var(--ink); }
+      .service-settings {
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+        padding: var(--sp-5);
+      }
+      .service-title { font-size: var(--fs-page-title); font-weight: 600; line-height: var(--lh-tight); }
+      .service-lead { max-width: 30rem; margin: var(--sp-2) 0 var(--sp-5); color: var(--ink2); font-size: var(--fs-body); line-height: var(--lh-prose); }
+      .service-field { margin: 0; }
+      .service-label { display: block; margin: 0 0 var(--sp-2); color: var(--ink); font-size: var(--fs-body); font-weight: 500; line-height: var(--lh-normal); }
+      .service-meta { display: grid; gap: var(--sp-1); margin-top: var(--sp-3); color: var(--ink3); font-size: var(--fs-small); line-height: var(--lh-normal); }
+      .service-meta strong { color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
+      .service-notice { display: none; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border: var(--border-width) solid var(--brand-soft-edge); border-radius: var(--r-card); background: var(--brand-soft); color: var(--ink2); font-size: var(--fs-small); line-height: var(--lh-normal); }
+      .service-error { min-height: calc(var(--fs-small) * var(--lh-normal)); margin: var(--sp-2) 0 0; color: var(--risk); font-size: var(--fs-small); line-height: var(--lh-normal); }
+      .service-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-top: auto; padding-top: var(--sp-5); }
+      .service-actions-right { display: flex; gap: var(--sp-2); }
+      .service-settings .b { flex: none; }
+      @media (max-width: 30rem) {
+        .service-settings { padding: var(--sp-4); }
+        .service-actions { align-items: stretch; flex-direction: column-reverse; }
+        .service-actions-right { width: 100%; }
+        .service-actions-right .b, .service-actions > .b { flex: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .service-settings * { transition-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="service-settings">
+      <h1 class="service-title">Matter 服务地址</h1>
+      <p class="service-lead">页面来自客户端安装包，业务请求默认连接线上 Matter。私有部署或本地开发时可修改后端地址。</p>
+      <form id="form">
+        <div class="service-field">
+          <label class="service-label" for="origin">HTTPS 服务根地址</label>
+          <div class="field-control-wrap input input--pill">
+            <input id="origin" class="field-control input-control" name="origin" type="url" autocomplete="url" spellcheck="false" required aria-describedby="effective default error" />
+          </div>
+        </div>
+        <div class="service-meta">
+          <div>当前生效：<strong id="effective">正在读取…</strong></div>
+          <div>默认地址：<strong id="default"></strong></div>
+        </div>
+        <div id="notice" class="service-notice"></div>
+        <div id="error" class="service-error" role="alert"></div>
+        <div class="service-actions">
+          <button id="reset" class="b b-tertiary b-pill b-md" type="button">恢复默认</button>
+          <div class="service-actions-right">
+            <button id="cancel" class="b b-tertiary b-pill b-md" type="button">取消</button>
+            <button id="save" class="b b-primary b-pill b-md" type="submit">保存并重启</button>
+          </div>
+        </div>
+      </form>
+    </main>
+    <script>
+      const api = window.matterServiceSettings
+      const form = document.querySelector('#form')
+      const input = document.querySelector('#origin')
+      const effective = document.querySelector('#effective')
+      const defaultOrigin = document.querySelector('#default')
+      const notice = document.querySelector('#notice')
+      const error = document.querySelector('#error')
+      const reset = document.querySelector('#reset')
+      const save = document.querySelector('#save')
+
+      const themeMedia = matchMedia('(prefers-color-scheme: light)')
+      function applyTheme() {
+        document.documentElement.dataset.theme = themeMedia.matches ? 'light' : 'dark'
+      }
+      applyTheme()
+      themeMedia.addEventListener?.('change', applyTheme)
+
+      function setBusy(busy) {
+        input.disabled = busy || input.dataset.locked === 'true'
+        reset.disabled = busy || input.dataset.locked === 'true'
+        save.disabled = busy || input.dataset.locked === 'true'
+      }
+
+      function showError(value) {
+        error.textContent = value instanceof Error ? value.message : String(value || '')
+      }
+
+      async function initialize() {
+        try {
+          const state = await api.get()
+          if (!state) throw new Error('无法读取 Matter 服务设置')
+          input.value = state.configuredOrigin || state.defaultOrigin
+          effective.textContent = state.effectiveOrigin
+          defaultOrigin.textContent = state.defaultOrigin
+          if (state.environmentOrigin) {
+            input.dataset.locked = 'true'
+            notice.style.display = 'block'
+            notice.textContent = '当前由环境变量 MINDUCK_MATTER_ORIGIN 强制使用 ' + state.environmentOrigin + '。请先移除环境变量，再从这里修改。'
+            setBusy(false)
+          } else if (state.environmentError) {
+            notice.style.display = 'block'
+            notice.textContent = 'MINDUCK_MATTER_ORIGIN 配置无效，应用已忽略它：' + state.environmentError
+          }
+        } catch (value) {
+          showError(value)
+          setBusy(true)
+        }
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        showError('')
+        setBusy(true)
+        try {
+          await api.save(input.value)
+          api.restart()
+        } catch (value) {
+          showError(value)
+          setBusy(false)
+        }
+      })
+
+      reset.addEventListener('click', async () => {
+        showError('')
+        setBusy(true)
+        try {
+          await api.reset()
+          api.restart()
+        } catch (value) {
+          showError(value)
+          setBusy(false)
+        }
+      })
+
+      document.querySelector('#cancel').addEventListener('click', () => api.close())
+      void initialize()
+    </script>
+  </body>
+</html>

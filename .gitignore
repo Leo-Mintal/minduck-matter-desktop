@@ -1,0 +1,20 @@
+node_modules/
+release/
+web-dist/
+.web-dist-*/
+minduck-matter-chromium/vendor/
+.DS_Store
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+
+# Apple signing and notarization secrets must stay outside the repository.
+AuthKey_*.p8
+*.p12
+*.mobileprovision
+
+# The pinned Coopanion runtime includes its own upstream dependencies.
+!vendor/coopanion/runtime/node_modules/
+!vendor/coopanion/runtime/node_modules/**

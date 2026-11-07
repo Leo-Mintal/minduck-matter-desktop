@@ -1,0 +1,17 @@
+# Decisions
+
+- 2026-11-05, revised by explicit user direction: cancel the external-browser port, restore the original Minduck browser chrome, and remove the unfinished migration source, patches, tooling/download caches and commands. This supersedes the native-runtime decision of 2026-11-04. No native port was installed.
+
+- Keep Electron's bundled Chromium, original shared Panel/pill-tab styling and existing automation bridge. Browser settings stay local and explicitly separate from Matter/pet settings.
+
+- Keep one Electron window as the product architecture. The fixed Matter page and the right-side browser pages are separate native views in that window; the right-side pages are owned by `ElectronBrowserHost` and all use Electron's bundled Chromium.
+- Keep the standalone Chromium prototype only as an opt-in compatibility experiment. It is not a runtime fallback and is not selected by the application entry point.
+- A scoped runtime bridge supplies the bundled Matter Browser extension's missing `chrome.debugger`, `chrome.tabGroups`, `chrome.tabs.group`, and `chrome.windows` calls by mapping them to Agent Browser `WebContentsView` and Electron CDP capabilities.
+- The bridge is deliberately limited to the APIs and semantics exercised by the bundled Matter Browser extension. It does not claim full Chrome-extension compatibility, and keeps “new window” requests inside the app-owned right-side tab model.
+- The external Chromium prototype remains a separate development/package route. It is not included in the primary Electron package, avoiding a second 360 MB browser runtime and all Chromium source/build maintenance.
+- The first package targets unsigned Apple Silicon macOS only.
+- Bundle the build output of the independently maintained Matter Web project instead of copying its frontend source. Startup and macOS packaging build the same source by default; CI can supply a prebuilt `dist`. An exact-origin protocol handler serves the UI locally while business APIs, media and public shares continue to the configured backend (default `https://matter.minduck.com`). This preserves relative requests and login storage without changing the Web business app’s deployment/backend contract, adding a local HTTP server or exposing Node.js. Distributed DMGs contain the frontend and do not require its source project or a Web dev server.
+- Xiaohongshu support is provided by the bundled extension when the user manually opens a Xiaohongshu page in a generic browser tab; the desktop shell does not offer a publisher shortcut or draft automation.
+- In the Electron host, the unchanged Matter Browser extension uses native Electron extension APIs plus a service-worker preload bridge for `chrome.debugger`, `chrome.tabGroups`, `chrome.tabs.group`, and the virtual `chrome.windows` calls it needs. 2026-11-05: replaced the earlier global loopback DevTools port, which any local process could use to drive every page including Matter; the service-worker preload and `ServiceWorkerMain` APIs are experimental in Electron 44, so rerun `test:extension-compatibility` and `test:extension-bridge` after Electron upgrades.
+
+- Keep conversation and agent orchestration in Matter. The desktop right panel is browser-only; remove the independent Local Agent UI and Go service while retaining the unchanged extension and its Electron compatibility bridge. No Matter-side browser workflow is added by this removal.

@@ -1,0 +1,218 @@
+{
+  "manifest": 2,
+  "api": 2,
+  "id": "minduck-suit-duck",
+  "version": "1.0.0",
+  "name": {
+    "zh": "西装鸭",
+    "en": "Suit Duck"
+  },
+  "about": {
+    "zh": "一只穿深蓝西装、白衬衫和红领带的黄色小鸭，有发光白眼和橙色鸭掌。"
+  },
+  "author": "Minduck",
+  "entry": "figure.js",
+  "export": "createSuitDuckBody",
+  "thumb": "artwork.svg",
+  "axes": [],
+  "presets": [],
+  "vocab": [
+    {
+      "id": "neutral",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "平静"
+        ]
+      },
+      "about": {
+        "zh": "保留发光白眼，轻轻呼吸",
+        "en": "Keeps its glowing white eyes and breathes softly"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "happy",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "开心"
+        ]
+      },
+      "about": {
+        "zh": "发光眼睛眯起，身体轻轻弹动",
+        "en": "Squints its glowing eyes and bounces softly"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "wink",
+      "kind": "expression",
+      "names": {
+        "zh": [
+          "眨眼"
+        ]
+      },
+      "about": {
+        "zh": "一只发光眼睛眯起",
+        "en": "Closes one glowing eye"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "stand",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "站起",
+          "站"
+        ]
+      },
+      "about": {
+        "zh": "恢复站立",
+        "en": "Returns to standing"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "walk",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "走走",
+          "散步"
+        ]
+      },
+      "about": {
+        "zh": "交替迈动两只鸭掌，翅膀跟着摆动",
+        "en": "Alternates its webbed feet and swings its wings"
+      },
+      "seconds": 12
+    },
+    {
+      "id": "run",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跑",
+          "跑起来"
+        ]
+      },
+      "about": {
+        "zh": "加快迈步，翅膀向后收",
+        "en": "Speeds up its steps and holds its wings back"
+      },
+      "seconds": 12
+    },
+    {
+      "id": "jump",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "跳",
+          "跳起来"
+        ]
+      },
+      "about": {
+        "zh": "下蹲后起跳，张开翅膀，落地回弹",
+        "en": "Crouches, jumps with wings spread, and rebounds on landing"
+      },
+      "seconds": 1.2
+    },
+    {
+      "id": "hop",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "小跳"
+        ]
+      },
+      "about": {
+        "zh": "轻轻蹦一下",
+        "en": "Makes a small hop"
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "turn",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "转身"
+        ]
+      },
+      "about": {
+        "zh": "水平转向另一侧",
+        "en": "Turns to face the other way"
+      },
+      "seconds": 0.4
+    },
+    {
+      "id": "wave",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "招手",
+          "打招呼"
+        ]
+      },
+      "about": {
+        "zh": "抬起近侧翅膀挥动",
+        "en": "Raises and waves its near wing"
+      },
+      "seconds": 1.7
+    },
+    {
+      "id": "flap",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "扑腾",
+          "扑翅膀"
+        ]
+      },
+      "about": {
+        "zh": "开心地跳起，快速扑动两只翅膀",
+        "en": "Hops happily while flapping both wings"
+      },
+      "seconds": 1.5
+    },
+    {
+      "id": "work",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "工作",
+          "掏电脑"
+        ]
+      },
+      "about": {
+        "zh": "播放完整的待机到工作动作流：掏出电脑，持续打字 3 秒，再收回电脑并恢复待机。",
+        "en": "Plays the complete idle-to-work flow, types for 3 seconds, then puts the laptop away and returns to idle."
+      },
+      "seconds": 5.85
+    },
+    {
+      "id": "ask",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "询问",
+          "请求确认"
+        ],
+        "en": [
+          "confirm"
+        ]
+      },
+      "about": {
+        "zh": "播放完整的待机到询问动作流：掏出纸笔，显示勾号与问号，随后收好纸笔并恢复待机。",
+        "en": "Plays the complete idle-to-question flow, takes out paper and pen, shows check and question badges, then puts them away and returns to idle."
+      },
+      "seconds": 6
+    }
+  ],
+  "sounds": {},
+  "can": {
+    "walk": true
+  }
+}

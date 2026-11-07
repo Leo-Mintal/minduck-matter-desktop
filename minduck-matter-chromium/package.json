@@ -1,0 +1,12 @@
+{
+  "name": "minduck-matter-chromium",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chromium-hosted prototype for the bundled Minduck Matter extensions.",
+  "scripts": {
+    "download": "bash scripts/download-chromium-macos.sh",
+    "start": "node scripts/launch.cjs",
+    "smoke": "node scripts/extension-smoke.cjs",
+    "dist:mac": "bash scripts/package-macos.sh"
+  }
+}
