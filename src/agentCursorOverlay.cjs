@@ -3,6 +3,7 @@ const path = require('node:path')
 
 const CURSOR_ID = '__minduck_agent_cursor__'
 const CURSOR_SIZE = 28
+const CURSOR_HOTSPOT = 3.5 // Arrow tip in the 24-unit SVG, scaled to 28px.
 const CURSOR_ASSET_PATH = path.join(__dirname, 'assets', 'agent-cursor.svg')
 const CURSOR_DATA_URI = `data:image/svg+xml;base64,${fs.readFileSync(CURSOR_ASSET_PATH).toString('base64')}`
 
@@ -31,6 +32,7 @@ function installationExpression() {
         display: 'block',
         pointerEvents: 'none',
         userSelect: 'none',
+        filter: 'drop-shadow(0 0 1px white) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))',
       });
       shadow.appendChild(image);
       root.appendChild(cursor);
@@ -61,8 +63,8 @@ function moveExpression(x, y) {
   return `(() => {
     const cursor = document.getElementById(${JSON.stringify(CURSOR_ID)});
     if (!cursor) return false;
-    cursor.style.left = ${JSON.stringify(`${x - CURSOR_SIZE / 2}px`)};
-    cursor.style.top = ${JSON.stringify(`${y - CURSOR_SIZE / 2}px`)};
+    cursor.style.left = ${JSON.stringify(`${x - CURSOR_HOTSPOT}px`)};
+    cursor.style.top = ${JSON.stringify(`${y - CURSOR_HOTSPOT}px`)};
     cursor.style.display = 'block';
     cursor.style.opacity = '1';
     return true;

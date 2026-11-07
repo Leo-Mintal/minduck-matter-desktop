@@ -21,14 +21,14 @@ function createWebContents() {
   return { webContents, scripts }
 }
 
-test('installs the bundled sidebar logo and moves the Agent Browser cursor', async () => {
+test('installs the supplied arrow and aligns its tip with the Agent Browser pointer', async () => {
   const { webContents, scripts } = createWebContents()
   const overlay = new AgentCursorOverlay(webContents)
 
   assert.equal(await overlay.showAt(120, 80), true)
   assert.equal(scripts.some((script) => script.includes('data:image/svg+xml;base64,')), true)
   assert.equal(scripts.some((script) => script.includes(CURSOR_ID)), true)
-  assert.equal(scripts.some((script) => script.includes('"106px"') && script.includes('"66px"')), true)
+  assert.equal(scripts.some((script) => script.includes('"116.5px"') && script.includes('"76.5px"')), true)
 })
 
 test('hides the cursor while a page screenshot is captured, then restores it', async () => {

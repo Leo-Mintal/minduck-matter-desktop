@@ -676,3 +676,7 @@ Related files: `scripts/build-web.cjs`, `scripts/bundled-frontend.test.cjs`, `sc
 
 - A source lookup guessed an `extensions/matter-browser/tests` directory that is absent in the packaged extension. Continued with the existing desktop Electron/WS smoke instead.
 - The quality checker treats its target as a directory, so a direct helper-file scan reported zero files. Repeated on temporary `.js` copies of both affected files: two scanned, no errors, one existing helper file-length warning. The temporary directory was removed.
+
+## 2026-11-07: Agent cursor asset lookup
+
+- A lookup used the module-style test filename `scripts/agentCursorOverlay.test.cjs`; the existing tests use kebab case (`scripts/agent-cursor-overlay.test.cjs`). Located and updated the existing test rather than creating a duplicate.
