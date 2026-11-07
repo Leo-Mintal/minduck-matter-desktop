@@ -1,215 +1,78 @@
-# 内置浏览器设备接入方案
+# 内置浏览器设备接入
 
-## 背景
+## 当前状态（2026-11-07）
 
-Matter agent 执行时支持一套浏览器工具（截图、点击、读页面、填表单等），目前这套工具通过用户自己安装的 Chrome 扩展（`minduck-matter-browser`）接入：扩展主动拨出一条 WebSocket 到服务端，在这条链路上扮演一台 MCP server，服务端作为 MCP client 发工具调用请求。
+桌面端主进程直接作为 `kind=browser` 设备连接 Matter 的反向 WebSocket。默认入口不再启动 Matter Browser 扩展 worker；用户登录当前 Matter 服务后自动配对，无需安装 Chrome 扩展。应用菜单「内置浏览器设置…」提供开关、连接状态和解除配对。
 
-本方案的目标是：**让桌面端内置的 Electron Chromium 直接作为这台「浏览器设备」接入服务端**，用户不需要另外安装 Chrome 扩展，agent 操控的是桌面端右侧面板里那个浏览器。
+本轮只改桌面仓库，未改 Matter Web 或后端，未新增依赖。开发版使用独立 profile；未重打包或替换安装版。原始桌面状态已保存为 `7f3a599`，改造位于 `codex/builtin-browser-device`。
 
----
+## 实际架构
 
-## 可行性基础
-
-### 服务端侧（零改动）
-
-服务端 `platform/extension/mcp/reverse/` 已完整实现了反向 WS 设备接入的全部逻辑：
-
-- `hub.go` — WS 握手、认证帧、心跳、每设备串行调用队列
-- `tokens.go` — 配对码/设备令牌的生成与哈希存储
-- `caller.go` — 向设备发 MCP 请求（`initialize` → `tools/list` → `tools/call`）
-- `devices.go` — 设备健康状态管理
-
-服务端的 `reverse.Hub` 对连接来源没有任何假设：只要首帧 auth 通过（有效设备令牌 + 设备 ID），就是一台合法设备。它不知道对面是 Chrome 扩展还是桌面端进程。
-
-配对路由也已就绪（`bootstrap.go`）：
-
-```
-POST   /api/extensions/device-link/redeem   核销配对码换设备令牌
-GET    /api/extensions/device-link/ws       WebSocket 升级
-DELETE /api/extensions/device-link/self     扩展侧主动解绑
+```text
+Matter reverse.Hub
+  initialize / tools/list / tools/call / notifications/cancelled
+        ↕ device-link/ws
+src/local-exec/connection.cjs（通用传输，浏览器模式不声明 localExec）
+        ↕
+src/browser-device/controller.cjs（账号、配对、开关、连接生命周期）
+        ↓
+src/browser-device/tools.cjs
+  私有 Node VM 内复用固定版本 1.3.2 的工具引擎和全部 15 份 schema
+        ↓
+AgentBrowserCompatibility + src/browser-device/page-runtime.cjs
+        ↓
+右侧任务标签 WebContents / CDP 隔离环境 / 子 iframe 会话
 ```
 
-### 桌面端侧（已有能力）
+`extensions/matter-browser/background.js` 增加两个明确的桌面宿主入口：导出既有工具引擎、使用 Electron nativeImage 压缩截图。宿主钩子只存在于主进程创建的私有 VM；网页不接触它。普通扩展运行路径保留，兼容性 smoke 继续覆盖。
 
-`src/agentBrowserCompatibility.cjs` 已实现了操作 Electron 内置浏览器标签页的全部底层能力：
+### 为什么没有直接转译 15 个工具名
 
-- 标签页 CRUD（`tabsCreate` / `tabsUpdate` / `tabsRemove` / `tabsGroup`）
-- 导航（`tabsHistory` back/forward、`tabsReload`）
-- CDP 转发（`debuggerSendCommand`）——9 个页面级方法：截图、鼠标/键盘事件、JS 执行、对话框处理、设备指标覆写
-- 标签组管理（`tabsGroup`）
+原方案低估了适配成本：MCP 工具名不等于兼容层方法名（实际使用 `tabs.create`、`debugger.sendCommand` 等）；可访问树、ref、跨 frame、导航等待、页面变化判断及取消都含有现成状态逻辑。复制 schema 并重写整套工具容易发生行为漂移。
 
-`src/local-exec/connection.cjs` 的 `connectDesktop` 函数已实现了完整的设备 WS client 模式：首帧 auth、心跳看门狗、MCP dispatch、取消信号、退避重连。
+本实现复用这套工具执行逻辑，新增窄的 Chrome API 适配器。辅助脚本依赖 `chrome.runtime.onMessage` 和各自的私有 ref 状态，不能当作纯函数直接塞进页面主世界。`page-runtime.cjs` 为它们建立无 Node、无 IPC 的独立 CDP world，并提供私有消息派发。
 
-`src/local-exec/pairing.cjs` 的 `createPairing` 已实现了配对码核销 + safeStorage 加密令牌存储的完整流程，并复用了 `/api/extensions/devices/pairings` + `/api/extensions/device-link/redeem` 这两条接口。
+## 服务端约定
 
----
+- 配对必须传 `kind=browser`。`kind=desktop` 由服务端保留给本机执行，不能直接用来调用通用浏览器 MCP 工具。
+- 复用 `POST /api/extensions/devices/pairings`、`POST /api/extensions/device-link/redeem`、`GET /api/extensions/device-link/ws` 和 `DELETE /api/extensions/device-link/self`。
+- 握手的 `extension_version` 使用固定工具引擎版本 `1.3.2`，与桌面应用版本分开。
+- 设备在线且账号匹配时，主进程向固定 Matter 页写入 `data-matter-device`。既有 Web 请求据此发送 `X-Matter-Device`，避免仅配对成功却没有可用工具。
+- 是否执行写操作继续由服务端既有权限闸决定。点击、键盘、关闭标签、上传和 JavaScript 等不能统一视为无需审批的只读操作；对话框和 computer 操作也按具体动作处理。
 
-## 方案架构
+本地集成测试覆盖真实 WS 握手与工具调用。真实服务端、真实账号和模型连续任务的联合验收仍需在登录后的开发版完成，不能由 fixture 测试替代。
 
-```
-Matter 服务端
-  reverse.Hub（MCP client）
-       ↑ WebSocket（device-link/ws）
-       │  首帧: { type:"auth", token, device_id, browser:"Matter Desktop" }
-       │  服务端发: initialize → tools/list → tools/call
-       │  桌面端答: 工具结果 JSON-RPC response
-       ↓
-src/browser-device-link.cjs（新模块，~250 行）
-  - 维护 WS 连接（复用 connectDesktop 模式）
-  - 处理 initialize / tools/list / tools/call
-  - tools/call → AgentBrowserCompatibility.request(method, params)
-       ↓
-src/agentBrowserCompatibility.cjs（已有，零改动）
-  - chrome.tabs.* / chrome.windows.* / chrome.debugger.*
-       ↓
-Electron WebContents（内置 Chromium 标签页）
-```
+## 工具与范围
 
----
+保留既有 15 件工具：`get_windows_and_tabs`、`chrome_navigate`、`chrome_read_page`、`chrome_get_web_content`、`chrome_get_interactive_elements`、`chrome_click_element`、`chrome_fill_or_select`、`chrome_keyboard`、`chrome_computer`、`chrome_screenshot`、`chrome_switch_tab`、`chrome_close_tabs`、`chrome_handle_dialog`、`chrome_upload_file`、`chrome_javascript`。
 
-## 工具清单
+- 工具统一经过引擎的「Minduck Matter」任务标签组校验。手动标签不能被显式 tabId、默认目标或批量关闭路径接管；左侧固定 Matter 页不属于浏览器标签集合。
+- 对外的扩展调试接口仍只允许原有 9 个页面级 CDP 方法。原生运行时内部单独使用 frame tree、隔离 world，以及当前任务页的子 iframe 自动附加，不开放浏览器范围的 `Target.getTargets` 给工具或扩展。
+- 页面 ref 存在私有 world，导航后必须重新读取；页面主世界看不到 ref 容器或 Node API。
+- 同源 frame 和跨源独立进程 frame 使用各自的隔离执行环境；frameId 在当前标签生命周期内映射，0 为主 frame。MAIN 世界脚本仅支持主 frame。复杂站点中的具体 iframe 交互仍沿用固定引擎能力，不承诺完整 Chrome 扩展 API 兼容。
+- 文件上传读取当前 Matter 源的 `/media/` 字节，通过页面内的 File/DataTransfer 设置 file input，不读取本机任意路径，也不使用 `DOM.setFileInputFiles`。拒绝重定向、其他源、file URL 和超过 20MB 的响应；同时检查声明长度与实际流长度。
+- 截图用 nativeImage 转 JPEG，不改变像素尺寸；工具引擎继续负责截图与视口之间的坐标映射。
 
-与 Chrome 扩展暴露的工具集完全一致（`packages/shared/src/tools.ts`），共 15 件：
+## 生命周期与数据
 
-| 工具名 | 功能 | 风险级 |
-|---|---|---|
-| `get_windows_and_tabs` | 列 Matter 标签组的所有窗口/标签 | L1 只读 |
-| `chrome_navigate` | 打开 URL / 刷新 / 前进后退 | L1 |
-| `chrome_read_page` | 读无障碍树（含 fileInputs） | L1 只读 |
-| `chrome_get_web_content` | 抓页面文本/HTML | L1 只读 |
-| `chrome_get_interactive_elements` | 列可交互元素 | L1 只读 |
-| `chrome_click_element` | 按 selector/ref/坐标点击 | L1 |
-| `chrome_fill_or_select` | 填表单、勾 checkbox | L1 |
-| `chrome_keyboard` | 模拟键盘输入/组合键 | L1 |
-| `chrome_computer` | 鼠标+键盘+截图万能工具 | L1/L2 |
-| `chrome_screenshot` | 截图 | L1 只读 |
-| `chrome_switch_tab` | 切换标签 | L1 |
-| `chrome_close_tabs` | 关闭标签 | L1 |
-| `chrome_handle_dialog` | 处理 alert/confirm/prompt | L1 |
-| `chrome_upload_file` | 上传 /media/ 文件到页面 file input | **L2（需审批）** |
-| `chrome_javascript` | 在页面执行 JS | **L2（需审批）** |
+- 凭证独立保存在 `<userData>/browser-device/settings.json`，safeStorage 加密，文件权限 0600；不与本机执行的设备 ID 或令牌共用。
+- 默认开启，未登录时等待；设置损坏时安全关闭。账号或服务源不匹配、设备撤销时停止连接并要求手动重新开启。
+- 每次原生操作前校验当前账号、源、开关和连接代次。配对期间关闭或切账号时，丢弃迟到结果，并尝试撤销刚签发的凭证。
+- JS 对话框暂停渲染器时，仅已观察到的任务页对话框处理可使用该固定 Matter 文档最近验证且未过期的身份；其他操作仍读取实时身份。调试连接由原生运行时持有，在关闭、取消或账号变化时释放，避免工具结束时误中断对话框。
+- 每台设备一次只派发一个调用。取消会中止后续原生步骤并释放调试连接；取消中的调用不会与新调用同时派发。已提交给页面的 JavaScript 或已完成的动作不能回滚，超时和取消后不能盲目重放写操作。
+- 关闭主窗口只暂停连接，重新打开复用已配对设备；关闭功能立即撤销在线 presence。解除配对失败时保留加密凭证供重试。
+- 网页没有新增 preload 或 IPC 权限；本机文件和 Shell 仍由独立的「本机执行设置…」控制。
 
-工具 schema 直接从插件的 `packages/shared/src/tools.ts` 移植成 CommonJS，放在新模块里维护。
+## 验证
 
----
-
-## 实现计划
-
-### 新文件：`src/browser-device-link.cjs`
-
-核心逻辑，约 250 行。结构与 `src/local-exec/connection.cjs` 完全对称：
-
-```js
-// 对外暴露两件事：
-// 1. start(config) → 建连、返回 stop()
-// 2. TOOL_SCHEMAS — 工具清单（供 tools/list 应答）
-
-const TOOL_SCHEMAS = [ /* 从插件 tools.ts 移植 */ ]
-
-function connectBrowserDevice({ url, token, deviceId, version, browserCompat, onState, onRevoked }) {
-  // 握手帧：
-  // { type:'auth', token, device_id, browser:'Matter Desktop',
-  //   extension_version: version, capabilities:{ tab_groups:true } }
-  //
-  // tools/list → { tools: TOOL_SCHEMAS }
-  //
-  // tools/call → browserCompat.request(name, args) → JSON-RPC result
-  //
-  // 取消：notifications/cancelled → AbortController.abort()（当前工具调用不可中断，
-  //        只标记，下次调用不再派发）
-  //
-  // 重连：与 connectDesktop 同一套退避策略（500ms 起，指数，最大 30s）
-}
-
-module.exports = { connectBrowserDevice, TOOL_SCHEMAS }
+```bash
+pnpm test
+pnpm run test:browser-device
+pnpm run test:extension-compatibility
+pnpm run test:browser-chrome
+pnpm run test:local-exec
 ```
 
-**工具调用的派发逻辑**：
+`test:browser-device` 在一次性 profile 中使用真实 Electron、safeStorage、HTTP 和反向 WS fixture，覆盖 15 件工具、手动标签隔离、ref 填写与导航失效、可信点击、同源/跨源 iframe、截图、媒体上传限制、确认框、并发拒绝、取消和设置开关。采用离屏原生渲染，不依赖桌面鼠标，也不访问真实模型。系统 `prompt()` 的可用性取决于 Electron，本轮真实对话框测试使用 `confirm()`。
 
-`chrome_computer`、`chrome_screenshot` 等工具在扩展里走的是 CDP（通过 inject-scripts），但 `agentBrowserCompatibility.cjs` 已经通过 `debuggerSendCommand` 把相同的 CDP 方法封装好了。新模块只需要把 MCP 的工具名和参数格式转译成 `AgentBrowserCompatibility.request(method, params)` 能接受的格式。
-
-转译表（工具名 → `agentBrowserCompatibility` 内部方法名）：
-
-| MCP 工具名 | `AgentBrowserCompatibility` 方法 |
-|---|---|
-| `get_windows_and_tabs` | `tabsQuery` |
-| `chrome_navigate` | `tabsCreate` / `tabsUpdate` / `tabsHistory` |
-| `chrome_screenshot` | `debuggerSendCommand({ method:'Page.captureScreenshot' })` |
-| `chrome_computer` (action=screenshot) | 同上 |
-| `chrome_computer` (action=left_click 等) | `debuggerSendCommand({ method:'Input.dispatchMouseEvent' })` |
-| `chrome_computer` (action=key/type) | `debuggerSendCommand({ method:'Input.dispatchKeyEvent' })` |
-| `chrome_read_page` | `debuggerSendCommand({ method:'Runtime.evaluate', … })` |
-| `chrome_javascript` | `debuggerSendCommand({ method:'Runtime.evaluate' })` |
-| `chrome_handle_dialog` | `debuggerSendCommand({ method:'Page.handleJavaScriptDialog' })` |
-| `chrome_close_tabs` | `tabsRemove` |
-| `chrome_switch_tab` | `tabsUpdate({ active:true })` |
-
-inject-scripts（`accessibility-tree-helper.js`、`click-helper.js` 等）目前只在 Chrome 扩展的 content script 环境里运行。`chrome_read_page`、`chrome_click_element`、`chrome_fill_or_select` 这几个依赖注入脚本的工具，需要通过 `Runtime.evaluate` 把对应的 inject-script 内容注入到页面执行，而不是走 `chrome.scripting.executeScript`（那是扩展专有 API）。**这是实现里最主要的适配工作**，inject-scripts 本身是纯 JS 函数，不依赖扩展 API，可以直接通过 CDP `Runtime.evaluate` 注入并调用。
-
-### 修改文件：`src/main.cjs`
-
-约 40 行改动，接入新模块的生命周期：
-
-1. `app.on('ready')` 里：检查是否已配对 + 是否启用 → 调 `connectBrowserDevice`
-2. Matter 服务地址/账号变更时：重新配对或断开（与 `local-exec` 同一套检测逻辑）
-3. `app.on('before-quit')` 里：调 `stop()` 优雅关闭
-
-### 修改文件：`src/local-exec/pairing.cjs` 或新建 `src/browser-device/pairing.cjs`
-
-配对逻辑与 local-exec 完全相同，复用 `createPairing`，只需传不同的 `store` key（`browserDevicePairing` 而非 `pairing`），令牌分开存。
-
-### 配对触发时机
-
-两个选项（最终实现选其一）：
-
-**A. 自动配对（推荐）**：用户登录后，桌面端主进程自动使用当前 JWT 调 `POST /api/extensions/devices/pairings` 签发配对码，再自己调 `redeem` 换令牌。用户无感知，设备出现在 Matter 网页「设置 → 扩展 → 已配对浏览器」列表里，显示名为「{hostname} · Matter 桌面端」。
-
-**B. 手动配对**：在「本机执行设置」页面加一个「配对内置浏览器」按钮，点击后走和 Chrome 扩展相同的配对码流程。
-
----
-
-## 不需要改动的部分
-
-- **服务端**：0 行改动。服务端视桌面端为一台普通浏览器设备。
-- `src/agentBrowserCompatibility.cjs`：0 行改动（直接调用其 `request` 方法）。
-- `src/extensionApiBridge.cjs`：0 行改动（Chrome 扩展那条路继续并存）。
-- Chrome 扩展（`minduck-matter-browser`）：两条路完全独立，互不影响。
-
----
-
-## 工作量估计
-
-| 文件 | 类型 | 规模 |
-|---|---|---|
-| `src/browser-device-link.cjs` | 新建 | ~250 行 |
-| inject-scripts 的 CDP 注入适配 | 新建（可放在同文件） | ~150 行 |
-| `src/main.cjs` | 修改 | ~40 行 |
-| `src/local-exec/pairing.cjs` 或新建 `src/browser-device/pairing.cjs` | 复用/新建 | ~30 行 |
-| **合计** | | **~470 行** |
-
----
-
-## 风险与注意事项
-
-1. **inject-scripts 注入方式不同**：扩展走 `chrome.scripting.executeScript`（有 content script 权限），CDP `Runtime.evaluate` 效果相同但需要把脚本文件内容内联。脚本本身是纯函数，不依赖扩展 API，可以直接用。
-
-2. **`chrome_upload_file`**：扩展走 `chrome.debugger` 的 `DOM.setFileInputFiles`，CDP 侧同样支持，路径一致。但文件路径限制（只接受 `/media/...` 路径）需要在桌面端侧同样做校验。
-
-3. **`chrome_computer` 的截图坐标系**：扩展走 `Page.captureScreenshot` + 设备指标覆写（`Emulation.setDeviceMetricsOverride`），这两个 CDP 方法已在 `EXTENSION_DEBUGGER_METHODS` 白名单里，直接可用。
-
-4. **设备令牌独立存储**：与 `local-exec` 的设备令牌分开存（不同的 safeStorage key），避免一方撤销影响另一方。
-
-5. **单设备限制**：服务端 `CloseReplaced(4002)` 会把同一 `device_id` 的旧连接踢掉。桌面端重启时会用同一个 `device_id` 重连，这是正常行为。
-
----
-
-## 与 Chrome 扩展的关系
-
-两条路完全独立并存：
-
-- 用户安装了 Chrome 扩展 → Chrome 里的浏览器作为一台设备
-- 桌面端运行 → 内置浏览器作为另一台设备（不同 `device_id`）
-- 两台设备都出现在「设置 → 扩展 → 已配对浏览器」
-- agent 执行时按团队版本里 `tool_refs` 里钉的是哪台用哪台
-
-如果只用桌面端，不装 Chrome 扩展也能获得完整的浏览器控制能力。
+升级扩展工具包时必须保留或同步这两个宿主入口，并重跑以上测试；不能只替换 bundle 或只提高声明版本。锁屏环境可以完成离屏验证，但不能据此声称已人工验收开发版的可见窗口。

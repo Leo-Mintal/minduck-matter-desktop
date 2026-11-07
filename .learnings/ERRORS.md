@@ -1,5 +1,18 @@
 # Unexpected Errors
 
+## 2026-11-07 - Native browser integration validation
+
+- The development-preview restart stopped its exact parent, then a `ps` lookup raced a terminating child and returned exit 1. The new preview still started; rechecked with exit-tolerant process reads, confirmed exactly one running preview and its waiting-login settings state, and restricted its log to 0600.
+
+- Native visible-window click/capture probes were inconsistent and capture reported `Current display surface not available for capture`. CUA subsequently confirmed the Mac was locked. Reused the project's offscreen native-rendering test pattern; real trusted events, resulting DOM state and screenshots then passed. Do not attribute this failure to the tool's click coordinates or claim visible-window inspection while locked.
+- JS modal testing exposed blocked renderer identity evaluation and redundant `Page.enable` while the modal was open; per-tool debugger detach also rejected a pending dialog evaluation. Native runtime now observes dialogs, retains its own page session, uses only the paused fixed document's last verified unexpired identity for the dialog handler, and releases ownership on stop/cancel. Real `confirm()` accept and out-of-scope rejection pass. The initial unbounded prompt probe was replaced by a bounded confirm fixture; do not claim system prompt UI validation.
+- A heartbeat timeout threw `DOMException: invalid code`: WHATWG WebSocket refuses application-sent close code 1001. Reconnect-only closes now use private code 4000, separate from terminal revocation codes.
+- Cross-origin OOPIF keyboard targeting initially had no mapped frame. Native-only child-target attachment now enumerates the task page's iframe sessions; both same-origin and cross-origin frame targeting pass. The extension-facing CDP whitelist remains unchanged.
+- A capture immediately after resizing an offscreen settings window returned `UnknownVizError` before the compositor produced the new surface. The preview fixture now retries the read-only capture with a bounded deadline; all four light/dark and 360/560px captures pass.
+
+- The initial smoke selected the label's accessibility ref instead of the nested textbox. The fill tool correctly rejected that non-fillable element; the fixture now selects the textbox role explicitly.
+- One combined patch used an incorrect errors-file heading and failed verification without writing. Read back both targets and applied the corrected patch.
+
 ## 2026-11-06 - Desktop update release notarization profile
 
 - The `0.1.3` desktop-update release reached successful Developer ID signing, but electron-builder's `notarytool` submission stopped with `No Keychain password item found for profile: MinduckNotary`. The Developer ID Application identity remains valid; the macOS Keychain notarization profile must be restored with `xcrun notarytool store-credentials` using the controlled App Store Connect API key before retrying.

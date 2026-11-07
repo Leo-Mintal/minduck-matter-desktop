@@ -9,7 +9,9 @@ if (process.argv.includes('--minduck-companion-host')) {
 
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
-const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, View, WebContentsView, safeStorage } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, View, WebContentsView, safeStorage, nativeImage } = require('electron')
+const { createBrowserDevice } = require('./browser-device/controller.cjs')
+const { createBrowserSettings } = require('./browser-device/settings.cjs')
 const { createController } = require('./local-exec/controller.cjs')
 const { createSettings: createLocalExecSettings } = require('./local-exec/settings.cjs')
 const { installBundledFrontend } = require('./bundledFrontend.cjs')
@@ -90,6 +92,8 @@ let browserPreferences
 let browserSettingsWindow
 let localExec
 let localExecSettings
+let browserDevice
+let browserDeviceSettings
 let updateCheckInFlight
 
 function nativeCanvasColor(theme = matterTheme) {
@@ -147,8 +151,14 @@ const extensionCompatibility = new AgentBrowserCompatibility({
   getMainWindow: () => mainWindow,
   getActiveTabId: () => browserHost?.getActiveTabId(),
   selectTab: (tabId) => browserHost?.selectTab(tabId),
-  notifyGroupChanged: (tab) => extensionApiBridge?.notifyTabGroupChanged(tab),
-  notifyTabUpdated: (tab, changeInfo) => extensionApiBridge?.notifyTabUpdated(tab, changeInfo),
+  notifyGroupChanged: (tab) => {
+    browserDevice?.notifyTabUpdated(tab, { groupId: tab.groupId })
+    return extensionApiBridge?.notifyTabGroupChanged(tab)
+  },
+  notifyTabUpdated: (tab, changeInfo) => {
+    browserDevice?.notifyTabUpdated(tab, changeInfo)
+    return extensionApiBridge?.notifyTabUpdated(tab, changeInfo)
+  },
 })
 
 extensionApiBridge = new ExtensionApiBridge({
@@ -383,7 +393,7 @@ async function updateMatterPresence() {
   const { webContents } = matterTab?.view ?? {}
   if (!webContents || webContents.isDestroyed() || !isMatterWebURL(webContents.getURL(), matterOrigin)) return
 
-  const deviceId = await extensionApiBridge.presenceDeviceId(matterOrigin)
+  const deviceId = await browserDevice?.presenceDeviceId() || ''
   const expression = `(() => {
     const root = document.documentElement
     if (!root) return
@@ -954,6 +964,7 @@ function createMenu() {
           { label: '使用默认 Matter 服务', click: () => void useDefaultMatterService() },
           { label: '桌宠设置…', accelerator: 'CmdOrCtrl+,', click: () => companion?.openSettings() },
           { label: '本机执行设置…', click: () => localExecSettings?.open() },
+          { label: '内置浏览器设置…', click: () => browserDeviceSettings?.open() },
           { label: '显示桌宠', click: () => void companion?.show().catch(console.error) },
           { label: '隐藏桌宠', click: () => void companion?.hide().catch(console.error) },
           ...(process.platform === 'darwin'
@@ -1073,9 +1084,10 @@ function createWindow() {
     layoutViews()
   })
   mainWindow.on('blur', finishPanelResize)
-  mainWindow.once('show', () => void localExec?.refresh())
+  mainWindow.once('show', () => { void localExec?.refresh(); void browserDevice?.refresh() })
   mainWindow.on('closed', () => {
     localExec?.suspend()
+    browserDevice?.suspend()
     matterTasks?.dispose()
     matterTasks = undefined
     void companion?.hide().catch(console.error)
@@ -1105,14 +1117,14 @@ app.whenReady().then(async () => {
     getContents: () => matterTab?.view.webContents, getWindow: () => mainWindow, onSetupNeeded: () => localExecSettings?.open() })
   localExecSettings = createLocalExecSettings({ BrowserWindow, ipcMain, controller: localExec, getWindow: () => mainWindow, shell })
   installBundledFrontend({ app, protocol, net, origin: matterOrigin, backendHeaders: (headers, url) => localExec.headers(headers, url) })
-  // Register the worker preload first so the extension's first start already has the shim.
+  const extensionRoot = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'extensions', 'matter-browser')
+    : path.join(__dirname, '..', 'extensions', 'matter-browser')
+  browserDevice = createBrowserDevice({ app, safeStorage, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
+    getContents: () => matterTab?.view.webContents, compatibility: extensionCompatibility, extensionRoot, nativeImage })
+  browserDeviceSettings = createBrowserSettings({ BrowserWindow, ipcMain, controller: browserDevice, getWindow: () => mainWindow })
   try {
-    extensionApiBridge.start()
-  } catch (error) {
-    console.error('Failed to start the Matter Browser extension compatibility bridge:', error)
-  }
-  try {
-    await loadBuiltInExtensions(app)
+    await loadBuiltInExtensions(app, { matterBrowser: false })
   } catch (error) {
     console.error('Failed to load bundled browser extensions:', error)
   }
@@ -1148,6 +1160,8 @@ let companionQuitting = false
 app.on('before-quit', (event) => {
   localExec?.dispose()
   localExecSettings?.dispose()
+  browserDevice?.dispose()
+  browserDeviceSettings?.dispose()
   matterTasks?.dispose()
   if (companion && !companionQuitting) {
     event.preventDefault()

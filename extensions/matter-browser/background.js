@@ -2061,6 +2061,7 @@ Tip: If the returned elements do not include the specific element you need, use 
 	* @returns {Promise<{dataUrl: string, mimeType: string}>} A promise that resolves to the compressed image data URL and its MIME type.
 	*/
 	async function compressImage(imageDataUrl, options) {
+		if (globalThis.__minduckNativeTools) return globalThis.__minduckNativeTools.compressImage(imageDataUrl);
 		const { scale = 1, quality = .8, format = "image/jpeg" } = options;
 		const imageBitmap = await createImageBitmapFromUrl(imageDataUrl);
 		const newWidth = Math.round(imageBitmap.width * scale);
@@ -5343,6 +5344,15 @@ Tip: If the returned elements do not include the specific element you need, use 
 	var background_default = defineBackground(() => {
 		initLink();
 	});
+	// Desktop reuses this pinned tool engine, without starting an extension or its transport.
+	// The host hook exists only in the desktop's private VM, never in a website.
+	if (globalThis.__minduckNativeTools) {
+		globalThis.__minduckNativeTools.register({
+			schemas: TOOL_SCHEMAS, execute: handleCallTool, beginCall, endCall, cancel,
+			configure: setScope, watchGroupMembership,
+		});
+		return;
+	}
 	globalThis.browser?.runtime?.id ? globalThis.browser : globalThis.chrome;
 	//#endregion
 	//#region \0virtual:wxt-background-entrypoint?/private/tmp/claude-501/-Users-kilin-Dev-project-weave-init/703a2edc-79ce-4a22-a5c7-7c5dab4d6132/scratchpad/rel-ext/app/chrome-extension/entrypoints/background/index.ts

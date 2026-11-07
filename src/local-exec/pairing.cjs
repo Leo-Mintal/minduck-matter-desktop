@@ -9,7 +9,8 @@ function deviceSocketURL(value, origin) {
   return url.href
 }
 
-function createPairing({ store, safeStorage, fetchImpl, origin, version }) {
+function createPairing({ store, safeStorage, fetchImpl, origin, version, kind = 'desktop',
+  deviceName = os.hostname() + ' · Matter 桌面端', assertCurrent = () => {} }) {
   async function request(route, token, body, method = 'POST') {
     const response = await fetchImpl(origin + route, {
       method, redirect: 'error', signal: AbortSignal.timeout(15000),
@@ -29,15 +30,21 @@ function createPairing({ store, safeStorage, fetchImpl, origin, version }) {
     token,
     async pair(jwt, account) {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('系统钥匙串不可用，不能保存设备令牌')
-      const issued = await request('/api/extensions/devices/pairings', jwt, { kind: 'desktop' })
+      await assertCurrent()
+      const issued = await request('/api/extensions/devices/pairings', jwt, { kind })
+      await assertCurrent()
       const wsURL = deviceSocketURL(issued.ws_url, origin)
       const previous = store.get().pairing?.account === account ? token() : null
       const result = await request('/api/extensions/device-link/redeem', '', {
-        code: issued.code, device_name: os.hostname() + ' · Matter 桌面端', browser: 'Matter Desktop',
+        code: issued.code, device_name: deviceName, browser: 'Matter Desktop',
         extension_version: version, ...(previous ? { previous_device_token: previous } : {}),
       })
       if (typeof result.device_token !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(result.device_id)) throw new Error('配对响应无效')
       deviceSocketURL(result.ws_url, origin)
+      try { await assertCurrent() } catch (error) {
+        await request('/api/extensions/device-link/self', result.device_token, undefined, 'DELETE').catch(() => {})
+        throw error
+      }
       store.update({ pairing: { deviceId: result.device_id, encryptedToken: safeStorage.encryptString(result.device_token).toString('base64'),
         origin, wsURL, account } })
       return store.get().pairing

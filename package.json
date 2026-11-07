@@ -16,6 +16,7 @@
     "start": "electron .",
     "test": "node --test scripts/*.test.cjs",
     "test:local-exec": "node scripts/local-exec-smoke.cjs",
+    "test:browser-device": "node scripts/browser-device-smoke.cjs",
     "test:bundled-frontend": "node scripts/bundled-frontend-smoke.cjs",
     "test:extension": "electron scripts/matter-browser-extension-smoke.cjs",
     "test:extension-bridge": "electron scripts/extension-bridge-probe.cjs",

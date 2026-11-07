@@ -15,24 +15,30 @@ the left area and the built-in browser panel occupies the right. The panel uses
 Electron's Chromium renderer and keeps the original in-window tab, address-bar,
 and navigation controls. The browser frontend uses the original shared Panel and pill-shaped tabs,
 a local new-tab search page with the existing Minduck brand icon, and a small browser-settings dialog.
-The Matter Browser extension loads unchanged; a local
-compatibility bridge supplies its required `tabs`/`windows` operations,
-`tabs.group`/`tabGroups`, and DevTools Protocol commands over the Agent Browser
-views.
+Native browser-device tools operate the right-side Agent Browser views through
+the existing tab/group compatibility controller and private page helpers.
 
 Browser settings are opened from the gear in the right-side toolbar. They save
 the search engine (Bing or Google) and new-tab page locally, and can clear only
 the browser HTTP cache while keeping login cookies. Cmd/Ctrl+L focuses the address
 bar, Cmd/Ctrl+T creates a tab and Cmd/Ctrl+W closes the active browser tab. The
-visible assistant and sandbox buttons are removed; the existing automation bridge
-and bundled extensions continue to run. The chrome uses the project's original shared React components, layout tokens
+visible assistant and sandbox buttons are removed; native browser automation
+and the bundled Xiaohongshu extension remain available. The chrome uses the project's original shared React components, layout tokens
 and panel/tab transitions. No external browser UI or runtime is synchronized.
 
-Electron's extension implementation does not natively expose `chrome.debugger`
-or `chrome.tabGroups`. The bridge implements the subset the bundled Matter
-Browser extension uses; it is not a compatibility layer for arbitrary Chrome
-extensions. Its local DevTools endpoint binds only to `127.0.0.1` and is used to
-connect the unchanged extension worker with the app-owned browser views.
+The main process connects the built-in browser directly as a Matter browser device.
+It reuses the pinned 15-tool engine in a private VM, with isolated page helpers and
+page-scoped Electron APIs. The default app does not start a Matter Browser extension
+worker or a DevTools endpoint. The older extension compatibility bridge remains for
+explicit regression tests and experimental entry points.
+
+应用菜单 **内置浏览器设置…** 可查看在线状态、关闭或解除配对。默认在登录后自动配对，
+仅操作 Matter 自己创建的任务标签；切换账号后需要重新开启。浏览器设备凭证与本机执行
+独立加密存储，写操作仍遵循服务端审批。详见 [内置浏览器设备接入](docs/builtin-browser-device.md)。
+
+```bash
+pnpm run test:browser-device  # 一次性 profile、真实 Electron/WS、15 件工具与隔离/取消验证
+```
 
 The standalone `minduck-matter-chromium/` prototype is retained for separate
 full-Chromium compatibility testing. It is not included in the main Electron

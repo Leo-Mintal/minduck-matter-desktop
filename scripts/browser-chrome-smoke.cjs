@@ -65,6 +65,9 @@ async function probe() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const fixture = `http://127.0.0.1:${server.address().port}`
   const window = await waitFor(() => BrowserWindow.getAllWindows().find((item) => item.contentView.children.length >= 5), Boolean, 'main window')
+  const { getAgentBrowserSession, MATTER_BROWSER_EXTENSION_NAME } = require('../src/agentBrowser.cjs')
+  assert.equal(getAgentBrowserSession().extensions.getAllExtensions().some(item => item.name === MATTER_BROWSER_EXTENSION_NAME), false,
+    'default app uses the native browser device without starting a Matter Browser extension')
   const chrome = await waitFor(() => webContents.getAllWebContents().find((item) => item.getURL().includes('surface=chrome')), Boolean, 'shared chrome')
   const resizer = await waitFor(() => webContents.getAllWebContents().find((item) => item.getURL().includes('surface=resizer')), Boolean, 'shared resizer')
   const state = () => chrome.executeJavaScript('minduckBrowserShell.getState()')

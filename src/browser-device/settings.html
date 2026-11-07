@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'">
+<title>内置浏览器设置</title>
+<link rel="stylesheet" href="../../web-dist/desktop-shell/assets/shared.css">
+<link rel="stylesheet" href="../companion/ui/qa.css"><link rel="stylesheet" href="../local-exec/local-exec.css">
+</head><body><main class="local-card">
+<section class="pet-question permission-card" aria-labelledby="browser-title">
+<h1 class="pet-question-title" id="browser-title">让 Matter 使用内置浏览器</h1>
+<p class="pet-question-desc">登录后自动连接当前 Matter 账号，任务会在右侧浏览器中打开网页、读取内容和操作页面，无需另外安装 Chrome 扩展。页面内容和截图会回传 Matter 服务端，点击、快捷键、上传等动作继续遵循任务审批。</p>
+<div class="pet-options"><label class="pet-option permission-option"><input id="enabled" type="checkbox"><span class="pet-option-label">启用内置浏览器<span class="option-description">仅限当前登录账号，随时可以关闭</span></span></label></div>
+<p id="status" class="pet-status" role="status"></p><p id="device" class="muted"></p>
+<p id="error" class="pet-error" role="alert"></p>
+</section>
+<section class="pet-question permission-card">
+<h2 class="pet-question-title">操作范围</h2>
+<p class="pet-question-desc">Matter 只操作自己创建的任务标签，不会接管你手动打开的其他页面。文件上传仅使用会话已有的 Matter 文件；本机文件和命令执行仍由独立设置控制。</p>
+<p class="muted">切换账号或关闭功能会停止后续操作。断开并解除配对后，需要手动重新开启。</p>
+</section>
+<div class="pet-confirm-actions"><button id="revoke" class="b b-tertiary b-pill b-md">断开并解除配对</button></div>
+</main><script src="settings-ui.js"></script></body></html>

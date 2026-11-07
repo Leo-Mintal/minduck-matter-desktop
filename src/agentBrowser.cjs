@@ -27,12 +27,12 @@ async function loadExtension(app, name, directory) {
   return getAgentBrowserSession().extensions.loadExtension(extensionDirectory(app, directory), { allowFileAccess: false })
 }
 
-async function loadBuiltInExtensions(app) {
+async function loadBuiltInExtensions(app, { matterBrowser = true } = {}) {
   if (extensionsReady) return extensionsReady
 
   extensionsReady = Promise.allSettled([
     loadExtension(app, XIAOHONGSHU_EXTENSION_NAME, 'xiaohongshu'),
-    loadExtension(app, MATTER_BROWSER_EXTENSION_NAME, 'matter-browser'),
+    matterBrowser ? loadExtension(app, MATTER_BROWSER_EXTENSION_NAME, 'matter-browser') : Promise.resolve(null),
   ]).then(([xiaohongshu, matterBrowser]) => {
     if (xiaohongshu.status === 'rejected') {
       console.error('Failed to load the bundled Xiaohongshu extension:', xiaohongshu.reason)

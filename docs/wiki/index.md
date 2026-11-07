@@ -9,7 +9,8 @@
 - Default single-window Electron shell: `src/main.cjs`
 - Bundled frontend and network pass-through: `src/bundledFrontend.cjs`; shared Web build: `scripts/build-web.cjs`
 - Electron Chromium browser host: `src/electronBrowserHost.cjs`
-- Matter Browser Electron compatibility bridge: `src/extensionApiBridge.cjs`, `src/agentBrowserCompatibility.cjs`
+- Native browser device: `src/browser-device/`
+- Experimental Matter Browser Electron compatibility bridge: `src/extensionApiBridge.cjs`, `src/agentBrowserCompatibility.cjs`
 - Integrated desktop pet and explicit settings: `src/companion/`; pinned runtime: `vendor/coopanion/`
 - Experimental external Chromium launcher: `src/chromium-shell.cjs`, `src/chromiumBrowser.cjs`
 - Chromium-hosted extension compatibility prototype: `minduck-matter-chromium/`
@@ -23,6 +24,8 @@
 - [macOS 客户端打包与直发](../macos-distribution.md)
 
 ## Recent Updates
+
+- 2026-11-07: 将桌面端全部既有状态提交为 `7f3a599`，在 `codex/builtin-browser-device` 开始原生浏览器设备改造。主进程以 `kind=browser` 自动配对并提供 15 件工具，复用固定引擎、隔离 world、反向 WS 和右侧标签兼容层；默认不启动 Matter Browser 扩展 worker。新增独立加密凭证、在线 presence、内置浏览器设置和账号/取消边界，原有本机执行保持独立。168 项单测、原生设备/旧扩展兼容/主入口浏览器/本机执行 Electron smoke、8 个相关模块质量扫描通过；设置 360/560px 深浅色截图与无横向溢出验证通过。开发版已打开设置，当前等待登录；真实服务端/模型联合验收与解锁后的可见窗口验收另行确认，未替换安装版或重打发布包。
 
 - 2026-11-06: 仅修改桌面端标准目录授权：显式访问桌面/文稿/下载时由主进程按需访问目录，交给 macOS 系统授权；成功后将该标准目录加入当前会话沙箱，其他自定义目录仍用原生选择器。增加三个目录用途声明和「文件与文件夹权限…」入口，拒绝后给设置引导；取消、关闭或切账号后的迟到结果不授权。`workspace-v2` 要求旧用户重新阅读范围并开启，不静默扩大既有同意。154 项单测、一次性 home 下的真实 Electron 目录探测/Seatbelt worker/设置 IPC/四宽深浅 smoke 及 4 个相关 CJS 文件的临时副本质量扫描通过。本轮未改后端、重打包或替换安装版；签名新包在未授权状态下的首次真实 TCC 弹窗仍待实机验证。
 

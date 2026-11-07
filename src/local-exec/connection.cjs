@@ -1,7 +1,8 @@
 const VERSIONS = ['2025-06-18', '2025-11-25', '2025-03-26', '2024-11-05']
 
 function connectDesktop({ url, token, deviceId, version, execute, onState = () => {}, onRevoked = () => {},
-  WebSocketImpl = globalThis.WebSocket, reconnectDelay = 1000 }) {
+  WebSocketImpl = globalThis.WebSocket, reconnectDelay = 1000, tools, mcpResults = false, maxActive = 4,
+  serverName = 'matter-desktop-local-exec', capabilities = { tools: {}, localExec: { version: 1, approval: 'local', sandbox: 'seatbelt' } } }) {
   let socket
   let timer
   let heartbeat
@@ -38,19 +39,20 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
       if (!VERSIONS.includes(params.protocolVersion)) return fail(current, id, 'unsupported protocol version')
       initialized = true
       return send(current, { jsonrpc: '2.0', id, result: { protocolVersion: params.protocolVersion,
-        capabilities: { tools: {}, localExec: { version: 1, approval: 'local', sandbox: 'seatbelt' } },
-        serverInfo: { name: 'matter-desktop-local-exec', version } } })
+        capabilities, serverInfo: { name: serverName, version } } })
     }
+    if (method === 'ping') return send(current, { jsonrpc: '2.0', id, result: {} })
+    if (method === 'tools/list' && initialized && tools) return send(current, { jsonrpc: '2.0', id, result: { tools } })
     if (method !== 'tools/call' || !initialized) return fail(current, id, 'unsupported desktop method')
     const key = String(id)
-    if (seen.has(key) || active.size >= 4) return fail(current, id, 'duplicate request or desktop busy')
-    if (seen.size >= 10000) { current.close(1001, 'refresh request window'); return }
+    if (seen.has(key) || active.size >= maxActive) return fail(current, id, 'duplicate request or desktop busy')
+    if (seen.size >= 10000) { current.close(4000, 'refresh request window'); return }
     seen.add(key)
     const controller = new AbortController()
     active.set(key, controller)
     try {
       const result = await execute(params, controller.signal)
-      if (!controller.signal.aborted) send(current, { jsonrpc: '2.0', id, result: {
+      if (!controller.signal.aborted) send(current, { jsonrpc: '2.0', id, result: mcpResults ? result : {
         content: [{ type: 'text', text: JSON.stringify(result) }],
         isError: result.denied === true || result.cancelled === true || result.timed_out === true || result.error !== undefined
           || ('exit_code' in result && result.exit_code !== 0),
@@ -69,7 +71,7 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
     socket = current
     const watch = () => {
       clearTimeout(heartbeat)
-      heartbeat = setTimeout(() => { cancelAll(); current.close(1001, 'heartbeat timeout') }, 55000)
+      heartbeat = setTimeout(() => { cancelAll(); current.close(4000, 'heartbeat timeout') }, 55000)
     }
     current.addEventListener('open', () => {
       if (socket !== current || stopped) return
