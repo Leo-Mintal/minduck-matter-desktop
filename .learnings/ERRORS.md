@@ -671,3 +671,8 @@ Related files: `scripts/build-web.cjs`, `scripts/bundled-frontend.test.cjs`, `sc
 - Assessment validation completed: 8 desktop browser unit tests and focused reverse-MCP pairing, presence and tool-chain tests passed. No production pairing or full server-to-Electron validation was performed.
 
 - Pairing follow-up: a guessed `src/local-exec/transport.cjs` path did not exist; the verified transport file is `src/local-exec/connection.cjs`.
+
+## 2026-11-07: Browser label regression investigation
+
+- A source lookup guessed an `extensions/matter-browser/tests` directory that is absent in the packaged extension. Continued with the existing desktop Electron/WS smoke instead.
+- The quality checker treats its target as a directory, so a direct helper-file scan reported zero files. Repeated on temporary `.js` copies of both affected files: two scanned, no errors, one existing helper file-length warning. The temporary directory was removed.

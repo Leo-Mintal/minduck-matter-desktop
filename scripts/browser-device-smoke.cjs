@@ -78,7 +78,17 @@ app.whenReady().then(async () => {
       response.setHeader('content-type', 'text/html; charset=utf-8')
       if (request.url === '/frame') { response.end('<!doctype html><label>Frame name<input id="frame-name"></label><button>Frame action</button>'); return }
       if (request.url === '/matter') { response.end('<!doctype html><h1>Matter fixture</h1>'); return }
-      response.end(`<!doctype html><meta charset="utf-8"><title>Native browser task</title><style>body{font:18px system-ui;padding:24px}label,button,p{display:block;margin:12px 0}iframe{width:450px;height:100px}</style><h1>内置浏览器任务验证</h1><label>Name<input id="name" aria-label="Name"></label><button id="go" onclick="document.querySelector('#result').textContent='完成：'+document.querySelector('#name').value">Run task</button><p id="result">等待执行</p><input id="file" type="file"><a href="/next">Next page</a><iframe src="/frame"></iframe><iframe id="cross" src="${origin.replace('127.0.0.1', 'localhost')}/frame"></iframe>`)
+      response.end(`<!doctype html><meta charset="utf-8"><title>Native browser task</title>
+        <style>body{font:18px system-ui;padding:24px}label,button,p{display:block;margin:12px 0}iframe{width:450px;height:100px}
+        footer{position:fixed;bottom:0;left:24px;background:white}footer>*{display:inline-block;margin:8px}</style>
+        <h1>内置浏览器任务验证</h1><label>Name<input id="name" aria-label="Name"></label>
+        <button id="go" onclick="document.querySelector('#result').textContent='完成：'+document.querySelector('#name').value">Run task</button>
+        <p id="result">等待执行</p><input id="file" type="file"><a href="/next">Next page</a>
+        <iframe src="/frame"></iframe><iframe id="cross" src="${origin.replace('127.0.0.1', 'localhost')}/frame"></iframe>
+        <footer><a href="#editor"><span>发布笔记</span></a>
+        <button id="fixture-publish" onclick="this.dataset.clicked='true'"><span>发布</span><span hidden>隐藏</span></button>
+        <button>保存<span>草稿</span></button><span role="button" tabindex="0"><span>设置</span></span>
+        <button aria-label="确认"><span>显示文字</span></button></footer>`)
     })
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = 'http://127.0.0.1:' + server.address().port
     wss = new WebSocketServer({ server, path: '/api/extensions/device-link/ws' })
@@ -123,6 +133,18 @@ app.whenReady().then(async () => {
     const tabId = nav.tabId, tab = compatibility.tabById(tabId), contents = tab.view.webContents
     const tree = payload(await call('chrome_read_page', { tabId }))
     assert.ok(tree.pageContent.includes('Name'), tree.pageContent)
+    const publishLine = tree.pageContent.split('\n').find(line => /- button "发布" /.test(line))
+    assert.ok(publishLine, 'Nested two-character button label is missing: ' + tree.pageContent)
+    assert.match(tree.pageContent, /- link "发布笔记" /)
+    assert.match(tree.pageContent, /- button "保存草稿" /)
+    assert.match(tree.pageContent, /- button "设置" /)
+    assert.match(tree.pageContent, /- button "确认" /)
+    const publishRef = publishLine.match(/\[ref=(ref_\d+)\]/)?.[1]
+    assert.ok(publishRef)
+    const interactiveTree = payload(await call('chrome_read_page', { tabId, filter: 'interactive' }))
+    assert.match(interactiveTree.pageContent, /- button "发布" /)
+    await call('chrome_click_element', { tabId, ref: publishRef })
+    assert.equal(await contents.executeJavaScript("document.querySelector('#fixture-publish').dataset.clicked"), 'true')
     const ref = tree.pageContent.split('\n').find(line => line.includes('textbox') && line.includes('Name'))?.match(/\[ref=(ref_\d+)\]/)?.[1]
     assert.ok(ref, tree.pageContent)
     await call('chrome_fill_or_select', { tabId, ref, value: 'Native device' })

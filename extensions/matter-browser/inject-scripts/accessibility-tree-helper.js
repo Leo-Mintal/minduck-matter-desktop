@@ -97,13 +97,10 @@
       if (type === 'submit' && val && val.trim()) return val.trim();
       if (input.value && input.value.length < 50 && input.value.trim()) return input.value.trim();
     }
-    if (['button', 'a', 'summary'].includes(tag)) {
-      let text = '';
-      for (let i = 0; i < el.childNodes.length; i++) {
-        const n = el.childNodes[i];
-        if (n.nodeType === Node.TEXT_NODE) text += n.textContent || '';
-      }
-      if (text.trim()) return text.trim();
+    if (isInteractive(el)) {
+      // Controls often wrap their visible name in spans; innerText also omits hidden children.
+      const text = /** @type {HTMLElement} */ (el).innerText;
+      if (text && text.trim()) return text.trim();
     }
     if (/^h[1-6]$/.test(tag)) {
       const t = el.textContent;
