@@ -32,7 +32,7 @@ test('system denial fails closed with settings guidance and never retries', asyn
       realpath: async value => value,
       opendir: async () => ({ read: async () => { attempts++; throw Object.assign(new Error('denied'), { code }) },
         close: async () => { closes++ } }),
-    }), error => error.denied === true && error.message.includes('文件与文件夹权限'))
+    }), error => error.denied === true && error.message.includes('完全磁盘访问'))
     assert.equal(attempts, 1); assert.equal(closes, 1)
   }
 })

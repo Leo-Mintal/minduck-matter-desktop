@@ -140,14 +140,14 @@ Apple 证书、App Store Connect API Key（`.p8`）、钥匙串 profile、公证
 ### 检查客户端更新
 
 macOS 应用菜单 **Minduck Matter → 检查更新…** 由桌面主进程读取固定的发布清单
-`http://124.70.149.30:8091/latest.json`。发现更高版本时，客户端会用系统默认浏览器
-打开对应 DMG；用户下载后将应用拖入“应用程序”覆盖即可。它不依赖 Matter Web 或业务后端，
+`https://matter-desktop.yogeeai.com/download/latest.json`。发现更高版本时，客户端会用系统默认浏览器
+打开 `https://matter-desktop.yogeeai.com/download/MinduckMatter-<version>-arm64.dmg`；用户下载后将应用拖入“应用程序”覆盖即可。它不依赖 Matter Web 或业务后端，
 也不会自动下载安装或替换正在运行的应用。
 
-清单和 DMG 当前由独立静态下载服务发布。客户端仅接受与清单同源、文件名严格匹配
-`MinduckMatter-<version>-arm64.dmg` 的下载链接，且忽略相同或更低版本。每次发布必须先上传
+清单和 DMG 当前由独立静态下载服务发布。客户端仅接受下载目录和文件名严格匹配的 HTTPS 链接，
+以及精确匹配版本的旧 `http://124.70.149.30:8091/MinduckMatter-<version>-arm64.dmg` 兼容值；旧值在新客户端中转换为上述 HTTPS 地址，且忽略相同或更低版本。每次发布必须先上传
 DMG，再原子替换 `latest.json`，详见 [macOS 客户端打包与直发手册](docs/macos-distribution.md)。
-当前地址是过渡期裸 IP HTTP；对外长期分发前应迁移到 HTTPS 域名并将清单地址同步改为该域名。
+发布清单保留旧地址字段以兼容已安装客户端；本次源码切换从下一版安装包生效，现有 `0.1.5` 不重打包。
 
 日常发布使用一个命令，并显式传入要发布的版本号：
 
@@ -255,21 +255,21 @@ DMG SHA-256 after packaging. Block maps and checksum files are stored in
 The standalone prototype package remains under
 `minduck-matter-chromium/release/`.
 
-## Matter 本机执行（macOS，默认关闭）
+## Matter 本机执行（macOS，使用系统权限）
 
-应用菜单「本机执行设置…」可显式开启 Shell 与文件工具。需要后端先应用迁移 `000109`、`000110`，配置既有设备通道并设置 `MATTER_LOCAL_EXEC=on`。本机通过既有配对 API 生成 `kind=desktop` 设备，safeStorage 加密保存设备令牌；开关关闭不连接、不注入设备头。解除配对会调用撤销 API；失败时保留加密凭证供重试。账号、Matter 服务源变化会停止执行并要求重新开启。
+客户端启动即检查 macOS 完全磁盘访问。缺少权限时显示一次原生提示，点击“打开系统设置”进入“隐私与安全性 → 完全磁盘访问”，由用户为 Minduck Matter 开启；没有独立的本机执行设置页或菜单项。系统已授权时不重复提示，登录 Matter 后自动连接本机 Shell 和文件工具。后端仍需迁移 `000109`、`000110` 和 `MATTER_LOCAL_EXEC=on`。设备通过既有 API 以 `kind=desktop` 配对，令牌使用 safeStorage 加密保存。
 
-首次登录自动展示复用桌宠 QA 样式的本地授权页；用户开启一次后，会话/授权目录内自动执行 Shell 与文件读写，不再逐条显示「允许这一次」。当前本地 consent 为 `workspace-v2`：旧版逐次确认或 `workspace-v1` 的开启/联网状态不会静默升级，需要重新阅读范围说明并开启。每个会话使用 `~/Matter/<清理后的标题>-<完整会话ID>/`，设置可更换根目录、移除会话授权或在 Finder 打开。显式访问标准桌面、文稿或下载目录时，主进程先按需访问对应目录，由 macOS 处理系统授权；成功后将整个标准目录加入当前会话的沙箱授权范围。系统已允许时沿用已有选择，其他会话不直接继承本地目录映射。其他外部目录继续使用原生文件夹选择器；不存在或被符号链接替换的标准目录也退回选择器。Shell 须显式设置 `cwd`，例如 `cwd:"~/Desktop", command:"ls -la"`。本地设置页独立于远程 Matter，主进程验证 WebContents、主帧与精确 file URL，远程页面无执行 IPC。
+权限以实际系统探测为准，不以旧页面的“已看过”标记或保存的开关为准。相同 bundle ID、签名身份与用户数据目录的升级/覆盖安装通常沿用系统授权，不因版本变化重新请求；macOS 可能要求开启权限后重启应用。卸载应用不保证清除系统 TCC 记录，撤销权限请在系统设置中关闭。客户端不重置 TCC，也不能自行授予完全磁盘访问。缺少权限时每次启动最多提示一次；撤销后停止连接和执行，重新授予后自动恢复。
 
-执行走 macOS `/usr/bin/sandbox-exec`，缺失时停用，不退回裸执行。默认无网络，只允许会话/授权目录及私有临时目录写入；读取限授权范围和必要系统/工具链，敏感凭证、Keychains、Application Support 与 userData 始终拒绝。命令只继承登录 PATH 和白名单环境，缓存重定向到会话 `.matter-cache/`。联网须在本机设置持久开启可选联网权限，并在命令中声明 `needs_network=true`；撤销会终止当前操作。命令输出与文件内容回传服务端；文件写入保留内容摘要冲突检查并返回 diff。自动模式下，被盗 JWT 或受控服务端可能触发授权范围内的执行，此风险不能靠设备请求头消除。
+当前执行策略为 `system-access-v1`：系统授权后可访问当前系统用户可读写的目录，不再逐目录选择。每个会话仍默认使用 `~/Matter/<清理后的标题>-<完整会话ID>/`；可通过显式 cwd/path 指定项目或标准目录（如 `cwd:"~/Desktop", command:"ls -la"`）。敏感凭据、Keychains、Application Support 与 userData 仍禁止读写，包括符号链接及 Shell 访问。旧设置标记不会被当作系统授权。切换账号/服务源会停止旧连接，仅当前登录账号可重新配对；远程 Matter 没有新增执行 IPC 或 preload。
 
-macOS 系统权限需要用户亲自确认，安装不能静默授予。当前按需请求具体文件夹，不预先要求辅助功能或录屏。标准目录访问被拒绝后返回设置引导，可从本机执行设置的「文件与文件夹权限…」进入系统设置；不反复重试或强制重新弹窗。`Operation not permitted` 只是权限错误，先核对返回的 `allowed_directories` / `permission_hint`；完全磁盘访问不会扩大 Matter 自有沙箱。登录后展示授权页是启动新版客户端后的行为，旧安装包不会因后端更新而获得此入口。
+Shell 与文件 worker 继续经过 macOS `/usr/bin/sandbox-exec`，缺失时停用，不退回裸执行。写入和读取均排除敏感目录，命令只继承登录 PATH 和白名单环境，临时文件/缓存隔离。每次命令默认无网络，仅显式声明 `needs_network=true` 时开放网络，不再有独立联网开关。命令输出与文件内容回传服务端；文件写入保留内容摘要冲突检查并返回 diff。自动模式仍依赖当前账号与服务端的可信性。
 
 文件工具仅支持整个文件不超过 256KB 的 UTF-8 文本；覆盖前需同一会话读取，内容哈希变化时要求重读。Shell 上限 2 分钟，stdout/stderr 各 1MB；退出、取消、超时及断线清理进程组。无 PTY、持续 stdin、后台任务、Windows/Linux 或团队成员执行支持。普通平台/团队聊天可用，组队及公开/触发/自定义 API 不挂载。
 
-实现位于 `src/local-exec/`。`main.cjs` 连接菜单/生命周期，默认 session 请求头与内置前端转发共用精确源、账号、就绪设备策略；`file-worker.cjs` 打包到 ASAR 外供受沙箱保护的 Electron Node 子进程调用。未替换本机安装版、未部署后端，真实模型全栈验收尚待进行。
+实现位于 `src/local-exec/`。`main.cjs` 连接系统权限提示与生命周期，默认 session 请求头与内置前端转发共用精确源、账号、就绪设备策略；`file-worker.cjs` 打包到 ASAR 外供受沙箱保护的 Electron Node 子进程调用。未替换本机安装版、未部署后端，真实模型全栈验收尚待进行。
 
 ```bash
 pnpm test                 # 含真实 macOS Seatbelt 与 WebSocket 回归
-pnpm run test:local-exec   # 独立临时数据目录的真实 Electron 确认/文件/Shell/请求头/设置隔离 smoke
+pnpm run test:local-exec   # 独立临时数据目录的真实 Electron 系统授权/文件/Shell/请求头/撤销取消 smoke
 ```

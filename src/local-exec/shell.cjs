@@ -63,7 +63,7 @@ async function runSandboxed(options, program, args, extra = {}) {
     result.sandbox_denied = result.exit_code !== 0 && /operation not permitted|sandbox|permission denied/i.test(result.stderr)
     if (result.sandbox_denied) {
       result.allowed_directories = options.roots
-      result.permission_hint = '权限错误不能证明是 macOS 隐私权限。先核对 allowed_directories：访问其他目录时把 cwd 设为目标目录，客户端会自动打开系统文件夹选择器。已授权目录仍被拒绝时才排查 macOS 文件访问权限；完全磁盘访问不会扩大 Matter 自己的沙箱。不要重复原命令或换写法绕过。'
+      result.permission_hint = '请检查系统设置中的完全磁盘访问、文件自身权限，以及是否涉及受保护的凭据或应用数据目录。完全磁盘访问不会绕过这些保护。不要重复原命令或换写法绕过。'
     }
     return result
   } finally { await sandbox.cleanup() }

@@ -17,6 +17,7 @@ function profileFor({ roots, temporary, denied = sensitivePaths(), home = os.hom
     path.join(home, '.nvm/versions'), path.join(home, '.volta/tools'), path.join(home, '.local/bin')]
   const exclusions = [...denied, '/private/etc/master.passwd', '/private/etc/security', '/private/etc/ssh']
   const readFilter = `(require-all (require-any ${readable.map(subpath).join(' ')}) ${exclusions.map(value => `(require-not ${subpath(value)})`).join(' ')})`
+  const writeFilter = `(require-all (require-any ${[...roots, temporary].map(subpath).join(' ')}) ${exclusions.map(value => `(require-not ${subpath(value)})`).join(' ')})`
   return `(version 1)
 (deny default)
 (allow process-exec)
@@ -26,7 +27,7 @@ function profileFor({ roots, temporary, denied = sensitivePaths(), home = os.hom
 (allow file-read-metadata)
 (allow file-read* (literal "/"))
 (allow file-read* ${readFilter})
-(allow file-write* (require-any ${[...roots, temporary].map(subpath).join(' ')}))
+(allow file-write* ${writeFilter})
 (allow file-write-data (literal "/dev/null") (literal "/dev/tty"))
 (allow mach-lookup (global-name "com.apple.system.logger") (global-name "com.apple.bsd.dirhelper") (global-name "com.apple.system.opendirectoryd.libinfo"))
 ${network ? '(allow network-outbound)\n(allow mach-lookup (global-name "com.apple.mDNSResponder"))' : ''}

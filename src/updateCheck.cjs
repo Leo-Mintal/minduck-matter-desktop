@@ -1,4 +1,7 @@
-const UPDATE_MANIFEST_URL = 'http://124.70.149.30:8091/latest.json'
+const UPDATE_MANIFEST_URL = 'https://matter-desktop.yogeeai.com/download/latest.json'
+// Keep the manifest's legacy URL compatible with already installed clients.
+// New clients validate it but always open the HTTPS download URL below.
+const LEGACY_UPDATE_DOWNLOAD_BASE_URL = 'http://124.70.149.30:8091/'
 const UPDATE_TIMEOUT_MS = 10_000
 const MAX_MANIFEST_BYTES = 16 * 1024
 
@@ -35,15 +38,14 @@ function parseManifest(value, manifestURL = UPDATE_MANIFEST_URL) {
   }
 
   const expectedFilename = `MinduckMatter-${version}-arm64.dmg`
-  if (download.origin !== manifest.origin
-    || download.protocol !== manifest.protocol
-    || download.username || download.password
-    || download.search || download.hash
-    || decodeURIComponent(download.pathname).split('/').pop() !== expectedFilename) {
+  const expectedDownload = new URL(expectedFilename, manifest)
+  const legacyDownload = new URL(expectedFilename, LEGACY_UPDATE_DOWNLOAD_BASE_URL)
+  const acceptsLegacy = manifest.href === UPDATE_MANIFEST_URL && download.href === legacyDownload.href
+  if (download.href !== expectedDownload.href && !acceptsLegacy) {
     throw new Error('更新下载地址无效')
   }
 
-  return { version, downloadURL: download.href }
+  return { version, downloadURL: expectedDownload.href }
 }
 
 async function checkForUpdate({ currentVersion, fetchImpl, manifestURL = UPDATE_MANIFEST_URL, timeoutMs = UPDATE_TIMEOUT_MS }) {
@@ -81,6 +83,7 @@ async function checkForUpdate({ currentVersion, fetchImpl, manifestURL = UPDATE_
 }
 
 module.exports = {
+  LEGACY_UPDATE_DOWNLOAD_BASE_URL,
   MAX_MANIFEST_BYTES,
   UPDATE_MANIFEST_URL,
   compareVersions,

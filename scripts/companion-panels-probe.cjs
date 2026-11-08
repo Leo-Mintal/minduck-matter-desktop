@@ -106,7 +106,7 @@ async function checkPanels(page, width, theme, hover = true) {
   }, 100))`)
 }
 
-module.exports = async function probePanels(url, waitFor) {
+module.exports = async function probePanels(url, waitFor, coreOrigin) {
   const page = new BrowserWindow({ show: false, width: 960, height: 600, transparent: true,
     backgroundColor: '#00000000',
     webPreferences: { contextIsolation: true, sandbox: true, offscreen: true, backgroundThrottling: false } })
@@ -404,6 +404,7 @@ module.exports = async function probePanels(url, waitFor) {
         (await page.webContents.capturePage({ x, y, width:right-x, height:bottom-y })).toPNG())
     }
     assert.deepEqual(await page.webContents.executeJavaScript('panelProbe.errors'), [])
+    await require('./companion-scale-probe.cjs')(page, waitFor, checkPanels, setTask, coreOrigin)
     await require('./companion-quick-chat-ui-probe.cjs')(page, waitFor)
     await require('./companion-running-ui-probe.cjs')(page, waitFor)
     await require('./companion-qa-ui-probe.cjs')(page, waitFor)

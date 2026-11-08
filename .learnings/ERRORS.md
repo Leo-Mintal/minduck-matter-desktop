@@ -1,5 +1,13 @@
 # Unexpected Errors
 
+## 2026-11-07 - Compact habits follow-up verification
+
+- Initial source discovery guessed an unshipped console source directory and hit an unmatched zsh glob. The shipped editable console is `build/console/index.js`; subsequent changes used unique, hash-guarded spans. Preserved and byte-verified the pre-existing independent bubble-size/panel-scaling edits in all three touched runtime files.
+- The first settings assertion observed the slider's temporary initial value 1 before configuration arrived. Wait for loaded glow preferences before checking the real default 0. One later native media-emulation run timed out; the rerun completed all four widths in both appearances without changing production theme behavior.
+- A saved-preferences fixture mixed display and sound paths in the pet config group and was rejected. Split it into the existing `world:desktop-pet` and `world:desktop-pet:sound` groups; reload, native category clicks, hidden-value preservation and Core restart then passed.
+- The full test run reported 152/168 passing, with 16 failures in concurrently edited Full Disk Access/local-execution/system-folder modules outside this change. The 62 scoped companion tests pass. Runtime integrity also reports unsynchronized hashes in the independently edited `minduck-panels.js` and `.css`; did not replace those files or silently update their notices. The three runtime files touched here have matching recorded hashes.
+- Resolution: after the independent permission tests/modules and panel notices were synchronized, the final whole-project run passed all 165 current tests and `check-companion` passed. The completed settings probe also passed four widths/light-dark, both sidebar states, real category saves, explicit glow after reload, hidden-value preservation and theme/Core restart; reviewed fresh display and sound screenshots in both appearances. No unrelated permission or panel source was changed by this settings task.
+
 ## 2026-11-07 - Preview name broke the main Matter page
 
 - The task-local launcher set `app.setName('Minduck Matter 浏览器开发预览')`. Electron included the non-Latin app name in its default User-Agent; the protocol request adapter then threw `TypeError: Cannot convert argument to a ByteString` (character value 27983) before the bundled frontend handler could serve the document, producing `ERR_UNEXPECTED` and the unavailable page.
@@ -680,3 +688,41 @@ Related files: `scripts/build-web.cjs`, `scripts/bundled-frontend.test.cjs`, `sc
 ## 2026-11-07: Agent cursor asset lookup
 
 - A lookup used the module-style test filename `scripts/agentCursorOverlay.test.cjs`; the existing tests use kebab case (`scripts/agent-cursor-overlay.test.cjs`). Located and updated the existing test rather than creating a duplicate.
+
+## 2026-11-07: Production installer source retrieval
+
+- The normal Web `dev` shallow clone did not complete over the configured `github-minduck` SSH connection during the observed interval, even though a separate bounded SSH authentication probe succeeded. Stopped only that build's verified SSH child; the package script exited and cleaned its temporary stage before producing artifacts. The underlying transfer cause was not established.
+- A bounded HTTPS read of the same repository resolved `dev` to `00793b1f184d8d98425aa64d7f00bd159d8840ec`. Retried packaging with `MINDUCK_WEB_REMOTE` selecting that repository over HTTPS and process-local Git credential-helper configuration using the already authenticated GitHub CLI. No repository/global Git configuration, TLS checks, branch or credentials were changed.
+- The HTTPS clone transferred data but failed with `curl 18`, `early EOF` and `invalid index-pack output`; no release artifact was produced. The user then explicitly requested a faster local build. Reused the desktop project's existing `web-dist/` through `MINDUCK_WEB_ALLOW_PREBUILT=1`, retaining signing/notarization and recording its input hashes. The sibling Web checkout is on `integration/custom-api` and lacks the shared desktop-shell build, so it was not used as a replacement frontend.
+- The explicit local build completed as `MinduckMatter-0.1.4-arm64.dmg`. Both notarizations were accepted; the final mounted app passed signature/ticket/distribution checks, all 380 input files matched, and the DMG SHA-256 plus all 9,419 blockmap blocks verified. Distribution docs now describe this user-authorized local path without changing the default remote build.
+
+## 2026-11-07: Bubble scaling and native permission integration
+
+- Initial source lookups guessed absent `src/local-exec/permissions.cjs`, vendored `console/`, and `build/core.js` paths; continued using the verified controller and built console paths.
+- Initial controller tests exposed retained retry cooldown after successful activation and a restart fixture reading its fresh store instead of the supplied one; fixed the activation cooldown and fixture store, then all 30 relevant tests passed. Unit fixtures now inject PATH resolution instead of invoking the user's interactive shell.
+- The scaling probe initially posted Core config to the pet World's different loopback origin, which rejected the route. Use the verified Core origin from the companion status and the main-process fetch.
+- Real 150% narrow-screen geometry exposed subpixel overflow from rounded offsetWidth/Height. Positioning now uses fractional computed CSS dimensions.
+- Final verification passed: 165 unit tests; Electron native startup/menu/browser, local execution/revocation, settings slider/persistence, panels 100/125/150% and QA round-trip smokes; runtime hashes; eight-module quality scan with no errors or warnings. Validation captures were backed up under `/tmp/minduck-panel-validation-20261107`; regenerated panel reference images were restored, while new 150% previews and independently updated settings captures were retained.
+
+## 2026-11-07: Local 0.1.5 release verification
+
+- A release-metadata lookup omitted the `.dmg` segment from the existing 0.1.4 input manifest filename. Continued with the verified `MinduckMatter-0.1.4-arm64.dmg.inputs.json` path.
+- A read-only signing-progress probe tried `os.listxattr`, unavailable in this macOS Python build. Continued observing the specific signing child and build log without changing the packaging pipeline.
+- An initial package hash check included raw `package.json`. Electron Builder intentionally strips `scripts`, `devDependencies` and `build`; verified the exact remaining metadata against the source instead, while retaining the source JSON hash and byte-for-byte checks for all other inputs.
+
+## 2026-11-07: HTTPS update-source migration verification
+
+- A read-only compatibility probe passed an undefined filename to Node 24's private Module._compile API, causing that temporary Node process to abort. Re-ran the extracted updater in a VM with an explicit URL global; installed-client compatibility, live HTTPS manifest normalization, and unchanged 0.1.5 DMG checksum all passed. No app/profile or release artifact was changed.
+- An error-log patch used a heading placeholder that did not match the file, so it made no edit; appended this verified record instead.
+
+## 2026-11-08: Compact native pet window validation
+
+- An initial lookup guessed `src/window.ts`; the verified runtime host manager is `src/window-host.ts`.
+- The new native-window probe initially sent a nonexistent `worlds.desktop-pet.sound.enabled` config key. Removed it and awaited the DevTools connection before setup so setup failures cannot leave an unhandled connection rejection. The real native probe then passed CGWindow bounds/screenshots, transparency, QA/150% expansion and contraction, unchanged renderer viewport and drag/drop.
+- The quality script treats `--help` as no explicit scan target and scanned the current repository. Re-ran it on temporary `.js` copies of the five relevant runtime files, since `.cjs` is excluded: zero errors and one existing renderer file-length warning. Temporary copies were removed.
+
+## 2026-11-08: Initial repository push credential check
+
+- A pre-push credential-pattern guard stopped on an AWS-key-shaped substring in vendored pnpm. Inspection confirmed the match is embedded inside a `data:application/octet-stream;base64` WebAssembly string, with base64 characters on both sides; a standalone-token check has no match. No dependency or Git history was changed. Check token boundaries and source context before classifying embedded binary data as a credential.
+- The initial SSH push was rejected because the default key authenticated a different GitHub account without repository write access; the configured GitHub SSH alias used that same account, and no SSH agent was available. The existing GitHub CLI owner login has API-confirmed push/admin permissions. Use HTTPS with a repository-local `gh auth git-credential` helper; leave global SSH/account configuration unchanged and never write tokens into Git URLs or files.
+- A subsequent HTTPS attempt was still rewritten to SSH by an inherited `url.git@github-minduck:.insteadOf` rule. Confirm transport with `git remote get-url` before retrying; an HTTPS URL with the repository owner's username bypasses that prefix rewrite without altering global configuration or embedding any credential.

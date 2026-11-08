@@ -220,6 +220,90 @@
       "upstreamSha256": "e8a1e3dbbeb3a49cbdcafe98eab2a0454cbce5b6ce2c70c77c8dd5ebf06e49e3",
       "integratedSha256": "9a7c849c62aa382739bbc9c8c8ca87ef790c859aa6d5f06bbb364d0368e16063",
       "reason": "Omit the upstream version/GitHub release group from the Minduck settings titlebar, including its separator and GitHub update links. Preserve navigation, sidebar toggle and appearance controls."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "da1f9809056ccb1ab7a4cc8d360e2cd56e22cadb025d0cfcfbefaa02e43e23e3",
+      "integratedSha256": "104b1517e5a9020ba1e8114a56ad600aeefab9364a24487758e0ebf2f8c5383d",
+      "reason": "Remove language and its empty General section, font-size and snore-duration rows, and talk/UI sound category controls from Minduck habits. Default the glow slider to off while preserving explicit values and the existing independent bubble-size changes. Retain detached sound controls internally for the speech dependency without exposing them."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/src/config.ts",
+      "upstreamSha256": "019affcbcd53533af8749b292a7dbe054e60a4cf7e054dd99a9c6f4e6c9c9a59",
+      "integratedSha256": "36620a1d24d19c1a525a100f8c88e7346458bfd829d0471066d47c667ff195a4",
+      "reason": "Default outer glow to zero when not explicitly configured; preserve saved values and the existing independent bubble-size limits."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "d80cb5e21dd1734bdb1a75f66e1dd3996393e74f99cba0e8ed862ed9ef6fa8f9",
+      "integratedSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "reason": "Default the pet renderer halo to off before preferences arrive, preserving explicit glow preferences and the existing independent panel-scaling changes."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "104b1517e5a9020ba1e8114a56ad600aeefab9364a24487758e0ebf2f8c5383d",
+      "integratedSha256": "104b1517e5a9020ba1e8114a56ad600aeefab9364a24487758e0ebf2f8c5383d",
+      "reason": "Expose bubble size in Minduck settings with a 150% maximum and the 100% default; keep the independent compact-settings filters."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/src/config.ts",
+      "upstreamSha256": "36620a1d24d19c1a525a100f8c88e7346458bfd829d0471066d47c667ff195a4",
+      "integratedSha256": "36620a1d24d19c1a525a100f8c88e7346458bfd829d0471066d47c667ff195a4",
+      "reason": "Limit bubble size to 80–150%, keep font-size validation at 160% and preserve the independent default-off glow."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/src/self.ts",
+      "upstreamSha256": null,
+      "integratedSha256": "b82cf29ba5e6c92ea138f5c519c60895279a28ee8e8080342d0cd3d344dfd282",
+      "reason": "Validate bubble and font size against their separate maximums and report the correct ranges."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "integratedSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "reason": "Apply saved bubble size live to top and bottom panels and reserve scaled floor space; preserve the independent default-off glow."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "089635dde16cee378861645de718220cc54ddabc21e69eb3c3bdccea1d30e7d1",
+      "integratedSha256": "56ff982d6576d4346d469be949233ce8f241efa8ba3db80c7e3a715efb4c99a4",
+      "reason": "Scale message/QA, hover actions, collapsed handle and composer together; use scaled geometry for positioning and hit testing."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.css",
+      "upstreamSha256": "3052f314f3144c00efc8c4d86f7b757fc553f051d75c9aaea1da502d9ba3a0cb",
+      "integratedSha256": "d26e3a4a9514de3ae97aece45140df5f48ce5b5ce43a5da1baacb30ca66cf761",
+      "reason": "Scale from top-left and constrain panel widths to fit the viewport at up to 150%."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/content-window.cjs",
+      "upstreamSha256": null,
+      "integratedSha256": "078739fd1d0b6725031e4f4fa229b41d2f9dd1c452b1e5dfaef40bff0dd5824b",
+      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/electron-main.cjs",
+      "upstreamSha256": "5b88cfd25e85a4a2be985a366db5bab6be38f260f5a6e540d513dc93278c6353",
+      "integratedSha256": "0e159a45d0bfc29401f7fd2728242af6b11392cbcff0f0bff5f8fc38cdafee88",
+      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/preload.cjs",
+      "upstreamSha256": "57038ad911784af5d2f5073e6831691a59b6a8ff44afb39a2c6741576c4374f8",
+      "integratedSha256": "9d740f020e96283c94b1d4468d26aae043c3b464a98f3c4deec9b898ee6453e6",
+      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/host/overlay.cjs",
+      "upstreamSha256": "fe2be2eda6bc758c3d4509bdac7f9db8a29f3f1b69c6adbaed6f1b8e781d7199",
+      "integratedSha256": "e4763f10a1ebeabd1ec1a4691bd760a6b0ad86b4a9f4f478fa1ebd5672ed1fb4",
+      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "integratedSha256": "254e526c653e58a5e9367701123ffdbff1930db5df20592de8bd2061c4878bcb",
+      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
     }
   ]
 }

@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
+const { LEGACY_UPDATE_DOWNLOAD_BASE_URL, parseManifest } = require('../src/updateCheck.cjs')
 const {
   REMOTE_RELEASE_DIR,
   artifactName,
@@ -16,7 +17,7 @@ const {
 
 test('creates only the expected versioned arm64 artifact and public URL', () => {
   assert.equal(artifactName('0.1.4'), 'MinduckMatter-0.1.4-arm64.dmg')
-  assert.equal(releaseDownloadURL('0.1.4'), 'http://124.70.149.30:8091/MinduckMatter-0.1.4-arm64.dmg')
+  assert.equal(releaseDownloadURL('0.1.4'), 'https://matter-desktop.yogeeai.com/download/MinduckMatter-0.1.4-arm64.dmg')
   assert.throws(() => artifactName('v0.1.4'))
 })
 
@@ -56,7 +57,7 @@ test('remote publisher writes a parseable latest.json after checksum verificatio
   const staged = path.join(directory, dmg + '.uploading')
   fs.writeFileSync(staged, 'verified installer bytes')
   const checksum = execFileSync('shasum', ['-a', '256', staged], { encoding: 'utf8' }).split(/\s+/)[0]
-  const downloadURL = releaseDownloadURL(version)
+  const downloadURL = new URL(dmg, LEGACY_UPDATE_DOWNLOAD_BASE_URL).href
 
   execFileSync('bash', ['-c', script, '--', version, downloadURL, checksum])
   assert.equal(fs.existsSync(path.join(directory, dmg)), true)
@@ -64,6 +65,7 @@ test('remote publisher writes a parseable latest.json after checksum verificatio
     version,
     downloadUrl: downloadURL,
   })
+  assert.equal(parseManifest(JSON.parse(fs.readFileSync(path.join(directory, 'latest.json'), 'utf8'))).downloadURL, releaseDownloadURL(version))
 })
 
 test('SSH control-master setup cleans up its temporary directory when authentication fails', () => {

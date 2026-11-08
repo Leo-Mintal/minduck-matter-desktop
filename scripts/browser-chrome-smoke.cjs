@@ -6,11 +6,18 @@ const os = require('node:os')
 const path = require('node:path')
 const electron = require('electron')
 const { app, BrowserWindow, WebContentsView, webContents } = electron
+const permissions = require('../src/fullDiskAccess.cjs')
+let permissionPrompts = 0
 const { MATTER_TOP_INSET } = require('../src/rightPanelLayout.cjs')
 const { verifyNewTab, verifySettings } = require('./browser-pages-probe.cjs')
 
 // Offscreen native surfaces keep real user mouse movement out of trusted-input assertions.
 const testElectron = Object.create(electron)
+Object.defineProperty(testElectron, 'dialog', { value: { ...electron.dialog, showMessageBox: async (...args) => {
+  const options = args.at(-1)
+  assert.equal(options.title, '完全磁盘访问'); permissionPrompts++
+  return { response: 1 }
+} } })
 function TestWindow(options) {
   const window = new BrowserWindow({ ...options, show: false,
     webPreferences: { ...options.webPreferences, offscreen: true, backgroundThrottling: false } })
@@ -53,6 +60,8 @@ const Module = require('node:module')
 const load = Module._load
 try {
   Module._load = function (request, ...args) {
+    if (request.endsWith('/fullDiskAccess.cjs')) return { ...permissions, hasFullDiskAccess: () => false,
+      createPermissionPrompt: options => permissions.createPermissionPrompt({ ...options, check: () => false }) }
     return request === 'electron' ? testElectron : load.call(this, request, ...args)
   }
   require('../src/main.cjs')
@@ -65,6 +74,10 @@ async function probe() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const fixture = `http://127.0.0.1:${server.address().port}`
   const window = await waitFor(() => BrowserWindow.getAllWindows().find((item) => item.contentView.children.length >= 5), Boolean, 'main window')
+  await waitFor(() => permissionPrompts, value => value === 1, 'native startup permission prompt')
+  const labels = electron.Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items.map(child => child.label) || [])
+  assert.ok(!labels.includes('本机执行设置…'))
+  assert.equal(BrowserWindow.getAllWindows().some(item => item.webContents.getURL().endsWith('/local-exec/settings.html')), false)
   const { getAgentBrowserSession, MATTER_BROWSER_EXTENSION_NAME } = require('../src/agentBrowser.cjs')
   assert.equal(getAgentBrowserSession().extensions.getAllExtensions().some(item => item.name === MATTER_BROWSER_EXTENSION_NAME), false,
     'default app uses the native browser device without starting a Matter Browser extension')

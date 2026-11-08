@@ -203,125 +203,125 @@ test('workspace-v1 consent does not silently allow the new system folder scope',
   assert.equal(loaded.enabled, false); assert.equal(loaded.setupSeen, false); assert.equal(loaded.allowNetwork, false)
 })
 
-async function controllerFixture(t, choose = async () => ({ canceled: true, filePaths: [] }), options = {}) {
-  const root = await temporary(t), store = memoryStore(path.join(root, 'Matter'))
-  let currentToken = jwt('u1'), setup = 0, picks = 0
-  const contents = { isDestroyed: () => false, getURL: () => 'https://matter.test/c/conv1', executeJavaScriptInIsolatedWorld: async () => currentToken }
+async function controllerFixture(t, initiallyGranted = true, options = {}) {
+  const root = await temporary(t), store = options.store || memoryStore(path.join(root, 'Matter'))
+  let currentToken = jwt('u1'), permission = initiallyGranted, prompts = 0, pairs = 0, stops = 0, connectionOptions
+  let url = 'https://matter.test/c/conv1'
+  const contents = { isDestroyed: () => false, getURL: () => url, executeJavaScriptInIsolatedWorld: async () => currentToken }
   const controller = createController({ app: { getPath: () => path.join(root, 'profile'), getVersion: () => 'test' }, safeStorage,
-    origin: 'https://matter.test', getContents: () => contents, getWindow: () => null, store, home: root, ...options,
-    dialog: { showOpenDialog: async options => { picks++; return choose(options) } }, onSetupNeeded: () => setup++ })
+    origin: 'https://matter.test', getContents: () => contents, store, home: root, checkPermission: () => permission,
+    resolvePath: async () => '/usr/bin:/bin:/usr/sbin:/sbin', onPermissionNeeded: () => prompts++, connectImpl: value => { connectionOptions = value; value.onState('在线'); return { stop: () => stops++ } },
+    fetchImpl: async route => { if (route.endsWith('pairings')) pairs++
+      return { ok: true, status: 200, json: async () => route.endsWith('pairings')
+        ? { code: 'pair', ws_url: 'wss://matter.test/api/extensions/device-link/ws' }
+        : { device_id: 'test-desktop', device_token: 'secret', ws_url: 'wss://matter.test/api/extensions/device-link/ws' } }
+    }, ...options })
   t.after(() => controller.dispose())
   await controller.refresh()
-  const activate = () => store.update({ enabled: true, executionPolicy: EXECUTION_POLICY, pairing: { account: 'u1', origin: 'https://matter.test' } })
   const call = (name, args, signal) => controller.execute({ name, arguments: args, _matter: meta }, signal)
-  return { root, store, controller, call, activate, token: value => { currentToken = jwt(value) }, setup: () => setup, picks: () => picks }
+  return { root, store, controller, call, permission: value => { permission = value }, token: value => { currentToken = jwt(value) },
+    url: value => { url = value }, prompts: () => prompts, pairs: () => pairs, stops: () => stops, revoke: () => connectionOptions.onRevoked() }
 }
 
-test('first login presents setup once; closing feature or changing account blocks execution', async t => {
-  const f = await controllerFixture(t)
-  await f.controller.refresh(); assert.equal(f.setup(), 1)
+test('missing FDA prevents pairing and execution even with old saved enabled flags', async t => {
+  const f = await controllerFixture(t, false)
+  f.store.update({ enabled: true, executionPolicy: EXECUTION_POLICY })
+  await f.controller.refresh()
+  assert.equal(f.pairs(), 0); assert.equal(f.controller.snapshot().enabled, false)
+  await assert.rejects(f.controller.setEnabled(true), /完全磁盘访问/)
   await assert.rejects(f.call('local_shell', { command: 'touch never' }))
-  f.controller.acknowledgeSetup(); assert.equal(f.store.get().setupSeen, true)
-  f.activate()
-  f.store.update({ allowNetwork: true })
-  f.token('u2'); await f.controller.refresh()
-  assert.equal(f.controller.snapshot().enabled, false)
-  assert.equal(f.controller.snapshot().allowNetwork, false)
-  assert.equal(JSON.stringify(f.controller.snapshot()).includes('encryptedToken'), false)
-  await assert.rejects(f.call('local_shell', { command: 'touch never' }))
+  f.permission(true); await f.controller.refresh()
+  assert.equal(f.pairs(), 1); assert.equal(f.controller.snapshot().enabled, true)
 })
 
-test('authorized workspace writes and Shell execute automatically; file conflicts still fail', { skip: process.platform !== 'darwin' }, async t => {
-  const f = await controllerFixture(t); f.activate()
+test('system permission automatically pairs; repeated refresh and version upgrade reuse encrypted identity', async t => {
+  const f = await controllerFixture(t)
+  assert.equal(f.controller.snapshot().enabled, true); assert.equal(f.pairs(), 1); assert.equal(f.prompts(), 0)
+  await f.controller.refresh(); await f.controller.refresh()
+  assert.equal(f.pairs(), 1)
+  const previous = f.store.get().pairing
+  f.controller.dispose()
+  const restarted = await controllerFixture(t, true, { store: f.store })
+  assert.equal(restarted.pairs(), 0); assert.deepEqual(restarted.store.get().pairing, previous)
+  assert.equal(JSON.stringify(restarted.controller.snapshot()).includes('encryptedToken'), false)
+})
+
+test('revocation stops transport and blocks execution; regrant reconnects without pairing again', async t => {
+  const f = await controllerFixture(t)
+  f.permission(false)
+  await assert.rejects(f.call('local_shell', { command: 'touch never' }))
+  await f.controller.refresh()
+  assert.equal(f.controller.snapshot().enabled, false); assert.equal(f.stops(), 1)
+  f.permission(true); await f.controller.refresh()
+  assert.equal(f.controller.snapshot().enabled, true); assert.equal(f.pairs(), 1)
+  f.revoke(); await f.controller.refresh()
+  assert.equal(f.controller.snapshot().enabled, false); assert.equal(f.pairs(), 1, 'server revocation is not silently repaired in this session')
+})
+
+test('account or origin changes invalidate old execution and pair only the current Matter account', async t => {
+  const f = await controllerFixture(t)
+  f.token('u2')
+  await assert.rejects(f.call('local_shell', { command: 'touch never' }))
+  await f.controller.refresh()
+  assert.equal(f.store.get().pairing.account, 'u2'); assert.equal(f.pairs(), 2)
+  f.url('https://untrusted.test/c/conv1'); await f.controller.refresh()
+  assert.equal(f.controller.snapshot().enabled, false)
+  await assert.rejects(f.call('local_read_file', { path: 'hello.txt' }))
+})
+
+test('failed automatic pairing backs off and cannot enable execution', async t => {
+  let requests = 0
+  const f = await controllerFixture(t, true, { fetchImpl: async () => { requests++; throw Error('offline') } })
+  await f.controller.refresh(); await f.controller.refresh()
+  assert.equal(requests, 1); assert.equal(f.controller.snapshot().enabled, false)
+})
+
+test('automatic workspace writes and Shell preserve file conflicts and cancellation', { skip: process.platform !== 'darwin' }, async t => {
+  const f = await controllerFixture(t)
   const write = await f.call('local_write_file', { path: 'hello.txt', content: 'hello' })
   assert.ok(write.diff.includes('+hello'))
-  const shell = await f.call('local_shell', { command: 'cat hello.txt' })
-  assert.equal(shell.stdout, 'hello'); assert.equal(f.picks(), 0)
+  assert.equal((await f.call('local_shell', { command: 'cat hello.txt' })).stdout, 'hello')
   const workspace = path.join(f.store.get().root, f.store.get().workspaces.conv1)
   await fs.writeFile(path.join(workspace, 'hello.txt'), 'external change')
   await assert.rejects(f.call('local_write_file', { path: 'hello.txt', content: 'stale overwrite' }))
   await f.call('local_read_file', { path: 'hello.txt' })
-  const edit = await f.call('local_edit_file', { path: 'hello.txt', old_string: 'external change', new_string: 'updated' })
-  assert.ok(edit.diff.includes('+updated'))
+  assert.ok((await f.call('local_edit_file', { path: 'hello.txt', old_string: 'external change', new_string: 'updated' })).diff.includes('+updated'))
+  const abort = new AbortController(); abort.abort()
+  await assert.rejects(f.call('local_shell', { command: 'touch never' }, abort.signal))
   await f.controller.setEnabled(false)
   await assert.rejects(f.call('local_shell', { command: 'touch never' }))
 })
 
-test('external cwd automatically opens native picker once and persists only for that conversation', { skip: process.platform !== 'darwin' }, async t => {
-  let external
-  const f = await controllerFixture(t, async options => {
-    assert.equal(options.defaultPath, external)
-    assert.ok(options.message.includes('无需逐次确认'))
-    return { canceled: false, filePaths: [external] }
-  })
-  external = path.join(f.root, 'project'); await fs.mkdir(external); f.activate()
-  assert.equal((await f.call('local_shell', { cwd: external, command: 'printf directory-ok' })).stdout, 'directory-ok')
-  assert.equal((await f.call('local_shell', { cwd: external, command: 'printf remembered' })).stdout, 'remembered')
-  assert.equal(f.picks(), 1); assert.deepEqual(f.store.get().grants.conv1, [external])
-  const spaces = createWorkspaces({ store: f.store })
-  assert.equal((await spaces.resolve('conv2', '', external)).authorized, false)
+test('FDA mode accesses external projects and standard folders without a picker or per-folder consent', { skip: process.platform !== 'darwin' }, async t => {
+  const f = await controllerFixture(t)
+  for (const folder of ['project', 'Desktop', 'Documents', 'Downloads']) {
+    const directory = path.join(f.root, folder); await fs.mkdir(directory)
+    assert.equal((await f.call('local_shell', { cwd: directory, command: 'printf system-ok' })).stdout, 'system-ok')
+    const filename = path.join(directory, 'note.txt')
+    await f.call('local_write_file', { path: filename, content: 'hello' })
+    assert.ok((await f.call('local_read_file', { path: filename })).content.includes('hello'))
+  }
+  assert.deepEqual(f.store.get().grants, {})
 })
 
-test('standard folders use system access before the sandbox and never show a picker', { skip: process.platform !== 'darwin' }, async t => {
-  const requests = []
-  const f = await controllerFixture(t, undefined, { requestSystemFolder: async folder => { requests.push(folder.root); return true } })
-  const documents = path.join(f.root, 'Documents'); await fs.mkdir(documents); f.activate()
-  assert.equal((await f.call('local_shell', { cwd: documents, command: 'printf native-ok' })).stdout, 'native-ok')
-  await fs.writeFile(path.join(documents, 'note.txt'), 'native file')
-  assert.ok((await f.call('local_read_file', { path: path.join(documents, 'note.txt') })).content.includes('native file'))
-  assert.deepEqual(requests, [documents, documents]); assert.equal(f.picks(), 0)
-  assert.deepEqual(f.store.get().grants.conv1, [documents])
-  assert.equal((await createWorkspaces({ store: f.store, home: f.root }).resolve('conv2', '', documents)).authorized, false)
+test('FDA retains sensitive path and symlink protections for reads and writes, including Shell', { skip: process.platform !== 'darwin' }, async t => {
+  const f = await controllerFixture(t)
+  const secret = path.join(f.root, '.ssh'); await fs.mkdir(secret)
+  const filename = path.join(secret, 'key'); await fs.writeFile(filename, 'private')
+  await fs.symlink(secret, path.join(f.root, 'alias'))
+  for (const target of [filename, path.join(f.root, 'alias/key')]) {
+    await assert.rejects(f.call('local_read_file', { path: target }), /敏感路径/)
+    await assert.rejects(f.call('local_write_file', { path: target, content: 'bad' }), /敏感路径/)
+    const shell = await f.call('local_shell', { command: 'cat ' + JSON.stringify(target) + '; echo bad > ' + JSON.stringify(target) })
+    assert.notEqual(shell.exit_code, 0); assert.equal(shell.sandbox_denied, true)
+  }
+  assert.equal(await fs.readFile(filename, 'utf8'), 'private')
 })
 
-for (const mode of ['denied', 'account', 'abort', 'disable']) test(`system folder ${mode} cannot grant or execute`, async t => {
-  let finish, entered = false
-  const f = await controllerFixture(t, undefined, { requestSystemFolder: () => {
-    entered = true; return new Promise((resolve, reject) => { finish = () => mode === 'denied'
-      ? reject(Object.assign(new Error('macOS denied'), { denied: true })) : resolve(true) })
-  } })
-  const documents = path.join(f.root, 'Documents'); await fs.mkdir(documents); f.activate()
-  const abort = new AbortController()
-  const result = assert.rejects(f.call('local_shell', { cwd: documents, command: 'touch never' }, abort.signal))
-  await until(() => entered)
-  if (mode === 'account') f.token('u2')
-  if (mode === 'abort') abort.abort()
-  if (mode === 'disable') await f.controller.setEnabled(false)
-  finish(); await result
-  assert.deepEqual(f.store.get().grants, {}); assert.equal(f.picks(), 0)
-  await assert.rejects(fs.stat(path.join(documents, 'never')))
-})
-
-for (const mode of ['cancel', 'account', 'abort', 'disable']) test(`native picker ${mode} cannot grant or execute`, async t => {
-  let resolvePicker, entered = false
-  const f = await controllerFixture(t, () => { entered = true; return new Promise(resolve => { resolvePicker = resolve }) })
-  const external = path.join(f.root, 'outside'); await fs.mkdir(external); f.activate()
-  const abort = new AbortController()
-  const result = assert.rejects(f.call('local_shell', { cwd: external, command: 'touch never' }, abort.signal))
-  await until(() => entered)
-  if (mode === 'account') f.token('u2')
-  if (mode === 'abort') abort.abort()
-  if (mode === 'disable') await f.controller.setEnabled(false)
-  resolvePicker({ canceled: mode === 'cancel', filePaths: mode === 'cancel' ? [] : [external] })
-  await result
-  assert.deepEqual(f.store.get().grants, {}); await assert.rejects(fs.stat(path.join(external, 'never')))
-})
-
-test('tilde paths resolve against home and still require a scoped grant', async t => {
+test('tilde resolves against home; scoped workspaces remain available for callers without system access', async t => {
   const root = await temporary(t), home = path.join(root, 'home'); await fs.mkdir(home)
   const store = memoryStore(path.join(home, 'Matter')), spaces = createWorkspaces({ store, home })
   const result = await spaces.resolve('conv1', '', '~/Desktop')
   assert.equal(result.filename, path.join(home, 'Desktop')); assert.equal(result.authorized, false)
   await assert.rejects(spaces.grant('conv1', home))
-})
-
-test('network requires persistent native consent in addition to needs_network', { skip: process.platform !== 'darwin' }, async t => {
-  const f = await controllerFixture(t); f.activate()
-  const denied = await f.call('local_shell', { command: 'touch never', needs_network: true })
-  assert.equal(denied.permission_required, 'network')
-  const spaces = createWorkspaces({ store: f.store })
-  await assert.rejects(fs.stat(path.join(await spaces.folder('conv1', ''), 'never')))
-  // Persistent policy change is tested through the settings IPC in the Electron smoke.
-  f.store.update({ allowNetwork: true })
-  assert.equal((await f.call('local_shell', { command: 'printf allowed', needs_network: true })).stdout, 'allowed')
 })

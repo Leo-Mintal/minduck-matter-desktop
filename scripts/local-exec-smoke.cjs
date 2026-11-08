@@ -7,7 +7,7 @@ if (!process.versions.electron) {
   if (result.error) console.error(result.error)
   process.exit(result.status ?? 1)
 }
-const { app, BrowserWindow, ipcMain, net, protocol, webContents, nativeTheme } = require('electron')
+const { app, BrowserWindow, net, protocol } = require('electron')
 // Surface asynchronous native/transport failures in CI instead of Electron's modal error dialog.
 process.on('uncaughtException', error => { console.error(error); app.exit(1) })
 const fs = require('node:fs/promises')
@@ -16,13 +16,12 @@ const http = require('node:http')
 const assert = require('node:assert/strict')
 const { WebSocketServer } = require('../vendor/coopanion/runtime/node_modules/ws')
 const { createController } = require('../src/local-exec/controller.cjs')
-const { createSettings } = require('../src/local-exec/settings.cjs')
+const { createPermissionPrompt } = require('../src/fullDiskAccess.cjs')
 const { createBundledFrontendHandler } = require('../src/bundledFrontend.cjs')
 const { canonical } = require('../src/local-exec/workspace.cjs')
-const { FILES_AND_FOLDERS_SETTINGS_URL, requestSystemFolder } = require('../src/local-exec/system-folders.cjs')
 
 app.setPath('userData', path.join(process.argv[2], 'profile'))
-let root, window, controller, settings, server, wsServer
+let root, window, controller, server, wsServer
 const pending = new Map()
 const networkRequests = []
 let sequence = 0
@@ -76,12 +75,16 @@ app.whenReady().then(async () => {
   } }
   const store = { get: () => stored, update: patch => (stored = { ...stored, ...patch }) }
   const external = path.join(root, 'External'); await fs.mkdir(external)
-  let folderPicks = 0, setupRequests = 0, systemRequests = 0
+  let granted = true, prompts = 0
   const home = path.join(root, 'test-home'), documents = path.join(home, 'Documents')
   await fs.mkdir(documents, { recursive: true })
-  controller = createController({ app, dialog: { showOpenDialog: async () => { folderPicks++; return { canceled: false, filePaths: [external] } } }, safeStorage: { isEncryptionAvailable: () => true, decryptString: value => value.toString() },
-    fetchImpl: net.fetch.bind(net), origin, getContents: () => window.webContents, getWindow: () => window, store, home,
-    requestSystemFolder: async folder => { systemRequests++; return requestSystemFolder(folder) }, onSetupNeeded: () => setupRequests++ })
+  const requestPermission = createPermissionPrompt({ check: () => granted, getWindow: () => window,
+    dialog: { showMessageBox: async () => { prompts++; return { response: 1 } } },
+    shell: { openExternal: async () => assert.fail('must not open real system settings') } })
+  controller = createController({ app, safeStorage: { isEncryptionAvailable: () => true, decryptString: value => value.toString() },
+    fetchImpl: net.fetch.bind(net), origin, getContents: () => window.webContents, store, home,
+    checkPermission: () => granted, onPermissionNeeded: requestPermission })
+  await requestPermission()
   window.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const own = details.webContentsId == null || details.webContentsId === window.webContents.id || details.webContentsId === -1
     if (details.url.endsWith('/api/echo')) networkRequests.push({ webContentsId: details.webContentsId, resourceType: details.resourceType, own })
@@ -90,7 +93,7 @@ app.whenReady().then(async () => {
   protocol.handle('http', createBundledFrontendHandler({ root: path.join(root, 'web'), origin, fetchImpl: net.fetch.bind(net), backendHeaders: (headers, url) => controller.headers(headers, url) }))
   await window.loadURL(origin + '/c/smoke-conv')
   await window.webContents.executeJavaScript(`localStorage.setItem('matter.token',${JSON.stringify(token)})`)
-  await controller.refresh(); assert.equal(setupRequests, 1); await controller.setEnabled(true)
+  await controller.refresh(); assert.equal(prompts, 0); assert.equal(controller.snapshot().enabled, true)
   await until(() => controller.snapshot().state === '在线')
   const request = await window.webContents.executeJavaScript(`fetch('/api/echo',{method:'POST',body:'native payload',headers:{Authorization:'Bearer '+localStorage.getItem('matter.token'),'X-Matter-Desktop':'spoof'}}).then(r=>r.json())`)
   assert.equal(request.headers['x-matter-desktop'], 'smoke-desktop', JSON.stringify(networkRequests))
@@ -108,69 +111,44 @@ app.whenReady().then(async () => {
     const outside = await call('local_shell', { cwd: external, command: 'printf external-ok' })
     assert.equal(JSON.parse(outside.result.content[0].text).stdout, 'external-ok')
   }
-  assert.equal(folderPicks, 1)
-  const blocked = await call('local_shell', { command: 'ls ' + JSON.stringify(root) })
+  assert.deepEqual(stored.grants, {})
+  const secret = path.join(home, '.ssh'); await fs.mkdir(secret)
+  await fs.writeFile(path.join(secret, 'key'), 'private')
+  const blocked = await call('local_shell', { command: 'cat ' + JSON.stringify(path.join(secret, 'key')) })
   const denied = JSON.parse(blocked.result.content[0].text)
   assert.equal(denied.sandbox_denied, true)
-  assert.ok(denied.permission_hint.includes('不能证明是 macOS'))
-  assert.deepEqual(denied.allowed_directories, [workspace, external])
-  // A disposable home exercises routing/probe/worker without resetting real macOS permissions.
+  assert.ok(denied.permission_hint.includes('完全磁盘访问'))
+  assert.deepEqual(denied.allowed_directories, [workspace, '/'])
+  // Disposable home and injected grant avoid changing the user's real TCC permissions.
   const standard = await call('local_shell', { cwd: documents, command: 'printf system-folder-ok' })
   assert.equal(JSON.parse(standard.result.content[0].text).stdout, 'system-folder-ok')
   const standardWrite = await call('local_write_file', { path: path.join(documents, 'note.txt'), content: 'system file' })
   assert.equal(standardWrite.result.isError, false)
   assert.equal(await fs.readFile(path.join(documents, 'note.txt'), 'utf8'), 'system file')
-  assert.equal(systemRequests, 2); assert.equal(folderPicks, 1)
-  assert.ok(stored.grants['smoke-conv'].includes(documents))
-  const network = await call('local_shell', { command: 'printf network', needs_network: true })
-  assert.equal(JSON.parse(network.result.content[0].text).permission_required, 'network')
-  const openedSettings = []
-  settings = createSettings({ BrowserWindow, ipcMain, controller, getWindow: () => window, shell: { openPath: async () => '', openExternal: async value => { openedSettings.push(value) } } })
-  settings.open()
-  const settingsContents = await until(() => webContents.getAllWebContents().find(value => value.getURL().endsWith('/local-exec/settings.html')))
-  await until(async () => (await settingsContents.executeJavaScript('document.readyState')) === 'complete')
-  const snapshot = await settingsContents.executeJavaScript("window.localSettings.request('get')")
-  assert.equal(snapshot.enabled, true); assert.equal(JSON.stringify(snapshot).includes('test-secret'), false)
-  await settingsContents.executeJavaScript("window.localSettings.request('privacy-files')")
-  assert.deepEqual(openedSettings, [FILES_AND_FOLDERS_SETTINGS_URL])
+  assert.deepEqual(stored.grants, {})
+  assert.equal(JSON.parse((await call('local_shell', { command: 'printf network-declared', needs_network: true })).result.content[0].text).stdout, 'network-declared')
+  const networkURL = `http://127.0.0.1:${server.address().port}/network`
+  const command = '/usr/bin/curl --noproxy "*" --silent --show-error --max-time 2 ' + networkURL
+  assert.notEqual(JSON.parse((await call('local_shell', { command })).result.content[0].text).exit_code, 0)
+  assert.equal(JSON.parse((await call('local_shell', { command, needs_network: true })).result.content[0].text).exit_code, 0)
+  assert.equal(BrowserWindow.getAllWindows().length, 1, 'no local execution settings window')
   assert.equal(await window.webContents.executeJavaScript('typeof window.localSettings'), 'undefined')
-  const foreign = new BrowserWindow({ show: false, webPreferences: { preload: path.join(__dirname, '../src/local-exec/settings-preload.cjs'), sandbox: true, contextIsolation: true } })
-  try {
-    await foreign.loadURL('data:text/html,<title>Untrusted</title>')
-    assert.equal(await foreign.webContents.executeJavaScript("window.localSettings.request('enable',false)"), null)
-    assert.equal(controller.snapshot().enabled, true)
-  } finally { foreign.destroy() }
-  const settingsWindow = BrowserWindow.fromWebContents(settingsContents)
-  assert.equal(await settingsContents.executeJavaScript('typeof require'), 'undefined')
-  assert.equal(await settingsContents.executeJavaScript('document.querySelectorAll(".pet-option").length'), 2)
-  assert.equal((await settingsContents.executeJavaScript("window.localSettings.request('network',true)")).allowNetwork, true)
-  await until(() => controller.snapshot().state === '在线')
-  assert.equal(JSON.parse((await call('local_shell', { command: 'printf network-approved', needs_network: true })).result.content[0].text).stdout, 'network-approved')
-  void call('local_shell', { command: 'touch started; sleep 10; touch should-not-exist', needs_network: true })
+  void call('local_shell', { command: 'touch started; sleep 10; touch should-not-exist' })
   await until(() => fs.stat(path.join(workspace, 'started')).then(() => true, () => false))
-  assert.equal((await settingsContents.executeJavaScript("window.localSettings.request('network',false)")).allowNetwork, false)
+  granted = false; await controller.refresh()
+  assert.equal(controller.snapshot().enabled, false); assert.equal(prompts, 1)
+  await controller.refresh(); assert.equal(prompts, 1, 'missing permission is prompted only once in this launch')
+  await assert.rejects(controller.execute({ name: 'local_shell', arguments: { command: 'touch never' }, _matter: { conversation_id: 'smoke-conv' } }))
+  granted = true; await controller.refresh()
   await until(() => controller.snapshot().state === '在线')
   const cancelled = await call('local_shell', { command: 'test ! -f should-not-exist && printf cancelled' })
   assert.equal(JSON.parse(cancelled.result.content[0].text).stdout, 'cancelled')
-  for (const theme of ['light', 'dark']) {
-    nativeTheme.themeSource = theme
-    for (const width of [375, 768, 1024, 1440]) {
-      settingsWindow.setContentSize(width, 768)
-      await new Promise(resolve => setTimeout(resolve, 100))
-      const layout = await settingsContents.executeJavaScript(`(() => {
-        const items = [...document.querySelectorAll('button,input')].filter(e => e.getClientRects().length)
-        return { width: innerWidth, scrollWidth: document.documentElement.scrollWidth, visible: items.every(e => { const r=e.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth }) }
-      })()`)
-      assert.equal(layout.width, width); assert.ok(layout.scrollWidth <= width); assert.equal(layout.visible, true)
-      if (width === 375 || width === 768) await fs.writeFile(`/tmp/matter-local-settings-${theme}-${width}.png`, (await settingsContents.capturePage()).toPNG())
-    }
-  }
   await controller.setEnabled(false)
   const disabled = await window.webContents.executeJavaScript(`fetch('/api/echo',{headers:{Authorization:'Bearer '+localStorage.getItem('matter.token'),'X-Matter-Desktop':'spoof'}}).then(r=>r.json())`)
   assert.equal(disabled.headers['x-matter-desktop'], undefined)
-  console.log('PASS QA setup, automatic workspace execution, system-folder probe and sandboxed worker, custom directory picker, privacy settings IPC, network revocation cancellation, sandbox denial hints, protocol headers, settings isolation and four-width light/dark layout')
+  console.log('PASS native permission prompt once, automatic execution, external/standard folders without pickers, protected credentials, network declaration, cancellation on revocation, regrant and protocol headers; no settings window or renderer IPC')
 }).catch(error => { console.error(error); process.exitCode = 1 }).finally(async () => {
-  clearTimeout(watchdog); settings?.dispose(); controller?.dispose()
+  clearTimeout(watchdog); controller?.dispose()
   for (const client of wsServer?.clients || []) client.terminate()
   await new Promise(resolve => wsServer ? wsServer.close(resolve) : resolve())
   await new Promise(resolve => server ? server.close(resolve) : resolve())

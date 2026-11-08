@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const {
+  LEGACY_UPDATE_DOWNLOAD_BASE_URL,
   UPDATE_MANIFEST_URL,
   compareVersions,
   parseManifest,
@@ -16,6 +17,7 @@ const PACKAGE_JSON = path.join(PROJECT_DIR, 'package.json')
 const RELEASE_DIR = path.join(PROJECT_DIR, 'release')
 const REMOTE_RELEASE_DIR = '/root/minduck-matter-download/releases'
 const REMOTE_USER = 'root'
+const REMOTE_HOST = '124.70.149.30'
 const NOTARY_PROFILE = process.env.MINDUCK_NOTARY_PROFILE || 'MinduckNotary'
 
 function artifactName(version) {
@@ -24,7 +26,7 @@ function artifactName(version) {
 }
 
 function releaseDownloadURL(version) {
-  return new URL(`/${artifactName(version)}`, UPDATE_MANIFEST_URL).href
+  return new URL(artifactName(version), UPDATE_MANIFEST_URL).href
 }
 
 function assertVersionProgression({ currentVersion, latestVersion, nextVersion }) {
@@ -156,8 +158,7 @@ function publish(version) {
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'))
   const remote = remoteLatestRelease()
   assertVersionProgression({ currentVersion: packageJson.version, latestVersion: remote.version, nextVersion: version })
-  const host = new URL(UPDATE_MANIFEST_URL).hostname
-  const remoteTarget = `${REMOTE_USER}@${host}`
+  const remoteTarget = `${REMOTE_USER}@${REMOTE_HOST}`
   const ssh = openReleaseSSH(remoteTarget)
 
   try {
@@ -174,10 +175,12 @@ function publish(version) {
     if (!fs.statSync(localDMG).isFile()) throw new Error(`打包后未找到 ${localDMG}`)
     const checksum = sha256(localDMG)
     const downloadURL = releaseDownloadURL(version)
+    const manifestDownloadURL = new URL(dmg, LEGACY_UPDATE_DOWNLOAD_BASE_URL).href
     const remoteArtifact = `${REMOTE_RELEASE_DIR}/${dmg}.uploading`
 
     run('scp', [...ssh.options, localDMG, `${remoteTarget}:${remoteArtifact}`])
-    run('ssh', [...ssh.options, remoteTarget, 'bash -s', '--', version, downloadURL, checksum], {
+    // Older installed clients require this legacy field to remain same-origin.
+    run('ssh', [...ssh.options, remoteTarget, 'bash -s', '--', version, manifestDownloadURL, checksum], {
       input: remotePublishScript(),
       stdio: ['pipe', 'inherit', 'inherit'],
     })

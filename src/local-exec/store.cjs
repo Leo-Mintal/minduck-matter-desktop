@@ -2,7 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const os = require('node:os')
-const EXECUTION_POLICY = 'workspace-v2'
+const EXECUTION_POLICY = 'system-access-v1'
 
 function privateWrite(filename, value) {
   fs.mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 })
@@ -23,7 +23,7 @@ function createStore(userData) {
   try {
     const parsed = JSON.parse(fs.readFileSync(filename, 'utf8'))
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('本机执行设置无效')
-    // A changed execution scope requires fresh local consent; never upgrade silently.
+    // Saved flags are not OS permission; the controller must check Full Disk Access.
     value = { ...defaults, ...parsed, enabled: parsed.enabled === true && parsed.executionPolicy === EXECUTION_POLICY,
       allowNetwork: parsed.allowNetwork === true && parsed.executionPolicy === EXECUTION_POLICY, setupSeen: parsed.setupSeen === true && parsed.executionPolicy === EXECUTION_POLICY }
     if (typeof value.root !== 'string' || !path.isAbsolute(value.root)

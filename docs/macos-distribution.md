@@ -6,6 +6,35 @@
 
 ## 当前本地发布记录
 
+2026-11-07 按用户要求从当前本地桌面代码和现有 `web-dist/` 生成 `0.1.5` arm64 包，包含气泡 100–150% 同步缩放、精简设置和系统完全磁盘访问流程；默认正式服仍为 `https://matter.minduck.com`。
+
+- 安装包：`release/MinduckMatter-0.1.5-arm64.dmg`，195,895,866 字节，SHA-256 `af35f542b9f28e62bd14b4ce1e6a80e6744e1d38e18269b3d43727c8a553794f`。
+- 应用公证 `2db8fcb6-ab81-479f-b65d-64fe75b2b831`、DMG 公证 `72ccf05a-fcc9-4265-9cc7-75c81d9af387` 均为 Accepted；最终 DMG 挂载应用的深度签名、票据和发布检查通过。405 个文件字节哈希、规范化 package.json、9,410 个最终增量块全部通过；165 项单测与打包 worker/Shell 沙箱验证通过。
+- 提供 `release/metadata/upload-0.1.5.sh`：校验本地 SHA-256，上传临时 DMG，远端复核后发布安装包并原子替换 `latest.json`，无需重启容器；已在临时目录验证校验失败不切换及成功清单。脚本未执行上传。本机仍为 0.1.4，安装内容未替换；使用其实际更新检查模块验证待发布的 0.1.5 清单可被识别。
+
+从此打包 Mac 上传并切换更新清单：
+
+```bash
+cd /Applications/File/WorkSpace/jomec/Minduck/minduck-matter-desktop
+bash release/metadata/upload-0.1.5.sh
+```
+
+2026-11-07 后续只读核对时，服务器公开清单已为 0.1.5，对应 DMG 的 HEAD 返回 200；本任务没有执行上传。现有 0.1.4 的“检查更新…”菜单可用于测试，安装仍需用户手动覆盖；版本不高于当前应用时不提供下载。
+
+按用户要求，下载源的 HTTPS 切换仅修改源码，随下一版本打包生效；本地已验证的 0.1.5 安装包、元数据和上传脚本保持原样，不重打包、不替换本机。
+
+### 0.1.4 历史记录
+
+2026-11-07 按用户要求复用本地现有 `web-dist/`，已生成并验证 `0.1.4`：
+
+- 安装包：`release/MinduckMatter-0.1.4-arm64.dmg`；正式服务默认地址仍为 `https://matter.minduck.com`。本机开发版和安装版保存的本地地址覆盖项均已清除，下次启动按默认地址解析。
+- 本次不拉取远端 Web 或重编译前端；原本地前端索引 SHA-256 为 `86471fb0336d8676fe30e61add03ce7ed2265cd85c674b79b4d99a1ea924d2b0`。打包当前桌面代码，包含原生浏览器设备、嵌套按钮名称修复及用户提供的箭头光标。
+- 应用公证 `33ab7599-e538-4b02-8dee-b34fbd010a99`、DMG 公证 `20d3bcef-46a7-40e0-ab2d-c18fabd74e9d` 均为 `Accepted`；从最终 DMG 只读挂载的应用通过深度签名、票据及发布检查。应用 CDHash 为 `604b9519dade418a02fab0ddc8cc26fb10f85b9a`。
+- 包内 380 个源码、扩展及前端文件与本地输入一致；168 项单测，以及前端转发、原生浏览器设备、浏览器界面三组 Electron smoke 通过。最终 DMG 的 SHA-256 和 9,419 个增量块校验通过。
+- DMG 为 195,891,588 字节，SHA-256 为 `4d747bb10a568a12869bab5219f1da0cc5981c3f701ac860a10a6367e11fda39`；发布记录、输入哈希、校验文件与最终 `.blockmap` 位于 `release/metadata/`。仅生成本地安装包，未上传或替换安装版。
+
+### 0.1.2 历史记录
+
 2026-11-06 已生成并验证 `0.1.2`：
 
 - `release/MinduckMatter-0.1.2-arm64.dmg`
@@ -36,11 +65,11 @@ Web 输入为远端 `dev` 的 `6beb91cbf357d19d2f0b62819b86f970b5ac43b8`。应�
 
 ## 静态下载与菜单检查更新
 
-桌面端应用菜单的“检查更新…”只读取一个静态 JSON，不调用 Matter Web 或业务后端。当前过渡发布源为
-`http://124.70.149.30:8091/latest.json`，Caddy 容器 `minduck-download` 只读提供服务器目录
+桌面端应用菜单的“检查更新…”只读取一个静态 JSON，不调用 Matter Web 或业务后端。源码中的发布源为
+`https://matter-desktop.yogeeai.com/download/latest.json`，下载地址为 `https://matter-desktop.yogeeai.com/download/` 后拼接 `MinduckMatter-<version>-arm64.dmg`。例如 `https://matter-desktop.yogeeai.com/download/MinduckMatter-0.1.5-arm64.dmg`。Caddy 容器 `minduck-download` 只读提供服务器目录
 `/root/minduck-matter-download/releases/`。不要改动 `/opt` 下的其他服务、Caddy、MinIO 或现有容器。
 
-清单格式固定如下，版本必须是 `x.y.z`，DMG 文件名必须和版本完全一致：
+清单格式如下，版本必须是 `x.y.z`，DMG 文件名必须和版本完全一致。`downloadUrl` 保留旧值供现有安装版做同源校验，新源码读取后转换为上述 HTTPS 下载地址：
 
 ```json
 {
@@ -49,7 +78,7 @@ Web 输入为远端 `dev` 的 `6beb91cbf357d19d2f0b62819b86f970b5ac43b8`。应�
 }
 ```
 
-客户端只接受同源、无参数且名为 `MinduckMatter-<version>-arm64.dmg` 的 URL；版本不高于当前应用时不会打开下载页。发布时一定先上传和验证 DMG，再以 `mv` 原子替换清单，避免用户读到指向不存在文件的版本。当前 HTTP 裸 IP 仅用于临时内测；清单没有签名，公网长期分发前应使用 HTTPS 域名，并在 `src/updateCheck.cjs` 与清单同步切换到该 HTTPS 地址。
+新源码仅接受精确匹配下载目录、版本和文件名的 HTTPS 地址，或上例精确匹配的旧地址；带认证、参数、片段或其他路径的地址均拒绝，旧地址只用于兼容清单，不会成为新版浏览器的下载目标。版本不高于当前应用时不会打开下载页。0.1.5 及更早安装版仍访问旧 IP 并要求下载与清单同源，所以后续发布继续保留清单里的旧地址字段。发布时一定先上传和验证 DMG，再以 `mv` 原子替换清单，避免用户读到指向不存在文件的版本。
 
 ### 标准一键发布
 
@@ -64,7 +93,7 @@ pnpm release:mac 0.1.4
 原子替换 `latest.json`，最后从公网读取新清单和 DMG 响应。公证、打包、上传或验证任一失败时，公开
 `latest.json` 保持原样，且不会重启 Caddy、MinIO 或其他容器。若失败发生在本地版本更新后，可在修复问题后用相同版本重试；脚本允许本地版本等于目标版本，但仍要求目标版本高于服务器当前版本。
 
-未配置服务器 SSH 密钥时，命令会在开始时询问 `root@124.70.149.30` 密码一次，并通过 SSH ControlMaster
+SSH 上传目标固定为 `root@124.70.149.30`，与公网下载域名分开配置。未配置服务器 SSH 密钥时，命令会在开始时询问密码一次，并通过 SSH ControlMaster
 复用到后续上传和清单切换。长期发布建议配置公钥；连接失败发生在打包前，不浪费 Apple 公证时间。
 
 ### 手动上传一个新版本
@@ -99,6 +128,7 @@ actual_checksum="$(shasum -a 256 "$release_dir/$dmg.uploading" | awk '{print $1}
 test "$actual_checksum" = "$expected_checksum"
 mv "$release_dir/$dmg.uploading" "$release_dir/$dmg"
 
+# Keep the manifest compatible with the same-origin check in installed 0.1.5 and earlier.
 download_url="${scheme}://${public_host}:${port}/${dmg}"
 printf '%s\n' \
   '{' \
@@ -110,8 +140,8 @@ mv "$release_dir/latest.json.next" "$release_dir/latest.json"
 curl --silent --fail "${scheme}://127.0.0.1:${port}/latest.json"
 REMOTE_SCRIPT
 
-curl --head --noproxy '*' "http://124.70.149.30:8091/${dmg}"
-curl --silent --noproxy '*' "http://124.70.149.30:8091/latest.json"
+curl --head --noproxy '*' "https://matter-desktop.yogeeai.com/download/${dmg}"
+curl --silent --noproxy '*' "https://matter-desktop.yogeeai.com/download/latest.json"
 ```
 
 这套命令不会重启 Docker 容器：Caddy 直接读取同一目录，新文件和清单会立即生效。请仅在签名、公证和本地验证完成后发布；客户端版本低于新清单时会打开 DMG，`0.1.3` 自身安装后才能通过菜单发现后续版本。
@@ -219,7 +249,13 @@ CSC_NAME="Developer ID Application: Your Organization (TEAMID)" \
 pnpm dist:mac
 ```
 
-即使环境中存在 `MINDUCK_WEB_DIST`，正常发布也会忽略它，防止旧产物进入安装包。只有 CI 在已验证预构建产物来源时，才可显式设置 `MINDUCK_WEB_ALLOW_PREBUILT=1` 和 `MINDUCK_WEB_DIST=/path/to/dist` 跳过远端 `dev` 构建。
+即使环境中存在 `MINDUCK_WEB_DIST`，正常发布也会忽略它，防止旧产物进入安装包。CI 在已验证预构建产物来源时，或用户明确要求使用本地产物打包时，可显式设置 `MINDUCK_WEB_ALLOW_PREBUILT=1` 和 `MINDUCK_WEB_DIST=/path/to/dist` 跳过远端 `dev` 构建。此时不会拉取 Web 源码、安装 Web 依赖或重新编译前端，仍会打包当前桌面源码并完成签名、公证和票据验证；发布记录应明确是本地产物，并保存输入哈希，不将其表述为最新远端版本。
+
+复用当前桌面项目中的前端构建：
+
+```bash
+MINDUCK_WEB_ALLOW_PREBUILT=1 MINDUCK_WEB_DIST="$PWD/web-dist" pnpm dist:mac
+```
 
 脚本会先检查签名身份和钥匙串 profile，再克隆远端 Web `dev`、安装锁定依赖、构建 Web、桌宠运行时和图标。接着向 `electron-builder` 提供已验证的钥匙串 profile，签名完整 Electron bundle，并在生成 DMG 前完成应用公证与票据装订。构建后再次验证应用的嵌套签名和票据；系统提供 `syspolicy_check` 时，同时执行应用发布检查。随后签名 DMG、提交其公证并等待结果，最后装订和验证 DMG 票据。装订后重新生成 `.blockmap`，使增量校验对应最终 DMG 字节。中途任一步失败时，临时构建目录会清理，`release/` 中已有的发布文件不会被替换。
 

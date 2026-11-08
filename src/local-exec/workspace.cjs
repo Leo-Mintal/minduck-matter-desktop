@@ -25,7 +25,7 @@ async function canonical(filename) {
   }
 }
 
-function createWorkspaces({ store, userData, home = os.homedir() }) {
+function createWorkspaces({ store, userData, home = os.homedir(), systemAccess = false }) {
   const denied = sensitivePaths(home, userData)
   const forbidden = filename => denied.some(root => inside(root, filename))
   async function validateRoot(selected = store.get().root) {
@@ -52,6 +52,8 @@ function createWorkspaces({ store, userData, home = os.homedir() }) {
   }
   async function roots(conversationId, title) {
     const workspace = await folder(conversationId, title)
+    // Only the main-process controller opts in after checking actual OS permission.
+    if (systemAccess) return [workspace, path.parse(home).root]
     const saved = store.get().grants[conversationId] || []
     const grants = await Promise.all(saved.map(canonical))
     if (grants.some((value, index) => forbidden(value) || value !== saved[index])) throw new Error('授权目录已变化或包含敏感路径，请重新授权')

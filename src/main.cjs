@@ -13,7 +13,6 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, View, W
 const { createBrowserDevice } = require('./browser-device/controller.cjs')
 const { createBrowserSettings } = require('./browser-device/settings.cjs')
 const { createController } = require('./local-exec/controller.cjs')
-const { createSettings: createLocalExecSettings } = require('./local-exec/settings.cjs')
 const { installBundledFrontend } = require('./bundledFrontend.cjs')
 const { createCompanion } = require('./companion/index.cjs')
 const { activateMatterWindow } = require('./companion/matter-actions.cjs')
@@ -52,7 +51,7 @@ const {
   resolveMatterOrigin,
 } = require('./matterService.cjs')
 const {
-  FULL_DISK_ACCESS_SETTINGS_URL,
+  FULL_DISK_ACCESS_SETTINGS_URL, createPermissionPrompt,
 } = require('./fullDiskAccess.cjs')
 const { checkForUpdate } = require('./updateCheck.cjs')
 
@@ -91,7 +90,6 @@ let chromeMetrics
 let browserPreferences
 let browserSettingsWindow
 let localExec
-let localExecSettings
 let browserDevice
 let browserDeviceSettings
 let updateCheckInFlight
@@ -963,7 +961,6 @@ function createMenu() {
           { label: '配置 Matter 服务地址...', click: openMatterServiceSettings },
           { label: '使用默认 Matter 服务', click: () => void useDefaultMatterService() },
           { label: '桌宠设置…', accelerator: 'CmdOrCtrl+,', click: () => companion?.openSettings() },
-          { label: '本机执行设置…', click: () => localExecSettings?.open() },
           { label: '内置浏览器设置…', click: () => browserDeviceSettings?.open() },
           { label: '显示桌宠', click: () => void companion?.show().catch(console.error) },
           { label: '隐藏桌宠', click: () => void companion?.hide().catch(console.error) },
@@ -1113,9 +1110,9 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   matterOrigin = loadMatterOrigin()
-  localExec = createController({ app, safeStorage, fetchImpl: net.fetch.bind(net), origin: matterOrigin, dialog,
-    getContents: () => matterTab?.view.webContents, getWindow: () => mainWindow, onSetupNeeded: () => localExecSettings?.open() })
-  localExecSettings = createLocalExecSettings({ BrowserWindow, ipcMain, controller: localExec, getWindow: () => mainWindow, shell })
+  const requestPermission = createPermissionPrompt({ dialog, shell, getWindow: () => mainWindow })
+  localExec = createController({ app, safeStorage, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
+    getContents: () => matterTab?.view.webContents, onPermissionNeeded: requestPermission })
   installBundledFrontend({ app, protocol, net, origin: matterOrigin, backendHeaders: (headers, url) => localExec.headers(headers, url) })
   const extensionRoot = app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked', 'extensions', 'matter-browser')
@@ -1132,6 +1129,7 @@ app.whenReady().then(async () => {
   configureIPC()
   createMenu()
   createWindow()
+  void requestPermission().catch(error => console.error('无法打开系统权限提示:', error))
   try {
     companion = createCompanion({ onMatterAction: (action, target) => {
       if (action.startsWith('chat-') || action === 'qa-answer' || action === 'qa-upload') return handleMatterQa({ bridge:matterTasks, dialog }, action, target)
@@ -1159,7 +1157,6 @@ app.on('window-all-closed', () => {
 let companionQuitting = false
 app.on('before-quit', (event) => {
   localExec?.dispose()
-  localExecSettings?.dispose()
   browserDevice?.dispose()
   browserDeviceSettings?.dispose()
   matterTasks?.dispose()

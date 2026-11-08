@@ -30,7 +30,7 @@ async function requestSystemFolder({ root, label }, fileSystem = fs) {
   } catch (error) {
     if (error.code === 'ENOENT') return false
     if (!['EACCES', 'EPERM'].includes(error.code)) throw error
-    throw Object.assign(new Error(`macOS 未允许 Matter 访问“${label}”。请在本机执行设置中点击“文件与文件夹权限…”，为 Minduck Matter 开启对应目录后重试。已拒绝的系统权限不能强制重新弹出；不要换写法绕过。`), { denied: true })
+    throw Object.assign(new Error(`macOS 未允许 Matter 访问“${label}”。请在系统设置的“隐私与安全性”中为 Minduck Matter 开启“完全磁盘访问”后重试。已拒绝的系统权限不能强制重新弹出；不要换写法绕过。`), { denied: true })
   } finally {
     if (directory) await directory.close()
   }

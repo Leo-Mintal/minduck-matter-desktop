@@ -7,7 +7,7 @@ const assert = require('node:assert/strict')
 if (!process.versions.electron) {
   const { spawnSync } = require('node:child_process')
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minduck-companion-smoke-'))
-  const result = spawnSync(require('electron'), [__filename, directory], { stdio: 'inherit', timeout: 120000 })
+  const result = spawnSync(require('electron'), [__filename, directory], { stdio: 'inherit', timeout: process.env.MINDUCK_COMPANION_PANELS_ONLY === '1' ? 200000 : 120000 })
   if (result.status !== 0) console.error('Companion diagnostic profile:', directory)
   else fs.rmSync(directory, { recursive: true, force: true })
   process.exit(result.status ?? 1)
@@ -30,7 +30,7 @@ const waitFor = async (read, predicate, label) => {
 }
 
 app.whenReady().then(async () => {
-  timeout = setTimeout(() => { console.error('Companion smoke deadline'); app.exit(1) }, 100000)
+  timeout = setTimeout(() => { console.error('Companion smoke deadline'); app.exit(1) }, process.env.MINDUCK_COMPANION_PANELS_ONLY === '1' ? 180000 : 100000)
   try {
     const project = path.resolve(__dirname, '..')
     const runtime = path.join(project, 'vendor/coopanion/runtime')
@@ -42,10 +42,11 @@ app.whenReady().then(async () => {
     const actionsOnly = process.env.MINDUCK_COMPANION_ACTIONS_ONLY === '1'
     const tasksOnly = process.env.MINDUCK_COMPANION_TASKS_ONLY === '1'
     const qaOnly = process.env.MINDUCK_COMPANION_QA_ONLY === '1'
+    const windowOnly = process.env.MINDUCK_COMPANION_WINDOW_ONLY === '1'
     const companionOptions = { dataDir: data, onMatterAction: (action, target) => onMatterAction(action, target),
       hostCommand: [process.execPath, project, '--minduck-companion-host',
         `--companion-runtime=${runtime}`, `--companion-data=${data}`,
-        ...actionsOnly || tasksOnly || qaOnly ? ['--remote-debugging-port=0'] : []] }
+        ...actionsOnly || tasksOnly || qaOnly || windowOnly ? ['--remote-debugging-port=0'] : []] }
     companion = createCompanion(companionOptions)
     await companion.start()
     await waitFor(() => companion.status(), (state) => state.state === 'running', 'core ready')
@@ -53,6 +54,10 @@ app.whenReady().then(async () => {
     const state = await waitFor(() => companion.panel('state'), (value) => value?.connected, 'official pet host connects')
     assert.equal(state.skin.figure, 'minduck-duck')
     assert.equal(state.window.source, 'CORTICO_DESKTOP_PET_HOST')
+    if (windowOnly) {
+      await require('./companion-window-probe.cjs')({ companion, data, state, waitFor })
+      return
+    }
     if (process.env.MINDUCK_COMPANION_STARTUP_ONLY === '1') {
       const shown = value => value?.connected && value.inWindow && value.onDesktop && value.skin.figure === 'minduck-duck'
       await waitFor(() => companion.panel('state'), shown, 'fresh profile automatically shows the default duck')
@@ -96,7 +101,7 @@ app.whenReady().then(async () => {
         assert.ok(response.ok, 'select panel fixture figure in the disposable profile')
         await waitFor(() => companion.panel('state'), (value) => value?.skin.figure === figure, 'panel fixture figure selected')
       }
-      await require('./companion-panels-probe.cjs')(state.url, waitFor)
+      await require('./companion-panels-probe.cjs')(state.url, waitFor, `http://127.0.0.1:${companion.status().port}`)
       return
     }
     const config = JSON.parse(fs.readFileSync(path.join(data, 'home/companion/config.json'), 'utf8'))
@@ -166,7 +171,7 @@ app.whenReady().then(async () => {
     assert.equal(persisted.worlds['desktop-pet'].skin.figure, 'minduck-duck')
     await require('./companion-click-page-probe.cjs')(state.url, waitFor)
     await require('./companion-suit-pose-probe.cjs')(state.url)
-    await require('./companion-panels-probe.cjs')(state.url, waitFor)
+    await require('./companion-panels-probe.cjs')(state.url, waitFor, `http://127.0.0.1:${companion.status().port}`)
     // Pet fixture interactions may close settings; check reuse of the current window.
     companion.openSettings()
     const reopened = companion.getSettingsWindow()
