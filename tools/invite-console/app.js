@@ -12,6 +12,7 @@
   const state = {
     items: [], current: null, filter: 'all', query: '', busy: false,
     loading: false, ready: false, revoking: null, listError: false,
+    nextCursor: '',
   };
   const dateFormat = new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -19,6 +20,8 @@
   let adapter;
   let issuer;
   let toastTimer;
+  let listGeneration = 0;
+  let searchTimer;
 
   function updateThemeButton() {
     const next = document.documentElement.dataset.theme === 'dark' ? '浅色' : '深色';
@@ -46,6 +49,8 @@
     $('generate-button').disabled = locked;
     $('copy-button').disabled = locked || state.current?.status !== 'active';
     $('refresh-button').disabled = state.busy || state.loading;
+    $('load-more').disabled = locked;
+    $('load-more').hidden = !state.nextCursor;
     $('generate-label').textContent = state.busy && !state.revoking ? '正在摇码…'
       : issuer?.hasPending() ? '重试本次摇码' : state.current ? '再摇一次' : '摇码';
     $('reels-area').setAttribute('aria-busy', String(state.busy));
@@ -177,10 +182,10 @@
 
   function renderHistory() {
     const items = state.items.filter((item) => (
-      (state.filter === 'all' || item.status === state.filter) && item.code.includes(state.query)
+      (state.filter === 'all' || item.status === state.filter) && (!state.query || item.code === state.query)
     ));
     $('record-count').textContent = String(state.items.length);
-    $('record-count').setAttribute('aria-label', `共 ${state.items.length} 条记录`);
+    $('record-count').setAttribute('aria-label', `已加载 ${state.items.length} 条记录`);
     $('history-rows').replaceChildren(...(items.length ? items.map(makeRow) : [emptyRow]));
     const filtered = state.filter !== 'all' || state.query;
     const unavailable = state.listError && !state.ready;
@@ -199,29 +204,35 @@
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }
 
-  async function refreshHistory() {
-    if (!adapter || state.busy || state.loading) return;
+  async function refreshHistory(append = false) {
+    if (!adapter || state.busy) return;
+    const generation = ++listGeneration;
     state.loading = true;
     state.listError = false;
     $('history-error').hidden = true;
     renderHistory();
     try {
-      state.items = (await adapter.list()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      const page = await adapter.listPage({ status: state.filter, query: state.query, cursor: append ? state.nextCursor : '' });
+      if (generation !== listGeneration) return;
+      state.items = append ? [...state.items, ...page.items.filter((item) => !state.items.some((entry) => entry.id === item.id))] : page.items;
+      state.nextCursor = page.nextCursor;
       state.ready = true;
       if (state.current) {
-        const current = state.items.find((item) => item.id === state.current.id);
+        const currentPage = await adapter.listPage({ query: state.current.code });
+        if (generation !== listGeneration) return;
+        const current = currentPage.items.find((item) => item.id === state.current.id);
         // A missing record must never remain copyable as an active invite.
         state.current = current || null;
         displayCode(state.current?.code);
         renderCaption();
       }
     } catch (error) {
+      if (generation !== listGeneration) return;
       state.listError = true;
       $('history-error').textContent = error.message;
       $('history-error').hidden = false;
     } finally {
-      state.loading = false;
-      renderHistory();
+      if (generation === listGeneration) { state.loading = false; renderHistory(); }
     }
   }
 
@@ -231,6 +242,7 @@
     $('operation-message').textContent = '';
     $('result-caption').textContent = '正在摇码…';
     updateControls();
+    let issued = false;
     try {
       startRolling();
       const item = await issuer.issue();
@@ -241,6 +253,7 @@
       state.filter = 'all';
       state.query = '';
       $('search-input').value = '';
+      issued = true;
     } catch (error) {
       displayCode(state.current?.code);
       $('operation-message').textContent = `${error.message}${issuer.hasPending() ? ' 请重试本次摇码。' : ''}`;
@@ -249,6 +262,7 @@
       renderCaption();
       renderHistory();
     }
+    if (issued) await refreshHistory();
   }
 
   async function copyCode(code) {
@@ -326,7 +340,8 @@
   $('copy-button').addEventListener('click', () => {
     if (state.current?.status === 'active') copyCode(state.current.code);
   });
-  $('refresh-button').addEventListener('click', refreshHistory);
+  $('refresh-button').addEventListener('click', () => void refreshHistory());
+  $('load-more').addEventListener('click', () => void refreshHistory(true));
   $('history-rows').addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');
     if (!button || button.disabled) return;
@@ -337,11 +352,12 @@
   });
   document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
     state.filter = button.dataset.filter;
-    renderHistory();
+    void refreshHistory();
   }));
   $('search-input').addEventListener('input', (event) => {
     state.query = event.target.value.trim().toUpperCase();
-    renderHistory();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => void refreshHistory(), 250);
   });
   $('cancel-revoke').addEventListener('click', closeDialog);
   $('close-dialog').addEventListener('click', closeDialog);
@@ -362,7 +378,7 @@
       ? core.createDemoAdapter({ storage: localStorage, locks: navigator.locks })
       : core.createApiAdapter({
         basePath: config.apiBasePath,
-        csrfToken: () => document.querySelector('meta[name="csrf-token"]').content,
+        accessToken: () => localStorage.getItem('matter.token') || '',
       });
     issuer = core.createIssuer({
       adapter, storage: sessionStorage, pendingKey: `matter:invite-console:${config.mode}:pending:v1`,

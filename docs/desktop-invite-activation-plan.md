@@ -1,6 +1,8 @@
 # 客户端邀请码：后端与 macOS 客户端改造方案
 
-日期：2026-11-16。状态：待实施方案；本次只修改独立 H5，不包含下面的服务端、客户端或签名改造。
+日期：2026-11-16。状态：服务端、客户端和独立 H5 源码已实现，尚未部署或发布。真实 macOS 签名包的 Secure Enclave 持久化、升级及卸载重装恢复待验收；生产强制开关保持关闭。
+
+当前后端迁移为 `000138_desktop_access`，产品模块为 `internal/app/desktopaccess`；桌面模块为 `src/desktop-access/` 和 `native/desktop-access.mm`。两仓库均在独立邀请码分支开发；Web 未新增邀请码分支或改造普通登录。
 
 ## 1. 已确定的产品规则
 
@@ -30,7 +32,7 @@
 | 桌面端 `src/local-exec/pairing.cjs` | `safeStorage` 加密令牌后写本地配置 | 保留原有用途；不能据此认为删除 userData 后激活信息仍能恢复 |
 | Web `src/components/core/{Button,Input,DataTable}.tsx` | 公共组件及 `src/design/primitives/` 样式 | H5 已提取使用到的样式和类名；移植到 React 时再直接使用组件 |
 
-独立 H5 当前的 API 适配器是“同源 Cookie＋CSRF”的占位契约。**现有后端实际使用 Bearer JWT**，接后端时必须按下面的 JWT 方式调整，不能只把页面切到 `api` 就认为已经接通。
+独立 H5 已改为读取同源既有 `matter.token`，发送 Bearer JWT，不建立第二套登录或 Cookie/CSRF 会话。`config.js` 默认仍为演示模式；服务端部署、权限和签名客户端验收完成后再切换为 `api`，演示码不能激活客户端。
 
 ## 3. 总体分工与流程
 
@@ -55,18 +57,18 @@ flowchart TD
 
 ### 4.1 模块和数据表
 
-建议新增产品层包 `services/api/internal/app/desktopaccess/`，由 bootstrap 注入数据库、Redis、配置和时钟。不放进通用 agent runtime，不复用“浏览器配对码”表代替邀请资格。
+产品层包 `services/api/internal/app/desktopaccess/` 由 bootstrap 注入数据库、Redis 和配置。通用 reverse transport 只接收回调，不依赖邀请码产品包，不复用浏览器配对码表。
 
-使用新的 forward migration，编号实施时按当时最大编号分配，不回改历史迁移。首版两张持久表即可：
+新增 forward migration `000138_desktop_access`，没有修改历史迁移。两张持久表：
 
 | 表 | 主要字段与约束 |
 | --- | --- |
-| `mt_desktop_invites` | `id`；`code_digest UNIQUE`；`code_ciphertext`、`encryption_key_version`；`status`；`issuer_user_id`；`issue_request_id`；`issue_request_digest`；`created_at`、`used_at`、`revoked_at`；`UNIQUE(issuer_user_id, issue_request_id)` |
-| `mt_desktop_activations` | `id`；`public_key_spki`；`public_key_fingerprint UNIQUE`；`invite_id UNIQUE REFERENCES mt_desktop_invites`；`status`；`created_at`、`last_seen_at`、`revoked_at` |
+| `mt_desktop_invites` | `id`；`code_digest UNIQUE`；`code_ciphertext`；`status`；`issuer_user_id`；`issue_request_id`；`issue_request_digest`；`created_at`、`used_at`、`revoked_at`；`UNIQUE(issuer_user_id, issue_request_id)` |
+| `mt_desktop_activations` | `id`；`public_key_spki`；`public_key_fingerprint UNIQUE`；`invite_id UNIQUE REFERENCES mt_desktop_invites`；`status`；`created_at`、`revoked_at` |
 
 邀请码状态仅允许 `active → used` 或 `active → revoked`。设备资格仅允许 `active → revoked`；作废未使用邀请码和吊销已激活设备是两个操作，不能混用。
 
-不要只对六位码做普通 SHA-256 后存库：搜索空间较小。建议使用独立服务端 lookup key 做 HMAC 查询摘要；由于管理表格和丢响应重试仍需显示原码，再用服务端加密保存码值。管理员 API 才能解密，客户端不持有这些服务端密钥，日志不记录完整码。加密密钥可以带版本轮换；lookup key 轮换须迁移全部摘要，包括已用/作废墓碑，保持跨版本不重复发码。
+使用独立服务端 lookup key 做 HMAC-SHA256 查询摘要；管理列表和丢响应重试所需原码用 AES-GCM 加密，并将行 ID 绑定为 AAD。管理员 API 才返回原码，客户端不持有服务端密钥，日志不记录完整码。首版不包含自动密钥版本轮换或 last-seen 写入；更换任何服务端密钥前必须迁移全部密文/摘要，包括已用和作废记录。启动 readiness 会尝试解密已有记录并核对摘要，不能直接换环境变量冒充轮换。
 
 保留已使用、已作废记录的唯一摘要，不因清理历史而让旧码重新可用。上线需同步 `.env.example`、配置校验和运维密钥备份策略，不把密钥写入仓库或复用 JWT secret。
 
@@ -74,7 +76,7 @@ flowchart TD
 
 独立静态目录建议部署在现有 Web 的同源子路径，例如 `/internal/invites/`，无需改 Web SPA 源码。管理员先在原 Web 登录，再进入摇码页。
 
-- H5 通过可替换的 `getAccessToken()` 读取当前同源既有登录态，发送 `Authorization: Bearer …`；不把 token 放在 URL、配置文件或额外持久存储里。
+- H5 通过适配器 `accessToken()` 读取当前同源既有登录态，发送 `Authorization: Bearer …`；不把 token 放在 URL、配置文件或额外持久存储里。
 - 后端每个管理接口都执行 JWT、账号可用性和管理员权限检查。隐藏入口、CORS、页面来源和前端角色判断不能代替权限验证。
 - `401` 提示先登录；`403` 禁止发码；不自动转入演示发码。若独立域部署，则另做明确认证交接，不能直接读取其他域的 localStorage。
 - 首版不需要再建设一套管理员账号、共享密码或内置长期密钥。
@@ -83,19 +85,19 @@ flowchart TD
 
 | 接口 | 用途 | 关键条件 |
 | --- | --- | --- |
-| `GET /api/admin/desktop-invites?status=&q=&cursor=&limit=20` | 查询记录 | 只返回管理员授权范围；游标按 `(created_at,id)` 排序 |
+| `GET /api/admin/desktop-invites?status=&q=&cursor=` | 查询记录 | 平台管理员可见；固定每页 20 条，游标按 `(created_at,id)` 排序；`q` 仅完整六位码精确匹配 |
 | `POST /api/admin/desktop-invites` | 生成一码 | 必填 `Idempotency-Key`；当前 body 为 `{}`；返回实际 `Invite` |
 | `POST /api/admin/desktop-invites/:id/revoke` | 作废未使用码 | 重复作废返回同一状态；已使用返回冲突 |
-| `POST /api/admin/desktop-activations/:id/revoke` | 吊销设备资格 | 独立权限和审计；不将原邀请码改回可用 |
+| `POST /api/admin/desktop-activations/:id/revoke` | 吊销设备资格 | 管理员权限、保留吊销时间；不将原邀请码改回可用 |
 
-移动端首屏建议每页 20 条，继续加载下一页；接入时同步将 H5 当前的全量本地筛选改为服务端筛选和游标加载，不能把首批结果误当成全部记录。本次精简页仍使用本地演示记录。
+H5 已接入服务端筛选和游标继续加载，记录数标注为“已加载”。为避免解密扫描全表，搜索只接受完整六位码，演示适配器采用同一契约。页面默认演示，真实管理员 JWT 接口已由隔离 HTTP/数据库测试覆盖，正式站点及 iPhone Safari 待部署验收。
 
 ### 4.3 同时点击、重复发码与唯一性
 
-页面生成一个请求 UUID，在成功确认前持续复用；连续点击合并，网络超时不生成新 UUID。服务端把 `(管理员ID, 请求UUID)` 的唯一约束和新码写入放在同一数据库事务中。
+页面生成一个请求 UUID，在成功确认前持续复用；连续点击合并，网络超时不生成新 UUID。服务端用同一次数据库 INSERT 同时落邀请码、请求 UUID 和正文摘要，通过 `(管理员ID, 请求UUID)` 唯一约束处理冲突并回查当前记录；不用进程锁或响应缓存实现持久幂等。
 
 - 同一管理员、同一请求编号：并发只留下一条邀请码，重试查询并返回这条记录的**当前状态**，不能重放过期的 `active` 响应。
-- 同一请求编号、不同参数摘要：返回 `409 idempotency_key_reused`。
+- 同一请求编号、不同参数摘要：返回 `409 invite_conflict`。
 - 不同请求编号：可以各发一个码；多管理员互不阻塞。同码碰撞由 `code_digest` 唯一约束兜底，有限次重新随机生成，不做“先查不存在再无约束插入”。
 - 进程重启、多 API 实例或缓存过期后仍由数据库去重。不要把持久记录做成只保留 180 秒的响应缓存。
 - 若以后增加发码配额，配额扣减也在同一事务内完成，不能 `COUNT` 通过后再分别插入。当前不增加公开抢码或概率抽奖机制。
@@ -106,21 +108,22 @@ flowchart TD
 
 | 接口 | 请求与结果 |
 | --- | --- |
-| `POST /api/desktop-access/challenges` | 提交公钥、用途，返回 challenge ID、随机 nonce、过期时间；用途包括 `activate`、`restore`、`renew`、`runtime_connect` |
-| `POST /api/desktop-access/activate` | 提交邀请码、公钥及挑战签名；事务核销后返回设备 ID 与短期激活会话 |
-| `POST /api/desktop-access/restore` | 提交已有公钥/设备 ID 和新挑战签名；查询激活状态并建立新会话，不需要原邀请码 |
-| `POST /api/desktop-access/renew` | 用新挑战证明仍持有私钥，续期激活会话；被吊销则拒绝 |
+| `GET /api/desktop-access/policy` | 返回 `{required,protocol:1}`；显式关闭才兼容放行；网络错误、404 或协议不匹配不放行 |
+| `POST /api/desktop-access/challenges` | 提交 `{publicKey,purpose}`，返回 challenge ID、随机 nonce、过期时间；用途为 `activate`、`restore`、`renew`、`auth`、`runtime_connect` |
+| `POST /api/desktop-access/activate` | 正文 `{code}`；公钥和签名放请求头；原子核销后返回资格 `id/status/createdAt` |
+| `POST /api/desktop-access/restore` | 正文 `{}` 和新挑战签名，按公钥查回资格，不需要原邀请码或本地设备 ID |
+| `POST /api/desktop-access/renew` | 正文 `{}` 和新挑战签名，重查资格；不签发可复制的 Bearer 激活会话 |
 
-采用 P-256 ECDSA/SHA-256，公钥统一为 SPKI，签名统一为 ASN.1 DER；原生端生成的公钥表示若不同，必须显式转换并互测。
+采用 P-256 ECDSA/SHA-256，公钥为规范 SPKI DER，签名为 ASN.1 DER，两者用无 padding 的 base64url 传输。原生模块导出 X9.63 公钥点，由主进程显式转换为 SPKI。HTTP 请求头为 `X-Desktop-Key`、`X-Desktop-Challenge`、`X-Desktop-Signature`。
 
 签名内容要版本化，绑定服务 origin、用途、HTTP 方法、固定路径、challenge ID、nonce 以及请求正文的 SHA-256；双方对**实际发送的 body 字节**计算摘要，签名放请求头，避免重新序列化 JSON 导致验签不一致。不能只签一个设备 ID。
 
-挑战使用安全随机 nonce，建议 120 秒有效，绑定公钥与用途。Redis 原子操作保证单次消费；先验签再原子核销挑战。Redis 不可用返回 `503`，不绕过验证。挑战已经消费但数据库事务失败时，客户端取得新挑战重试，不会因此消费邀请码。
+签名文本由 `matter-desktop-access-v1`、origin、用途、方法、路径、challenge ID、nonce、正文 SHA-256 十六进制依次以换行连接，无末尾换行。HTTP 正文上限 64KiB。挑战使用 32 随机字节 nonce、120 秒有效，绑定公钥与用途。先验签，再以 Redis 比较删除脚本原子消费；Redis 故障返回 `503`。挑战已消费但数据库事务失败时，取得新挑战重试，不会因此消费邀请码。
 
 核销事务应做到：
 
 1. 完成挑战、用途、持钥证明及请求格式验证。
-2. 查询同公钥已有的设备资格：已经激活就恢复该资格，不再扣另一个码；已吊销的公钥不能借新码自动洗白。
+2. 用 PostgreSQL 事务 advisory lock 串行化同一公钥；已有激活则恢复，不再扣另一个码；已吊销公钥不能借新码自动洗白。
 3. 锁定邀请码记录，确认仍为 `active`，插入设备资格并更新为 `used`，一并提交。
 4. 用公钥唯一约束和 `invite_id UNIQUE` 处理并发；竞争失败后回查同公钥结果或返回邀请码不可用。
 
@@ -128,20 +131,20 @@ flowchart TD
 
 响应丢失后，客户端用已保存的私钥走 `restore` 即可找回；即使本地设备 ID 尚未保存，也可按公钥找回。所以设备 ID 是索引，不是可复制后直接使用的密码。
 
-### 4.5 试码限制、会话和吊销
+### 4.5 试码限制、持钥检查和吊销
 
-- 验证码路径按可信来源 IP、公钥和全局预算组合限流，公钥可以随意生成，不能只限制公钥。具体阈值按灰测人数和公司 NAT 场景配置；过限返回 `429` 和 `Retry-After`。
+- 核销按直接来源 IP 每分钟 10 次、全局每分钟 600 次；挑战/恢复/桌面认证按 IP 每分钟 600 次、全局 10,000 次。Redis 原子计数；过限 `429`、`Retry-After:60`，故障 `503`。当前使用 `RemoteIP()`，忽略可伪造的转发头；反向代理部署会合并来源，需在可信边缘配置独立用户限流，并按公司 NAT/灰测人数验收阈值。
 - 无效、已使用、作废码，对未授权调用统一返回“邀请码不可用”，不公开领码列表或不同状态的查询 oracle。
 - 六位码不适合无边界公开尝试。生成数量、尝试失败率、异常来源须可观测，日志对码和 token 脱敏。
-- 建议激活会话 5 分钟有效，续期需要持钥证明；常驻连接绑定本次服务端连接挑战，不能拿一段可复制的 Bearer lease 直接建立另一台设备的连接。
-- 管理员吊销设备后，服务端拒绝后续续期并关闭已绑定 runtime；建议吊销传播上限 30 秒。该数字是待实现的验收目标，不是现有能力。
-- Redis 中仅保存短期挑战/会话；数据库是码和资格状态的最终事实源。重启 Redis 不得把已用码变回可用。
+- 首版省去激活 lease：恢复、定期检查、桌面认证各自使用新的单次挑战。runtime 新连接的证明绑定 runtime ID 和账号 JWT 的 SHA-256，挑战重放不能建立第二条连接；重连前先取得新证明，避免占用服务端首帧认证的 5 秒期限。
+- 客户端每 20 秒复查；失效或网络失败先停止业务再显示 gate。服务端在 runtime 心跳（20 秒）和工具上下文解析时重查资格，吊销后关闭连接。以上是检查周期，数据库/网络异常下不能当成已验收的严格 30 秒 SLA。
+- Redis 中仅保存短期挑战和限流预算；数据库是码和资格状态的最终事实源。重启 Redis 不会把已用码变回可用。
 
 ## 5. 客户端改造
 
 ### 5.1 激活状态机与入口
 
-建议新增 `src/desktop-access/`，包含 `controller.cjs`、`service.cjs`、`gate.html`、`gate-preload.cjs`、`gate.js` 和样式。状态为：
+`src/desktop-access/` 包含 `controller.cjs`、`service.cjs`、`keys.cjs`、`gate.cjs`、`gate.html`、`gate-preload.cjs`、`gate.js` 和样式。状态为：
 
 `checking → unactivated / active / retryable_error / revoked / unsupported`
 
@@ -158,12 +161,12 @@ flowchart TD
 
 ### 5.2 密钥与钥匙串
 
-建议使用在 Electron 主进程加载的薄原生模块，调用 macOS Security.framework。原生模块只封装创建/查找密钥、导出公钥、对主进程构造的受限协议数据签名；不增加面向远程 Web 的通用签名 IPC。
+已实现主进程加载的 N-API 原生模块 `native/desktop-access.mm`，仅依赖系统 Foundation/Security.framework。封装查找/创建密钥、导出公钥、对带固定协议前缀的数据签名；没有面向远程 Web 的通用签名 IPC。开发态或无嵌入 profile 的应用拒绝创建激活密钥，不回退软件私钥。
 
 1. 在 Secure Enclave 中创建永久密钥，使用稳定的 application tag；按正式/测试环境及服务 origin 隔离，不包含应用版本号。
-2. 使用 `SecItem` 数据保护钥匙串保存可恢复的密钥引用，选择仅本机可用的可访问性；是否要求解锁由实际支持的属性和产品后台运行需求验证确定。
+2. 使用数据保护钥匙串、`AfterFirstUnlockThisDeviceOnly` 和 `PrivateKeyUsage`；不要求每次签名使用 Touch ID。实际锁屏/解锁行为仍需签名包验收。
 3. **先确认密钥能持久查回并成功签名，再向后端核销邀请码。** 不把私钥明文导出，也不把原邀请码作为长期凭证。
-4. 激活后可在钥匙串附带保存设备 ID。ID 丢失时用公钥恢复；私钥丢失时不能仅凭 ID 恢复。
+4. 首版不持久保存设备 ID 或邀请码；服务端按公钥直接恢复。私钥丢失时不能仅凭 ID 恢复。
 5. 正常卸载应用不主动清理激活项；重新安装以相同身份查回密钥并完成服务端新挑战。
 
 普通应用写自己可访问的钥匙串项不需要先让用户点一个自制“允许保存”弹窗。但不能保证系统永远不提示：锁定状态、访问控制、签名身份变化等应保留系统真实结果。可在保存成功后给一次简短提示“已在本机安全保存，正常重装可恢复”，不承诺系统重装、钥匙串清理或换电脑仍然恢复。
@@ -181,7 +184,9 @@ Apple TN3137 明确：数据保护钥匙串的访问组 entitlement 需要 provi
 - 原生 `.node` 模块按当前 Electron/架构构建，移出 ASAR 并按同一团队签名，纳入现有签名、公证及包内一致性检查。
 - 在真实支持设备上验证创建、退出后查回、升级后查回、正常卸载重装查回、锁屏/解锁和新用户环境。当前发布目标为 arm64，也不能把模拟测试当成实际 Secure Enclave 验收。
 
-先做这一步技术验证，再接核销流程；未通过前不启用生产强制邀请。若团队 profile 或目标硬件不支持，应明确评估降低为软件密钥后的安全差异，不在本方案里默认接受降级。
+当前原生模块编译、加载和参数拒绝通过；本机现有 profile 未发现授权此应用的 macOS profile，因此真实密钥持久化与重装恢复未验收。源码链路已在隔离测试完成，未开启生产强制。若团队 profile 或目标硬件不支持，不默认降级软件密钥。
+
+打包使用 `MINDUCK_DESKTOP_ACCESS_PROFILE=/absolute/path/to/macOS.provisionprofile`；正式启用前同时设置 `MINDUCK_DESKTOP_ACCESS_REQUIRED=1`，缺失 profile 会终止打包。脚本检查平台、有效期、App ID 与访问组，再生成含字面 entitlement 键的主应用 plist；原生模块置于 Resources/native，并在 afterPack 核对编译输出。未提供 profile 的普通兼容包只能配合后端 `required:false`，不能用于强制激活发布。
 
 ### 5.4 与原 Web 登录及 runtime 的连接
 
@@ -211,7 +216,7 @@ Apple TN3137 明确：数据保护钥匙串的访问组 entitlement 需要 provi
 | 4. 客户端 | gate、原生密钥模块、恢复、runtime/桌面登录保护 | 所有官方入口不可跳过；有旧 JWT 也先检查；失败可恢复 |
 | 5. 灰测上线 | 后端先部署兼容接口，新客户端发布后切强制策略 | 旧版本明确提示升级；Web 回归不受影响；吊销生效 |
 
-建议后端先部署、默认不拒绝旧桌面版本；新客户端具备能力并可下载后，再启用服务端桌面邀请强制策略。新的策略配置须进入 `.env.example` 和运维文档。回滚可以关闭桌面限制或暂停发码，但不得删除已用码、恢复被核销的码或清空设备私钥。
+先部署迁移和兼容 API，`MATTER_DESKTOP_ACCESS=off`，确认 policy 返回 `required:false`，再发布新客户端；旧后端没有 policy 时新客户端会拦截。签名包验收、更新入口和 H5 管理权限就绪后，才设置 `MATTER_DESKTOP_ACCESS=on`，同时配置 `MATTER_DESKTOP_ACCESS_ORIGIN` 及两个独立 32 字节标准 base64 密钥 `MATTER_DESKTOP_INVITE_LOOKUP_KEY`、`MATTER_DESKTOP_INVITE_ENCRYPTION_KEY`。该开关也控制真实发码，提前联调用隔离环境。生产 origin 使用 HTTPS。回滚可关闭限制，但不得删除已用码或设备密钥。
 
 必要验收用例：
 
@@ -223,11 +228,11 @@ Apple TN3137 明确：数据保护钥匙串的访问组 entitlement 需要 provi
 - 有历史登录态仍不能绕过 gate；深链/菜单/桌宠不提前加载业务；设备失效不取消普通 Web 的账号资格。
 - H5 重点验收 375/390/430px，再验收 768/1024/1440px；真实 iPhone Safari 的触摸、键盘和剪贴板另做实机验收。
 
-工作量主要在 macOS 密钥/签名持久化与客户端启动生命周期，后端可复用现有栈，无需大改普通账号系统。应在第 1 阶段验证后再给正式排期；不以一个输入弹窗估算整条安全链路。
+已验证：专用 PostgreSQL 上 100 路幂等发码、同码/同设备竞争、作废竞争、失败回滚与恢复；独立真实 Redis 原子消费/限流和故障关闭；HTTP 旧账号保护、JWT 管理员降权、重放/正文篡改；runtime 传输吊销；Electron gate 生命周期、IPC 来源拒绝、真实 Chromium 请求的精确正文签名透传。H5 六种宽度深浅主题及分页交互通过。原生模块仅编译/加载过，以上不包含真实 Secure Enclave、签名包重装恢复、正式部署或真实手机验收。
 
 ## 8. 官方资料
 
 - Apple：[TN3137 — On Mac keychain APIs and implementations](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)。核对数据保护钥匙串、profile 授权、宿主 entitlement 与 Secure Enclave 的关系。
 - Apple：[Protecting keys with the Secure Enclave](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave)。核对不可导出密钥、硬件支持和签名 API；本方案协议选用 P-256。
 
-以上资料于 2026-11-16 读取 Apple 官方文档数据核对；方案中的接口、状态机、时限及模块名属于待实施设计，不能当成当前已经存在的能力。
+资料用于核对 Apple 配置前提。代码通过不代表已签名验收或已部署；当前仍待 macOS profile、真机升级/重装/锁屏恢复和真实 iPhone Safari 验收。

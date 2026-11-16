@@ -56,6 +56,14 @@
 
     return {
       list: async () => read().items,
+      listPage: async ({ status = 'all', query = '', cursor = '' } = {}) => {
+        const filtered = read().items.filter((item) => (status === 'all' || item.status === status)
+          && (!query || item.code === query.trim().toUpperCase()))
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id));
+        const offset = cursor ? Number(cursor) : 0;
+        if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('分页位置无效，请刷新记录。');
+        return { items: filtered.slice(offset, offset + 20), nextCursor: offset + 20 < filtered.length ? String(offset + 20) : '' };
+      },
       issue: (requestId) => exclusive(() => {
         const data = read();
         const existing = data.items.find((item) => item.id === data.requests[requestId]);
@@ -86,26 +94,25 @@
     };
   }
 
-  function createApiAdapter({ basePath, csrfToken, fetchImpl = globalThis.fetch, timeoutMs = 12000 }) {
+  function createApiAdapter({ basePath, accessToken, fetchImpl = globalThis.fetch, timeoutMs = 12000 }) {
     if (typeof basePath !== 'string' || !/^\/(?!\/)[a-zA-Z0-9/_-]+$/.test(basePath)) {
       throw new Error('服务地址必须为同源 API 路径，请联系管理员检查配置。');
     }
     const base = basePath.replace(/\/$/, '');
 
     async function request(path, { method = 'GET', requestId } = {}) {
-      const headers = { Accept: 'application/json' };
+      const token = accessToken?.();
+      if (typeof token !== 'string' || !token) throw new Error('请先在 Matter Web 登录管理员账号，再打开此页面。');
+      const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
       if (method !== 'GET') {
-        const token = csrfToken();
-        if (!token) throw new Error('管理会话校验信息缺失，请通过管理入口重新打开页面。');
         headers['Content-Type'] = 'application/json';
-        headers['X-CSRF-Token'] = token;
         if (requestId) headers['Idempotency-Key'] = requestId;
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(`${base}${path}`, {
-          method, headers, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+          method, headers, credentials: 'omit', cache: 'no-store', redirect: 'error',
           signal: controller.signal, ...(method === 'GET' ? {} : { body: '{}' }),
         });
         if (!response.ok) {
@@ -129,10 +136,14 @@
     }
 
     return {
-      list: async () => {
-        const data = await request('');
+      listPage: async ({ status = 'all', query = '', cursor = '' } = {}) => {
+        const params = new URLSearchParams({ status, q: query, cursor });
+        const data = await request(`?${params}`);
         if (!Array.isArray(data?.items)) throw new Error('发码记录格式不正确，请联系管理员。');
-        return data.items.map(validateInvite);
+        if (data.nextCursor !== undefined && (typeof data.nextCursor !== 'string' || data.nextCursor.length > 1024)) {
+          throw new Error('发码分页格式不正确，请刷新记录。');
+        }
+        return { items: data.items.map(validateInvite), nextCursor: data.nextCursor || '' };
       },
       issue: async (requestId) => {
         const item = validateInvite(await request('', { method: 'POST', requestId }));

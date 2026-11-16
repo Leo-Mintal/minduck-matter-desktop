@@ -8,7 +8,7 @@ const BRIDGE_PORT = 19473
 function createClientRuntime({ app, origin, getContents, localExec, compatibility, extensionRoot, nativeImage,
   fetchImpl, verifyFetch = globalThis.fetch, connect = connectDesktop,
   toolkit = createTools({ compatibility, extensionRoot, origin, nativeImage, fetchImpl }),
-  bridgePort = BRIDGE_PORT, bridgeRetryMs = 1000 }) {
+  bridgePort = BRIDGE_PORT, bridgeRetryMs = 1000, getAccessProof }) {
   const runtimeId = 'rt_' + crypto.randomBytes(24).toString('base64url')
   let identity = { token:'',account:'' }, lastContents, connection, state='等待登录', proof='', disposed=false, refreshing=false, generation=0, nativePermissions=false
   const capabilities = () => {
@@ -43,6 +43,7 @@ function createClientRuntime({ app, origin, getContents, localExec, compatibilit
       }
       const url=new URL('/api/client-runtime/ws',origin);url.protocol=url.protocol==='https:'?'wss:':'ws:'
       connection=connect({url:url.href,token:identity.token,runtimeId,version:app.getVersion(),getCapabilities:capabilities,
+        getAccessProof,
         capabilities:{tools:{},clientRuntime:{version:1,fileTransfer:1,fileOpen:localExec.snapshot().canOpenFile === true ? 1 : 0},localPermissions:{version:1,mode:'macos-native'}},mcpResults:true,tools:toolkit.schemas,
         onInitialize(capabilities){if(generation===expected)nativePermissions=capabilities?.localPermissions?.version===1 && capabilities.localPermissions.mode==='macos-native'},
         onContext(value){if(generation===expected && typeof value==='string') proof=value},

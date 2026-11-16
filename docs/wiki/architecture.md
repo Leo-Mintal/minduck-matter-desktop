@@ -1,5 +1,12 @@
 # Architecture
 
+## Desktop invitation gate
+
+- `src/desktop-access/controller.cjs` controls startup before the main window, runtime, local execution and companion. `service.cjs` checks the server policy, performs exact-body challenge signatures and maps only enumerated auth routes to `/api/desktop/auth/*`; ordinary Web source remains unchanged.
+- `native/desktop-access.mm` is a small system-framework N-API module. Private keys stay in Secure Enclave/data-protection Keychain, tagged by stable service origin; the remote renderer has no signing IPC. Missing profile/unsupported signing fails closed when the server requires activation.
+- Policy must be deployed before distributing this client; only an explicit `required:false` enables compatibility mode. A new client cannot infer an absent/failed policy endpoint is disabled. State checks repeat every 20 seconds; blocked state stops business before showing the local gate.
+- Build with `pnpm build:desktop-access`; `pnpm test:desktop-access` uses isolated Electron data and a fake activation service to test UI/IPC lifecycle. This does not validate signed Keychain persistence. Profile configuration and pending acceptance are in [the implementation record](../desktop-invite-activation-plan.md).
+
 ## External browser migration stopped
 
 - On 2026-11-05 the user canceled the external-browser port and requested restoration of the original Minduck browser style. No Brave/DuckDuckGo synchronization or native build is active; Electron's bundled Chromium remains the product runtime.

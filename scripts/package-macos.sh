@@ -21,6 +21,10 @@ project_dir="$(cd "$script_dir/.." && pwd)"
 release_dir="$project_dir/release"
 metadata_dir="$release_dir/metadata"
 stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/minduck-matter-build.XXXXXX")"
+cleanup() {
+  rm -rf "$stage_dir"
+}
+trap cleanup EXIT
 electron_dist="$project_dir/node_modules/electron/dist"
 default_web_source="$project_dir/../minduck-matter-web-prod"
 web_dev_ref="dev"
@@ -57,9 +61,18 @@ if [[ ! -x "$project_dir/node_modules/.bin/electron-builder" || ! -d "$electron_
 fi
 
 version="$(node -p "require('$project_dir/package.json').version")"
+activation_profile="${MINDUCK_DESKTOP_ACCESS_PROFILE:-}"
+if [[ "${MINDUCK_DESKTOP_ACCESS_REQUIRED:-0}" == "1" && -z "$activation_profile" ]]; then
+  echo "Desktop activation release requires MINDUCK_DESKTOP_ACCESS_PROFILE (macOS Developer ID profile)." >&2
+  exit 1
+fi
 artifact="MinduckMatter-${version}-arm64.dmg"
 update_archive="MinduckMatter-${version}-arm64.zip"
 sign_release="${MINDUCK_MACOS_SIGN:-1}"
+if [[ -n "$activation_profile" && "$sign_release" != "1" ]]; then
+  echo "A desktop activation provisioning profile requires a signed macOS build." >&2
+  exit 1
+fi
 notary_profile="${MINDUCK_NOTARY_PROFILE:-MinduckNotary}"
 identity=""
 
@@ -95,11 +108,6 @@ case "$sign_release" in
     exit 1
     ;;
 esac
-
-cleanup() {
-  rm -rf "$stage_dir"
-}
-trap cleanup EXIT
 
 mkdir -p "$metadata_dir"
 
@@ -174,6 +182,10 @@ fi
 # Regenerate the application icon used by the macOS bundle.
 "${pnpm_cmd[@]}" run icon
 
+# N-API uses only system frameworks; private activation keys stay in the host's
+# data-protection Keychain, never in an auxiliary executable or a JSON file.
+node scripts/build-desktop-access.cjs
+
 # Package the Electron app as an Apple Silicon DMG. Keep the output in the
 # temporary staging directory until both final artifacts are ready to move.
 builder_args=(
@@ -186,6 +198,12 @@ builder_args=(
   "--config.directories.output=$stage_dir"
   "--config.electronDist=$electron_dist"
 )
+
+if [[ -n "$activation_profile" ]]; then
+  activation_entitlements="$stage_dir/desktop-access-entitlements.plist"
+  node scripts/prepare-desktop-access-profile.cjs "$activation_profile" "$activation_entitlements"
+  builder_args+=("--config.mac.provisioningProfile=$activation_profile" "--config.mac.entitlements=$activation_entitlements")
+fi
 
 if [[ "$sign_release" == "1" ]]; then
   # electron-builder 26 identifies the certificate type itself and expects

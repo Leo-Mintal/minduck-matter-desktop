@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
     <meta name="referrer" content="same-origin" />
-    <meta name="csrf-token" content="" />
     <title>邀请码 · Minduck Matter</title>
     <link rel="icon" href="./assets/logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./web-primitives.css" />
@@ -70,7 +69,7 @@
             <button type="button" class="filter" data-filter="used" aria-pressed="false">已使用</button>
             <button type="button" class="filter" data-filter="revoked" aria-pressed="false">已作废</button>
           </div>
-          <label class="field-control-wrap input input--square field-control-wrap--with-start-icon search-field"><svg class="icon field-control-start-icon" aria-hidden="true"><use href="#icon-search"/></svg><span class="sr-only">搜索邀请码</span><input class="field-control input-control" id="search-input" type="search" placeholder="搜索邀请码" maxlength="6" autocomplete="off" spellcheck="false" /></label>
+          <label class="field-control-wrap input input--square field-control-wrap--with-start-icon search-field"><svg class="icon field-control-start-icon" aria-hidden="true"><use href="#icon-search"/></svg><span class="sr-only">搜索完整邀请码</span><input class="field-control input-control" id="search-input" type="search" placeholder="搜索完整邀请码" maxlength="6" autocomplete="off" spellcheck="false" /></label>
         </div>
         <div class="history-error" id="history-error" role="alert" hidden></div>
         <div class="data-table-scroll" id="table-wrap">
@@ -79,6 +78,7 @@
             <tbody id="history-rows"><tr id="empty-row"><td colspan="4" class="data-table-empty-cell"><div class="data-table-empty" id="empty-state" role="status">暂无记录</div></td></tr></tbody>
           </table>
         </div>
+        <div class="history-pagination"><button class="b b-tertiary b-pill b-lg" id="load-more" type="button" hidden>加载更多</button></div>
       </section>
     </main>
 

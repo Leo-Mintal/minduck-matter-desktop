@@ -1,5 +1,5 @@
-// Standalone preview only. API mode requires a separately implemented admin service.
-// Keep credentials out of this file; production uses the same-origin admin session.
+// Keep demo mode until the new backend is deployed. API mode reads the existing
+// same-origin matter.token login; never put an administrator token in this file.
 window.InviteConsoleConfig = Object.freeze({
   mode: 'demo',
   apiBasePath: '/api/admin/desktop-invites',

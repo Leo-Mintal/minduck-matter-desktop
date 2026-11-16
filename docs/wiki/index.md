@@ -24,9 +24,11 @@
 - [macOS 客户端打包与直发](../macos-distribution.md)
 - [Matter 接入云电脑的讨论记录](../matter-cloud-workspace-mvp.md)
 - [独立邀请码摇号页](../../tools/invite-console/README.md)
-- [客户端邀请码改造方案（待实施）](../desktop-invite-activation-plan.md)
+- [客户端邀请码改造与上线前提](../desktop-invite-activation-plan.md)
 
 ## Recent Updates
+
+- 2026-11-16: 邀请码分支已实现设备 gate、原生 Secure Enclave 模块、签名认证和 runtime 接入；独立 H5 已接 Bearer/20 条游标分页。隔离 PostgreSQL/Redis 并发、Electron gate 和签名请求透传测试通过，H5 六宽深浅回归通过。尚无可用 macOS profile，签名包密钥持久化/重装恢复未验收，未部署、安装、打包或开启强制；版本保持 0.1.10。详见[改造记录](../desktop-invite-activation-plan.md)。
 
 - 2026-11-16: 邀请码 H5 收简为摇码区与记录表格，提取复用 Web 的按钮、输入框和表格样式，按移动端优先调整按钮尺寸、字号与时间换行。375/390/430/768/1024/1440px 深浅主题及 13 项浏览器交互检查通过；真实 iPhone Safari 待实机验收。新增后端/客户端待实施方案，覆盖 JWT 接入、事务去重/核销、设备挑战签名、钥匙串重装恢复、Apple profile 前置验证及 Web 开放的安全边界；未实施后端或客户端激活。
 

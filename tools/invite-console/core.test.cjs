@@ -93,46 +93,67 @@ test('demo collision is retried without replacing an existing invite', async () 
   assert.deepEqual((await adapter.list()).find((item) => item.id === old.id), old);
 });
 
-test('API adapter sends authenticated same-origin requests, CSRF and idempotency headers', async () => {
+test('API adapter sends the existing Bearer login, pagination and idempotency headers', async () => {
   const requests = [];
-  const adapter = createApiAdapter({ basePath: '/api/admin/desktop-invites', csrfToken: () => 'test-csrf', fetchImpl: async (url, options) => {
+  const adapter = createApiAdapter({ basePath: '/api/admin/desktop-invites', accessToken: () => 'test-jwt', fetchImpl: async (url, options) => {
     requests.push({ url, ...options });
     return response(options.method === 'GET' ? { items: [invite] } : invite);
   } });
-  assert.deepEqual(await adapter.list(), [invite]);
+  assert.deepEqual(await adapter.listPage({ status: 'active', query: 'ABC234', cursor: 'next' }), { items: [invite], nextCursor: '' });
+  assert.equal(requests[0].url, '/api/admin/desktop-invites?status=active&q=ABC234&cursor=next');
   await adapter.issue('request-1');
   assert.equal(requests[1].headers['Idempotency-Key'], 'request-1');
-  assert.equal(requests[1].headers['X-CSRF-Token'], 'test-csrf');
-  assert.equal(requests[1].credentials, 'same-origin');
+  assert.equal(requests[1].headers.Authorization, 'Bearer test-jwt');
+  assert.equal(requests[0].headers.Authorization, 'Bearer test-jwt');
+  assert.equal(requests[1].credentials, 'omit');
   assert.equal(requests[1].redirect, 'error');
   assert.equal(requests[1].cache, 'no-store');
   assert.equal(requests[1].body, '{}');
 });
 
-test('API configuration rejects remote endpoints and mutations without CSRF', async () => {
+test('API configuration rejects remote endpoints and requests without a login', async () => {
   for (const basePath of ['https://example.test/invites', '//example.test/invites', '/api?token=x', '/api\\evil']) {
     assert.throws(() => createApiAdapter({ basePath }), /同源/);
   }
   let calls = 0;
-  const adapter = createApiAdapter({ basePath: '/api/invites', csrfToken: () => '', fetchImpl: async () => { calls += 1; } });
-  await assert.rejects(adapter.issue('request-1'), /校验信息缺失/);
+  const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => '', fetchImpl: async () => { calls += 1; } });
+  await assert.rejects(adapter.issue('request-1'), /登录管理员/);
   assert.equal(calls, 0);
 });
 
 test('API errors and malformed success responses never produce a local invite', async () => {
   for (const status of [401, 403, 409, 429, 500]) {
-    const adapter = createApiAdapter({ basePath: '/api/invites', csrfToken: () => 'test', fetchImpl: async () => response({}, status) });
+    const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => 'test', fetchImpl: async () => response({}, status) });
     await assert.rejects(adapter.issue('request-1'));
   }
-  const adapter = createApiAdapter({ basePath: '/api/invites', csrfToken: () => 'test', fetchImpl: async () => response({ ...invite, code: '<img>' }) });
+  const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => 'test', fetchImpl: async () => response({ ...invite, code: '<img>' }) });
   await assert.rejects(adapter.issue('request-1'), /格式/);
 });
 
 test('API timeout aborts the transport and reports a retriable result', async () => {
-  const adapter = createApiAdapter({ basePath: '/api/invites', csrfToken: () => 'test', timeoutMs: 5,
+  const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => 'test', timeoutMs: 5,
     fetchImpl: (_url, { signal }) => new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new DOMException('Timeout', 'AbortError')));
     }),
   });
   await assert.rejects(adapter.issue('request-1'), /请求超时/);
+});
+
+test('demo paging and full-code search match the server list contract', async () => {
+  const storage = memoryStorage();
+  const items = Array.from({ length: 25 }, (_, index) => ({
+    ...invite, id: 'item-' + index, code: 'ABC2' + ALPHABET[index] + '3',
+    status: index % 2 ? 'active' : 'used', createdAt: new Date(1700000000000 + index * 1000).toISOString(),
+  }));
+  storage.setItem(DEMO_KEY, JSON.stringify({ items, requests: {} }));
+  const adapter = createDemoAdapter({ storage });
+  const first = await adapter.listPage();
+  assert.equal(first.items.length, 20); assert.equal(first.nextCursor, '20');
+  const last = await adapter.listPage({ cursor: first.nextCursor });
+  assert.equal(last.items.length, 5); assert.equal(last.nextCursor, '');
+  assert.equal(new Set([...first.items, ...last.items].map(item => item.id)).size, 25);
+  assert.equal((await adapter.listPage({ query: 'ABC' })).items.length, 0);
+  assert.deepEqual((await adapter.listPage({ query: items[0].code.toLowerCase() })).items, [items[0]]);
+  assert.equal((await adapter.listPage({ status: 'active' })).items.length, 12);
+  await assert.rejects(adapter.listPage({ cursor: '-1' }), /分页/);
 });

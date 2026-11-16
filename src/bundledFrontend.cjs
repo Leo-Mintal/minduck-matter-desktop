@@ -32,12 +32,13 @@ async function bundledFile(root, pathname, navigation) {
   return isInside(realRoot, realFile) ? realFile : null
 }
 
-function createBundledFrontendHandler({ root, origin, fetchImpl, logger = console, backendHeaders }) {
+function createBundledFrontendHandler({ root, origin, fetchImpl, logger = console, backendHeaders, backendRequest }) {
   const bundleRoot = path.resolve(root)
   const matterOrigin = normalizeMatterOrigin(origin)
   return async (request) => {
     const url = new URL(request.url)
     if (url.origin !== matterOrigin || isBackendPath(url.pathname)) {
+      if (backendRequest) request = await backendRequest(request)
       // Keep POST bodies, auth headers, uploads and SSE streams unchanged.
       if (backendHeaders) {
         const headers = backendHeaders(Object.fromEntries(request.headers), request.url, request.referrer)
@@ -70,13 +71,13 @@ function createBundledFrontendHandler({ root, origin, fetchImpl, logger = consol
   }
 }
 
-function installBundledFrontend({ app, protocol, net, origin, backendHeaders }) {
+function installBundledFrontend({ app, protocol, net, origin, backendHeaders, backendRequest }) {
   const root = path.join(app.getAppPath(), 'web-dist')
   if (!existsSync(path.join(root, 'index.html'))) {
     throw new Error('Matter frontend is missing. Run pnpm run build:web before starting or packaging.')
   }
   const scheme = new URL(origin).protocol.slice(0, -1)
-  protocol.handle(scheme, createBundledFrontendHandler({ root, origin, fetchImpl: net.fetch.bind(net), backendHeaders }))
+  protocol.handle(scheme, createBundledFrontendHandler({ root, origin, fetchImpl: net.fetch.bind(net), backendHeaders, backendRequest }))
   console.log('Matter frontend: bundled web-dist; backend:', origin)
 }
 

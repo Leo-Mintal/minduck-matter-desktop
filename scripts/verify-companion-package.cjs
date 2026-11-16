@@ -6,8 +6,12 @@ const { assertRuntime } = require('../src/companion/runtime.cjs')
 // It therefore has a separate mapping, verified before a DMG can be produced.
 module.exports = async ({ appOutDir, packager }) => {
   const resources = packager.getResourcesDir(appOutDir)
-  for (const file of ['AppIcon.icns', 'Assets.car']) {
+  for (const file of ['AppIcon.icns', 'Assets.car', 'native/desktop-access.node']) {
     if (!fs.existsSync(path.join(resources, file))) throw new Error(`Packaged application icon resource is missing: ${file}`)
+  }
+  const activationModule = fs.readFileSync(path.join(__dirname, '../build/desktop-access/desktop-access.node'))
+  if (!activationModule.equals(fs.readFileSync(path.join(resources, 'native/desktop-access.node')))) {
+    throw new Error('Packaged desktop activation module differs from the current native build')
   }
   assertRuntime(path.join(resources, 'companion-runtime'))
   for (const file of ['node_modules/koffi/package.json', 'node_modules/ws/package.json',

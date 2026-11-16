@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'">
+<title>激活 Minduck Matter</title><link rel="stylesheet" href="gate.css"><script defer src="gate.js"></script></head>
+<body><main><h1>激活 Minduck Matter</h1><form id="activation-form">
+<label for="invite-code">邀请码</label><input id="invite-code" name="code" maxlength="6" autocomplete="off" spellcheck="false" autocapitalize="characters" placeholder="六位字母和数字" autofocus>
+<p id="message" role="status" aria-live="polite">正在检查本机激活状态…</p>
+<div class="actions"><button type="button" id="quit">退出</button><button type="submit" id="confirm" disabled>确定</button><button type="button" id="retry" hidden>重试</button></div>
+</form><button class="update" id="update" type="button">检查更新</button></main></body></html>

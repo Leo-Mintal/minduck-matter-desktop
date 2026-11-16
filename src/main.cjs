@@ -58,6 +58,10 @@ const {
   FULL_DISK_ACCESS_SETTINGS_URL,
 } = require('./fullDiskAccess.cjs')
 const { createDesktopUpdater, macUpdateRuntime } = require('./desktopUpdater.cjs')
+const { createKeyProvider } = require('./desktop-access/keys.cjs')
+const { createService: createDesktopAccessService } = require('./desktop-access/service.cjs')
+const { createAccessController } = require('./desktop-access/controller.cjs')
+const { createGate } = require('./desktop-access/gate.cjs')
 
 const MATTER_UNAVAILABLE_PAGE = path.join(__dirname, 'matter-unavailable.html')
 const MATTER_UNAVAILABLE_URL = pathToFileURL(MATTER_UNAVAILABLE_PAGE).toString()
@@ -104,6 +108,11 @@ let browserDevice
 let desktopUpdater
 let desktopUpdate = { checking: false, available: false }
 let nextUpdateCheckAt = 0
+let desktopAccess
+let desktopAccessService
+let activationGate
+let businessAllowed = false
+let businessStarted = false
 
 function nativeFrameColor() {
   return matterTheme === 'light' ? '#e7e7e9' : '#202222'
@@ -1063,6 +1072,7 @@ function createMenu() {
 }
 
 function createWindow() {
+  if (!businessAllowed) { activationGate?.show(); return }
   shellReady = false
   matterWorkspace = false
   mainWindow = new BrowserWindow({
@@ -1157,14 +1167,23 @@ function createWindow() {
   void windowDragView.webContents.loadFile(path.join(__dirname, 'window-drag-region.html')).catch((error) => console.error('Failed to load window drag region:', error))
   const sharedShellPage = path.join(app.getAppPath(), 'web-dist', 'desktop-shell', 'index.html')
   void panelResizeView.webContents.loadFile(sharedShellPage, { query: { surface: 'resizer' } }).catch((error) => console.error('Failed to load panel resizer:', error))
-  shellView.webContents.once('did-finish-load', async () => {
+  const chromeContents = shellView.webContents
+  const hostWindow = mainWindow
+  chromeContents.once('did-finish-load', async () => {
     const sidebarIcon = pathToFileURL(path.join(__dirname, 'assets/sidebar-toggle.svg')).href
-    await shellView.webContents.insertCSS(`:root { --desktop-sidebar-icon: url("${sidebarIcon}"); }\n`
-      + fs.readFileSync(path.join(__dirname, 'browser-frame.css'), 'utf8'))
+    try {
+      await chromeContents.insertCSS(`:root { --desktop-sidebar-icon: url("${sidebarIcon}"); }\n`
+        + fs.readFileSync(path.join(__dirname, 'browser-frame.css'), 'utf8'))
+    } catch (error) {
+      if (!chromeContents.isDestroyed()) console.error('Failed to prepare browser shell:', error)
+      return
+    }
+    // A revoke/outage may have stopped this window while CSS was loading.
+    if (!businessAllowed || mainWindow !== hostWindow || hostWindow.isDestroyed()) return
     shellReady = true
     layoutViews()
     publishShellState()
-    mainWindow.show()
+    hostWindow.show()
   })
   void shellView.webContents.loadFile(sharedShellPage, { query: { surface: 'chrome' } }).catch((error) => console.error('Failed to load browser shell:', error))
 
@@ -1202,15 +1221,19 @@ function createWindow() {
   layoutViews()
 }
 
-app.whenReady().then(async () => {
-  matterOrigin = loadMatterOrigin()
+async function startDesktopBusiness() {
+  if (businessStarted) {
+    if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+    return
+  }
+  businessStarted = true
   localExec = createController({ app, origin: matterOrigin, getContents: () => matterTab?.view.webContents,
     openPath: filename => shell.openPath(filename), confirmAccess: createAccessDialog({ dialog, getWindow: () => mainWindow }) })
-  installBundledFrontend({ app, protocol, net, origin: matterOrigin, backendHeaders: (headers, url, referrer) => browserDevice?.headers(headers, url, referrer) || headers })
   const extensionRoot = app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked', 'extensions', 'matter-browser')
     : path.join(__dirname, '..', 'extensions', 'matter-browser')
   browserDevice = createClientRuntime({ app, localExec, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
+    getAccessProof: (runtimeId, token) => desktopAccessService.runtimeProof(runtimeId, token),
     getContents: () => matterTab?.view.webContents, compatibility: extensionCompatibility, extensionRoot, nativeImage })
   try {
     await loadBuiltInExtensions(app, { matterBrowser: false })
@@ -1218,8 +1241,6 @@ app.whenReady().then(async () => {
     console.error('Failed to load bundled browser extensions:', error)
   }
   matterPresenceTimer = setInterval(() => { void updateMatterPresence(); publishDesktopFrameState() }, 1_000)
-  configureIPC()
-  createMenu()
   createWindow()
   try {
     companion = createCompanion({ onMatterAction: (action, target) => {
@@ -1234,11 +1255,43 @@ app.whenReady().then(async () => {
     console.error('Failed to start integrated companion:', error)
   }
 
+}
+
+async function stopDesktopBusiness() {
+  businessAllowed = false
+  businessStarted = false
+  clearInterval(matterPresenceTimer)
+  localExec?.dispose(); localExec = undefined
+  browserDevice?.dispose(); browserDevice = undefined
+  matterTasks?.dispose(); matterTasks = undefined
+  mainWindow?.destroy()
+  await companion?.stop().catch(console.error)
+  companion = undefined
+  extensionApiBridge.stop()
+}
+
+app.whenReady().then(async () => {
+  matterOrigin = loadMatterOrigin()
+  desktopAccessService = createDesktopAccessService({ origin: matterOrigin, keys: createKeyProvider({ app, origin: matterOrigin }) })
+  installBundledFrontend({ app, protocol, net, origin: matterOrigin,
+    backendHeaders: (headers, url, referrer) => browserDevice?.headers(headers, url, referrer) || headers,
+    backendRequest: request => {
+      if (!businessAllowed) throw new Error('Desktop activation required')
+      return desktopAccessService.prepareAuth(request)
+    } })
+  configureIPC()
+  createMenu()
+  desktopAccess = createAccessController({ service: desktopAccessService,
+    onActive: async () => { businessAllowed = true; await startDesktopBusiness() },
+    onBlocked: stopDesktopBusiness })
+  activationGate = createGate({ app, BrowserWindow, ipcMain, controller: desktopAccess, checkUpdate: checkForDesktopUpdate })
   app.on('activate', () => {
+    if (!businessAllowed) { activationGate.show(); return }
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()
     else mainWindow.show()
     void companion?.show().catch(console.error)
   })
+  await desktopAccess.start()
 })
 
 app.on('window-all-closed', () => {
@@ -1247,6 +1300,8 @@ app.on('window-all-closed', () => {
 
 let companionQuitting = false
 app.on('before-quit', (event) => {
+  desktopAccess?.dispose()
+  activationGate?.dispose()
   localExec?.dispose()
   browserDevice?.dispose()
   matterTasks?.dispose()

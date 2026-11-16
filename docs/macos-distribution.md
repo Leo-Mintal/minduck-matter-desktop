@@ -4,6 +4,12 @@
 
 当前正式的打包入口是 `pnpm dist:mac`，实现位于 `scripts/package-macos.sh`。原生 Brave/Chromium 迁移仍是实验工作；本手册描述目前可交付的 Electron 安装包。
 
+### 邀请码分支的签名先决条件（2026-11-16，尚未发布）
+
+- 打包现在编译 `native/desktop-access.mm`，仅使用系统 Foundation/Security.framework；需要 Xcode CLI 和 Node N-API 头文件（默认 `/opt/homebrew/include/node`，可设 `MINDUCK_NODE_HEADERS`）。产物为 `Resources/native/desktop-access.node`，afterPack 核对其与本次编译输出相同。
+- 要发布可强制激活的客户端，设置 `MINDUCK_DESKTOP_ACCESS_PROFILE` 为授权此 App ID/Keychain Access Group 的 macOS profile 绝对路径，并设置 `MINDUCK_DESKTOP_ACCESS_REQUIRED=1`。预检拒绝非 macOS、过期、标识/访问组不匹配的 profile；主应用 entitlement 由原文件复制并追加，保留照片等现有能力。带 profile 的构建必须签名。
+- 当前没有适用的 macOS profile，未打邀请码签名包、未替换安装版或公开更新。原生编译与隔离 Electron 测试不能替代真实 Keychain 创建、升级/重装恢复和锁屏验收；未验收前后端 `MATTER_DESKTOP_ACCESS=off`。发布新客户端前须先部署 policy 兼容接口，详见[改造记录](desktop-invite-activation-plan.md)。
+
 ## 当前本地发布记录
 
 ### 0.1.10 本机目录与任务授权测试包（2026-11-16，已签名、公证及验证）

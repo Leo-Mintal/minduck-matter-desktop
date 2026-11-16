@@ -12,12 +12,14 @@
     "icon": "scripts/build-icon.sh",
     "build:web": "node scripts/build-web.cjs",
     "build:companion-qa": "node scripts/build-companion-qa.cjs",
+    "build:desktop-access": "node scripts/build-desktop-access.cjs",
     "prestart": "pnpm run check:companion && pnpm run build:web",
     "start": "electron .",
     "test": "node --test scripts/*.test.cjs",
     "test:local-exec": "node scripts/local-exec-smoke.cjs",
     "test:browser-device": "node scripts/browser-device-smoke.cjs",
     "test:bundled-frontend": "node scripts/bundled-frontend-smoke.cjs",
+    "test:desktop-access": "node scripts/desktop-access-smoke.cjs",
     "test:extension": "electron scripts/matter-browser-extension-smoke.cjs",
     "test:extension-bridge": "electron scripts/extension-bridge-probe.cjs",
     "test:extension-compatibility": "electron scripts/matter-browser-extension-compatibility-smoke.cjs",
@@ -56,6 +58,10 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "build/desktop-access/desktop-access.node",
+        "to": "native/desktop-access.node"
+      },
       {
         "from": "build/AppIcon.icns",
         "to": "AppIcon.icns"

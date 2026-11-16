@@ -1176,3 +1176,30 @@ Read both codesign output streams and inspect the actual packaged manifest. Pres
 - Read-only proposal research assumed a backend root go.mod and a bootstrap filename glob. The backend uses a Go workspace with services/api/go.mod; corrected reads used existing exact paths. An initially guessed Apple TN3137 documentation slug returned 404; the official tn3137-on-mac-keychains document data was retrieved and checked instead.
 - Browser device emulation did not persist across separate CLI invocations. Set device metrics explicitly in the QA invocation and assert innerWidth before screenshots. Replaced the mislabeled intermediate capture with the verified viewport matrix.
 - Related Files: tools/invite-console/app.js, docs/desktop-invite-activation-plan.md.
+
+## [ERR-20261116-I01] Invitation implementation and validation
+
+**Logged**: 2026-11-16T13:35:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+Corrected test-fixture and packaging-preflight errors while preserving the prior desktop/Web/backend baselines.
+
+### Details and resolution
+- Web's required dev synchronization first refused the dirty checkout. Saved a task-owned stash, fast-forwarded dev, restored it and reconciled three overlapping files against the newer code. Full Web tests/typecheck/lint passed before local commit; dropped only the verified task stash afterward. No push or Web invitation branch.
+- A PostgreSQL rollback test reused a populated GORM destination, which implicitly retained its old primary key. Replaced it with a fresh destination and asserted the query error; the rollback assertion and concurrent/race suites then passed against an isolated test database.
+- The owned Redis test socket initially exceeded Darwin's Unix socket path length under testing.T.TempDir. Used a short owned /tmp directory and captured subprocess diagnostics; real 100-way consume/rate tests and outage checks passed, with process/directory cleanup.
+- The first desktop full run raised a transient process.kill EPERM in the pre-existing Shell process-group test. The single-case rerun and subsequent full runs passed without changing Shell behavior. A cleanup diagnostic found the old runner had already exited; no unrelated process was killed.
+- The Electron gate harness initially exited when activation closed its sole window: fake business startup created no replacement window. Added a harness-only window-all-closed handler and a parent process to clean temporary userData after Electron exit. Actual gate/revocation/IPC and exact-body Chromium proxy smokes passed. Set the gate content size explicitly to remove a small scrollbar.
+- Native profile preflight used dotted plutil keypaths literally; an actual temporary plist reproduced Key path not found. Escape the entitlement dots and verify the resulting root dictionary with real plutil, including preserved existing entitlements and invalid-profile rejection. No actual signing profile or Keychain item was modified.
+- A browser assertion queried the empty-state element while its retained table row was detached. Observed the settled page and verified empty/populated, 20/27-item pagination, exact-code search and revocation. Production app code already retained the row correctly.
+- Read-only lookups hit guessed user-model/script paths, unmatched zsh globs and a wrong repository cwd. Used file inventory/exact paths afterward. No affected write was retried blindly. An external documentation lookup returned no result; no unsupported citation or hardware acceptance claim was added.
+
+### Remaining external checks
+- Backend default project-boundaries still reports an existing cloud_exec tenant-query rule; using the invitation baseline as BASE passes this task's tenant diff. The env contract also reports the pre-existing duplicate MATTER_LOCAL_EXEC entry. Both are retained as visible baseline failures, not suppressed.
+- No usable macOS provisioning profile was found. Native module compilation is not signed Secure Enclave persistence/reinstall acceptance; rollout remains disabled and no signed invitation package was released.
+
+### Metadata
+- Related Files: scripts/prepare-desktop-access-profile.cjs, scripts/desktop-access-smoke.cjs, src/desktop-access/, tools/invite-console/; backend internal/app/desktopaccess/.

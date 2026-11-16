@@ -3,12 +3,14 @@ const VERSIONS = ['2025-06-18', '2025-11-25', '2025-03-26', '2024-11-05']
 function connectDesktop({ url, token, deviceId, version, execute, onState = () => {}, onRevoked = () => {},
   WebSocketImpl = globalThis.WebSocket, reconnectDelay = 1000, tools, mcpResults = false, maxActive = 4,
   runtimeId, getCapabilities = () => ({}), onContext = () => {}, onInitialize = () => {},
+  getAccessProof,
   serverName = 'matter-desktop-local-exec', capabilities = { tools: {}, localExec: { version: 1, approval: 'local', sandbox: 'seatbelt' } } }) {
   let socket
   let timer
   let heartbeat
   let stopped = false
   let attempt = 0
+  let opening = 0
   let initialized = false
   let authenticated = false
   const active = new Map()
@@ -66,10 +68,21 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
       } })
     } finally { if (active.get(key) === controller) active.delete(key) }
   }
-  function open() {
+  async function open() {
     if (stopped) return
+    const expected = ++opening
     initialized = false; authenticated = false; seen.clear()
     onState('连接中')
+    let accessProof
+    try { if (runtimeId && getAccessProof) accessProof = await getAccessProof(runtimeId, token) }
+    catch {
+      if (!stopped && expected === opening) {
+        onState('激活检查暂不可用')
+        timer = setTimeout(open, Math.min(30000, reconnectDelay * 2 ** Math.min(attempt++, 5)))
+      }
+      return
+    }
+    if (stopped || expected !== opening) return
     const current = new WebSocketImpl(url)
     socket = current
     const watch = () => {
@@ -78,7 +91,9 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
     }
     current.addEventListener('open', () => {
       if (socket !== current || stopped) return
-      send(current, runtimeId ? { type:'auth', token, runtime_id:runtimeId, ...getCapabilities() } : { type: 'auth', token, device_id: deviceId, browser: 'Matter Desktop', extension_version: version }); watch()
+      watch()
+      send(current, runtimeId ? { type:'auth', token, runtime_id:runtimeId, ...getCapabilities(),
+        ...(accessProof ? { access_proof: accessProof } : {}) } : { type: 'auth', token, device_id: deviceId, browser: 'Matter Desktop', extension_version: version })
     })
     current.addEventListener('message', event => {
       if (socket !== current || stopped) return
