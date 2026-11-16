@@ -1,6 +1,10 @@
 const contracts = {
+  local_open_file: { required: ['path'], fields: { path: ['string', 1, 4096] } },
+  local_request_permission: { required: ['path'], fields: { path: ['string', 1, 4096], reason: ['string', 0, 200] } },
   local_shell: { required: ['command'], fields: { command: ['string', 1, 65536], cwd: ['string', 0, 4096], timeout_ms: ['integer', 1000, 120000], needs_network: ['boolean'], description: ['string', 0, 200] } },
   local_read_file: { required: ['path'], fields: { path: ['string', 1, 4096], offset: ['integer', 0, Number.MAX_SAFE_INTEGER], limit: ['integer', 1, 2000] } },
+  // Internal binary transport, intentionally absent from the model's tool list.
+  local_transfer_read: { required: ['path', 'offset', 'limit'], fields: { path: ['string', 1, 4096], offset: ['integer', 0, 268435456], limit: ['integer', 1, 262144], revision: ['string', 1, 256] } },
   local_edit_file: { required: ['path', 'old_string', 'new_string'], fields: { path: ['string', 1, 4096], old_string: ['string', 1, 262144], new_string: ['string', 0, 262144], replace_all: ['boolean'] } },
   local_write_file: { required: ['path', 'content'], fields: { path: ['string', 1, 4096], content: ['string', 0, 262144] } },
 }

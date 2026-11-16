@@ -5,7 +5,7 @@
 # Run from the project root or from any directory:
 #   bash scripts/package-macos.sh
 #
-# The build writes the final DMG to release/ and its block map and checksum
+# The build writes the final DMG/ZIP to release/ and update metadata/checksums
 # to release/metadata/. Electron
 # Builder uses a temporary output directory so intermediate app bundles do not
 # remain in the repository. It builds a fresh shallow checkout of the Web
@@ -58,6 +58,7 @@ fi
 
 version="$(node -p "require('$project_dir/package.json').version")"
 artifact="MinduckMatter-${version}-arm64.dmg"
+update_archive="MinduckMatter-${version}-arm64.zip"
 sign_release="${MINDUCK_MACOS_SIGN:-1}"
 notary_profile="${MINDUCK_NOTARY_PROFILE:-MinduckNotary}"
 identity=""
@@ -178,6 +179,7 @@ fi
 builder_args=(
   --mac
   dmg
+  zip
   --arm64
   --publish
   never
@@ -205,8 +207,8 @@ else
   "${pnpm_cmd[@]}" exec electron-builder "${builder_args[@]}"
 fi
 
-if [[ ! -f "$stage_dir/$artifact" || ! -f "$stage_dir/$artifact.blockmap" ]]; then
-  echo "Electron Builder did not produce the expected DMG artifacts." >&2
+if [[ ! -f "$stage_dir/$artifact" || ! -f "$stage_dir/$artifact.blockmap" || ! -f "$stage_dir/$update_archive" || ! -f "$stage_dir/latest-mac.yml" ]]; then
+  echo "Electron Builder did not produce the expected DMG/ZIP/update artifacts." >&2
   exit 1
 fi
 
@@ -245,8 +247,15 @@ buildBlockMap(file, 'gzip', `${file}.blockmap`).then(({ size }) => {
 NODE
 fi
 
+node "$script_dir/macos-update-artifacts.cjs" "$stage_dir" "$version"
+
 mv "$stage_dir/$artifact" "$release_dir/$artifact"
 mv "$stage_dir/$artifact.blockmap" "$metadata_dir/$artifact.blockmap"
+mv "$stage_dir/$update_archive" "$release_dir/$update_archive"
+mv "$stage_dir/latest-mac.yml" "$metadata_dir/latest-mac.yml"
+if [[ -f "$stage_dir/$update_archive.blockmap" ]]; then
+  mv "$stage_dir/$update_archive.blockmap" "$metadata_dir/$update_archive.blockmap"
+fi
 
 echo
 echo "DMG created: $release_dir/$artifact"
@@ -255,6 +264,12 @@ du -h "$release_dir/$artifact"
   cd "$release_dir"
   shasum -a 256 "$artifact"
 ) | tee "$metadata_dir/$artifact.sha256"
+(
+  cd "$release_dir"
+  shasum -a 256 "$update_archive"
+) | tee "$metadata_dir/$update_archive.sha256"
+echo "Update ZIP created: $release_dir/$update_archive"
+echo "Update manifest: $metadata_dir/latest-mac.yml"
 
 if [[ "$sign_release" == "1" ]]; then
   echo "Signed and notarized with: $identity"

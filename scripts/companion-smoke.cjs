@@ -3,11 +3,15 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const assert = require('node:assert/strict')
+const focusedProbe = Object.entries(process.env).some(([key, value]) =>
+  key.startsWith('MINDUCK_COMPANION_') && key.endsWith('_ONLY') && value === '1')
+// The full suite includes every panel probe plus Core/settings and figure lifecycle checks.
+const deadlineMs = !focusedProbe || process.env.MINDUCK_COMPANION_PANELS_ONLY === '1' ? 200000 : 100000
 
 if (!process.versions.electron) {
   const { spawnSync } = require('node:child_process')
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'minduck-companion-smoke-'))
-  const result = spawnSync(require('electron'), [__filename, directory], { stdio: 'inherit', timeout: process.env.MINDUCK_COMPANION_PANELS_ONLY === '1' ? 200000 : 120000 })
+  const result = spawnSync(require('electron'), [__filename, directory], { stdio: 'inherit', timeout: deadlineMs + 20000 })
   if (result.status !== 0) console.error('Companion diagnostic profile:', directory)
   else fs.rmSync(directory, { recursive: true, force: true })
   process.exit(result.status ?? 1)
@@ -30,7 +34,7 @@ const waitFor = async (read, predicate, label) => {
 }
 
 app.whenReady().then(async () => {
-  timeout = setTimeout(() => { console.error('Companion smoke deadline'); app.exit(1) }, process.env.MINDUCK_COMPANION_PANELS_ONLY === '1' ? 180000 : 100000)
+  timeout = setTimeout(() => { console.error('Companion smoke deadline'); app.exit(1) }, deadlineMs)
   try {
     const project = path.resolve(__dirname, '..')
     const runtime = path.join(project, 'vendor/coopanion/runtime')

@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 project_dir="$(cd "$script_dir/.." && pwd)"
-source_icon="$project_dir/build/sidebar-logo.svg"
+source_icon="$project_dir/build/app-icon.svg"
 iconset_dir="$project_dir/build/icon.iconset"
 output_icon="$project_dir/build/icon.icns"
 modern_icon_dir="$project_dir/build/AppIcon.icon"

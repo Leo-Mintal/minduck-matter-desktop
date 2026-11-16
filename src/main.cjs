@@ -8,11 +8,12 @@ if (process.argv.includes('--minduck-companion-host')) {
 }
 
 const path = require('node:path')
+const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, View, WebContentsView, safeStorage, nativeImage } = require('electron')
-const { createBrowserDevice } = require('./browser-device/controller.cjs')
-const { createBrowserSettings } = require('./browser-device/settings.cjs')
+const { createClientRuntime } = require('./client-runtime.cjs')
 const { createController } = require('./local-exec/controller.cjs')
+const { createAccessDialog } = require('./local-exec/access-dialog.cjs')
 const { installBundledFrontend } = require('./bundledFrontend.cjs')
 const { createCompanion } = require('./companion/index.cjs')
 const { activateMatterWindow } = require('./companion/matter-actions.cjs')
@@ -32,8 +33,10 @@ const { browserNavigationDisposition, browserURLForInput } = require('./agentBro
 const { ExtensionApiBridge } = require('./extensionApiBridge.cjs')
 const { extensionPopupURL, isExtensionPage } = require('./extensionPage.cjs')
 const {
-  MATTER_TOP_INSET,
+  FRAME_RADIUS,
+  FRAME_RAIL_WIDTH,
   matterContentBounds,
+  workspaceFrameBounds,
   rightPanelLayout,
 } = require('./rightPanelLayout.cjs')
 const { PANEL_TRANSITION_DURATION, interpolatePanelFrame, panelTransitionFrame } = require('./panelMotion.cjs')
@@ -51,15 +54,21 @@ const {
   resolveMatterOrigin,
 } = require('./matterService.cjs')
 const {
-  FULL_DISK_ACCESS_SETTINGS_URL, createPermissionPrompt,
+  hasFullDiskAccess,
+  FULL_DISK_ACCESS_SETTINGS_URL,
 } = require('./fullDiskAccess.cjs')
-const { checkForUpdate } = require('./updateCheck.cjs')
+const { createDesktopUpdater, macUpdateRuntime } = require('./desktopUpdater.cjs')
 
 const MATTER_UNAVAILABLE_PAGE = path.join(__dirname, 'matter-unavailable.html')
 const MATTER_UNAVAILABLE_URL = pathToFileURL(MATTER_UNAVAILABLE_PAGE).toString()
 const MATTER_SERVICE_SETTINGS_PAGE = path.join(__dirname, 'matter-service-settings.html')
 
 // A development run must not share extension workers or browser storage with an installed build.
+const shellTestOrigin = require('../package.json').shellTestOrigin
+if (shellTestOrigin) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'minduck-matter-shell-test'))
+  process.env.MINDUCK_MATTER_ORIGIN ||= shellTestOrigin
+}
 if (!app.isPackaged) {
   app.setPath('userData', developmentUserDataPath(app.getPath('appData'), process.env.MINDUCK_USER_DATA_DIR))
 }
@@ -73,6 +82,7 @@ let rightPanelView
 let shellReady = false
 let browserHost
 let matterTab
+let matterWorkspace = false
 let extensionApiBridge
 let matterPresenceTimer
 let matterTheme = 'dark'
@@ -91,12 +101,12 @@ let browserPreferences
 let browserSettingsWindow
 let localExec
 let browserDevice
-let browserDeviceSettings
-let updateCheckInFlight
+let desktopUpdater
+let desktopUpdate = { checking: false, available: false }
+let nextUpdateCheckAt = 0
 
-function nativeCanvasColor(theme = matterTheme) {
-  if (chromeMetrics?.theme === theme) return chromeMetrics.canvas
-  return theme === 'light' ? '#f7f7f8' : '#030303'
+function nativeFrameColor() {
+  return matterTheme === 'light' ? '#e7e7e9' : '#202222'
 }
 
 function nativeSettingsSurfaceColor(theme = matterTheme) {
@@ -105,15 +115,14 @@ function nativeSettingsSurfaceColor(theme = matterTheme) {
 }
 
 function applyNativeTheme() {
-  const canvasColor = nativeCanvasColor()
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setBackgroundColor(canvasColor)
-    mainWindow.contentView.setBackgroundColor(canvasColor)
+    mainWindow.setBackgroundColor(nativeFrameColor())
+    mainWindow.contentView.setBackgroundColor(nativeFrameColor())
   }
-  if (matterFrameView) matterFrameView.setBackgroundColor(canvasColor)
-  if (rightPanelView) rightPanelView.setBackgroundColor(chromeMetrics?.theme === matterTheme ? chromeMetrics.divider : canvasColor)
-  browserHost?.setBackgroundColor(canvasColor)
+  if (matterFrameView) matterFrameView.setBackgroundColor(nativeFrameColor())
+  if (rightPanelView) rightPanelView.setBackgroundColor(nativeFrameColor())
   browserHost?.setStartPageTheme(matterTheme)
+  browserHost?.setFrameColor(nativeFrameColor())
 }
 
 function setViewVisible(view, visible) {
@@ -126,10 +135,16 @@ function setViewBounds(view, bounds) {
 }
 
 function matterViewBounds(matterBounds) {
-  return localBounds(
-    matterContentBounds(matterBounds, process.platform === 'darwin' ? MATTER_TOP_INSET : 0),
-    matterBounds,
-  )
+  const bounds = workspaceFrameBounds(matterBounds, matterWorkspace)
+  return localBounds(matterContentBounds(bounds), bounds)
+}
+
+function updateMatterCorners(joined, force = false) {
+  const tab = matterTab
+  if (!tab || tab.view.webContents.isDestroyed() || (!force && tab.joined === joined)) return
+  tab.joined = joined
+  void tab.view.webContents.executeJavaScript(`document.documentElement.toggleAttribute('data-minduck-browser-open', ${joined})`)
+    .catch(error => console.error('Failed to update Matter card corners:', error))
 }
 
 function resizerState() {
@@ -215,8 +230,38 @@ function shellState() {
 }
 
 function publishShellState() {
+  publishDesktopFrameState()
   if (!shellReady || !shellView || shellView.webContents.isDestroyed()) return
   shellView.webContents.send('browser-shell:state', shellState())
+}
+
+function desktopFrameState() {
+  const contents = matterTab?.view.webContents
+  const ready = contents && !contents.isDestroyed()
+  const navigation = {
+    canGoBack: ready ? contents.navigationHistory.canGoBack() : false,
+    canGoForward: ready ? contents.navigationHistory.canGoForward() : false,
+    canReload: Boolean(ready),
+    isLoading: ready ? contents.isLoading() : false,
+  }
+  return { theme: matterTheme, workspace: matterWorkspace, rightPanelOpen: browserHost?.isPanelOpen() ?? false, navigation,
+    update: desktopUpdate }
+}
+
+function navigateMatter(type) {
+  const contents = matterTab?.view.webContents
+  if (!contents || contents.isDestroyed()) return
+  const history = contents.navigationHistory
+  if (type === 'matter-go-back' && history.canGoBack()) history.goBack()
+  if (type === 'matter-go-forward' && history.canGoForward()) history.goForward()
+  if (type === 'matter-reload') contents.reload()
+}
+
+function publishDesktopFrameState() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop-frame:state', desktopFrameState())
+  if (matterWorkspace && matterTab && !matterTab.view.webContents.isDestroyed()) {
+    matterTab.view.webContents.send('workspace-shell:state', { railWidth: FRAME_RAIL_WIDTH, update: desktopUpdate })
+  }
 }
 
 function panelLayouts() {
@@ -237,10 +282,10 @@ function motionBrowserLayout(frame, openLayout) {
   return {
     panel: frame.panel,
     browser: {
-      x: frame.panel.x + 1,
+      x: frame.panel.x,
       y: openLayout.browser.y,
-      width: frame.panel.width - 1,
-      height: frame.panel.height - openLayout.browser.y,
+      width: frame.panel.width,
+      height: Math.max(0, frame.panel.height - (openLayout.browser.y - openLayout.panel.y)),
     },
   }
 }
@@ -248,10 +293,11 @@ function motionBrowserLayout(frame, openLayout) {
 function applyPanelMotionFrame() {
   if (!panelMotion || !mainWindow || mainWindow.isDestroyed()) return
   const frame = interpolatePanelFrame(panelMotion.from, panelMotion.target, panelMotionProgress(panelMotion))
+  updateMatterCorners(true)
   if (windowDragView) setViewBounds(windowDragView, frame.dragRegion)
   if (panelResizeView) setViewVisible(panelResizeView, false)
   if (matterFrameView) {
-    setViewBounds(matterFrameView, frame.matter)
+    setViewBounds(matterFrameView, workspaceFrameBounds(frame.matter, matterWorkspace))
     setViewVisible(matterFrameView, true)
   }
   if (rightPanelView) {
@@ -345,6 +391,7 @@ function layoutViews() {
     panelResizeState?.panelWidth ?? currentDesktopSettings().rightPanelWidth,
     chromeMetrics,
   )
+  updateMatterCorners(Boolean(layout.panel))
   if (windowDragView) setViewBounds(windowDragView, layout.dragRegion)
   if (panelResizeView) {
     if (panelResizeState) {
@@ -358,7 +405,7 @@ function layoutViews() {
     }
   }
   if (matterFrameView) {
-    setViewBounds(matterFrameView, layout.matter)
+    setViewBounds(matterFrameView, workspaceFrameBounds(layout.matter, matterWorkspace))
     setViewVisible(matterFrameView, true)
   }
   if (rightPanelView) {
@@ -369,7 +416,10 @@ function layoutViews() {
       setViewVisible(rightPanelView, false)
     }
   }
-  if (shellView) setViewBounds(shellView, layout.shell)
+  if (shellView) {
+    if (layout.panel) setViewBounds(shellView, layout.shell)
+    setViewVisible(shellView, Boolean(layout.panel))
+  }
   if (matterTab) {
     setViewBounds(matterTab.view, matterViewBounds(layout.matter))
     setViewVisible(matterTab.view, matterTab.hasPainted !== false)
@@ -391,13 +441,14 @@ async function updateMatterPresence() {
   const { webContents } = matterTab?.view ?? {}
   if (!webContents || webContents.isDestroyed() || !isMatterWebURL(webContents.getURL(), matterOrigin)) return
 
-  const deviceId = await browserDevice?.presenceDeviceId() || ''
+  const runtime = browserDevice?.snapshot() || {}
   const expression = `(() => {
     const root = document.documentElement
     if (!root) return
-    const deviceId = ${JSON.stringify(deviceId)}
-    if (deviceId) root.dataset.matterDevice = deviceId
-    else delete root.dataset.matterDevice
+    root.dataset.matterRuntimeState = ${JSON.stringify(runtime.state || "当前客户端不可用")}
+    root.dataset.matterDesktop = "true"
+    root.dataset.matterRuntime = ${JSON.stringify(JSON.stringify({ ...runtime, updated_at: Date.now() }))}
+    window.dispatchEvent(new Event("matter:runtime-status"))
   })()`
   await webContents.executeJavaScript(expression, true).catch((error) => {
     console.error('Failed to synchronize Matter Browser presence:', error)
@@ -421,11 +472,14 @@ async function updateMatterPresence() {
 
 function configureMatterTab(tab) {
   const { webContents } = tab.view
+  for (const event of ['did-navigate', 'did-navigate-in-page', 'did-start-loading', 'did-stop-loading']) {
+    webContents.on(event, () => setImmediate(publishDesktopFrameState))
+  }
   // One listener owned by this session; right-side browser tabs use another session.
   webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     // Main-process net.fetch forwarding has no webContentsId.
     const ownRequest = details.webContentsId == null || details.webContentsId === webContents.id || details.webContentsId === -1
-    const headers = localExec?.headers(details.requestHeaders, ownRequest ? details.url : 'https://invalid.local/')
+    const headers = browserDevice?.headers(details.requestHeaders, ownRequest ? details.url : 'https://invalid.local/')
     callback({ requestHeaders: headers || details.requestHeaders })
   })
   matterTasks = createMatterTaskBridge({ contents: webContents, origin: matterOrigin, onOutput: (output) => {
@@ -490,6 +544,8 @@ function createMatterTab() {
 
   const view = new WebContentsView({
     webPreferences: {
+      preload: path.join(__dirname, 'workspace-preload.cjs'),
+      additionalArguments: [`--minduck-workspace-origin=${matterOrigin}`],
       // Task events and auth changes must continue while Matter is minimized.
       backgroundThrottling: false,
       contextIsolation: true,
@@ -500,7 +556,7 @@ function createMatterTab() {
       webviewTag: false,
     },
   })
-  view.setBackgroundColor(nativeCanvasColor())
+  view.setBackgroundColor('#00000000')
   const targetURL = matterOrigin + '/'
   const tab = matterTab = {
     id: 'matter',
@@ -511,6 +567,15 @@ function createMatterTab() {
     hasPainted: false,
   }
   matterFrameView.addChildView(view)
+  view.webContents.on('dom-ready', () => {
+    const corners = `html { background: #202222 !important; }
+      html[data-theme='light'] { background: #e7e7e9 !important; }
+      html:not([data-matter-workspace]) body { clip-path: inset(0 round ${FRAME_RADIUS}px) !important; }
+      html:not([data-matter-workspace])[data-minduck-browser-open] body { clip-path: inset(0 round ${FRAME_RADIUS}px 0 0 ${FRAME_RADIUS}px) !important; }`
+    void view.webContents.insertCSS(corners).then(() => {
+      if (matterTab === tab) updateMatterCorners(Boolean(panelMotion) || Boolean(browserHost?.isPanelOpen()), true)
+    }).catch(error => console.error('Failed to apply Matter card corners:', error))
+  })
   configureMatterTab(tab)
   void view.webContents.loadURL(targetURL).catch((error) => console.error('Failed to load Matter:', error))
   return tab
@@ -814,6 +879,7 @@ async function useDefaultMatterService() {
 async function openFullDiskAccessSettings() {
   if (process.platform !== 'darwin') return false
   try {
+    hasFullDiskAccess()
     await shell.openExternal(FULL_DISK_ACCESS_SETTINGS_URL)
     return true
   } catch (error) {
@@ -828,51 +894,68 @@ function showUpdateDialog(options) {
     : dialog.showMessageBox(options)
 }
 
-async function checkForDesktopUpdate() {
-  if (updateCheckInFlight) return updateCheckInFlight
+function lookupDesktopUpdate() {
+  return getDesktopUpdater().check()
+}
 
-  updateCheckInFlight = (async () => {
-    try {
-      const result = await checkForUpdate({ currentVersion: app.getVersion(), fetchImpl: net.fetch.bind(net) })
-      if (!result.available) {
-        await showUpdateDialog({
-          type: 'info',
-          title: '检查更新',
-          message: '当前已是最新版本',
-          detail: `当前版本 ${app.getVersion()}`,
-          buttons: ['知道了'],
-          noLink: true,
-        })
-        return
+function getDesktopUpdater() {
+  desktopUpdater ??= createDesktopUpdater({ ...macUpdateRuntime(app), currentVersion: app.getVersion(),
+    showDialog: showUpdateDialog,
+    onState: (state) => {
+      desktopUpdate = state
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setProgressBar(state.phase === 'downloading' ? state.percent / 100
+          : state.phase === 'preparing' ? 2 : -1)
       }
+      publishDesktopFrameState()
+    },
+    hasActiveTasks: () => matterTaskOutput.active === true,
+    prepareToQuit: async () => {
+      await companion?.stop()
+      companionQuitting = true
+    },
+  })
+  return desktopUpdater
+}
 
-      if (!await openExternal(result.downloadURL)) throw new Error('无法打开下载链接')
-      await showUpdateDialog({
-        type: 'info',
-        title: '发现新版本',
-        message: `发现新版本 ${result.version}`,
-        detail: '已在默认浏览器中打开下载页面。下载完成后，将应用拖入“应用程序”覆盖旧版本即可。',
-        buttons: ['知道了'],
-        noLink: true,
-      })
-    } catch (error) {
-      console.error('Failed to check for desktop update:', error)
-      await showUpdateDialog({
-        type: 'error',
-        title: '检查更新失败',
-        message: '暂时无法检查更新，请确认网络后重试。',
-        buttons: ['知道了'],
-        noLink: true,
-      })
-    } finally {
-      updateCheckInFlight = undefined
-    }
-  })()
+function refreshDesktopUpdate() {
+  if (Date.now() < nextUpdateCheckAt) return
+  nextUpdateCheckAt = Date.now() + 15 * 60 * 1000
+  void lookupDesktopUpdate().catch(error => console.error('Background update check failed:', error.message))
+}
 
-  return updateCheckInFlight
+function checkForDesktopUpdate() {
+  return getDesktopUpdater().run().catch(error => console.error('无法显示客户端更新:', error))
 }
 
 function configureIPC() {
+  const isWorkspaceSender = event => Boolean(matterTab && !matterTab.view.webContents.isDestroyed()
+    && event.sender === matterTab.view.webContents && event.senderFrame === event.sender.mainFrame
+    && isMatterWebURL(event.senderFrame.url, matterOrigin))
+  ipcMain.handle('workspace-shell:get-state', event => {
+    if (!isWorkspaceSender(event)) return null
+    if (!matterWorkspace) { matterWorkspace = true; layoutViews(); publishDesktopFrameState() }
+    return { railWidth: FRAME_RAIL_WIDTH, update: desktopUpdate }
+  })
+  ipcMain.on('workspace-shell:command', (event, type) => {
+    if (!isWorkspaceSender(event)) return
+    if (type === 'companion-settings') companion?.openSettings()
+    if (type === 'check-update') void checkForDesktopUpdate()
+  })
+  const isFrameSender = (event) => Boolean(mainWindow && !mainWindow.isDestroyed()
+    && event.sender === mainWindow.webContents && event.senderFrame === mainWindow.webContents.mainFrame)
+  ipcMain.handle('desktop-frame:get-state', (event) => isFrameSender(event) ? desktopFrameState() : null)
+  ipcMain.on('desktop-frame:command', (event, type) => {
+    if (!isFrameSender(event)) return
+    if (['matter-go-back', 'matter-go-forward', 'matter-reload'].includes(type)) navigateMatter(type)
+    if (type === 'companion-settings') companion?.openSettings()
+    if (type === 'check-update') void checkForDesktopUpdate()
+    if (type === 'toggle-browser') {
+      finishPanelResize()
+      if (browserHost?.isPanelOpen()) browserHost.closePanel()
+      else browserHost?.openPanel()
+    }
+  })
   ipcMain.handle('browser-settings:get', (event) => isBrowserSettingsSender(event.sender)
     ? { ...currentBrowserPreferences(), theme: matterTheme } : null)
   ipcMain.handle('browser-settings:save', (event, value) => isBrowserSettingsSender(event.sender)
@@ -961,11 +1044,10 @@ function createMenu() {
           { label: '配置 Matter 服务地址...', click: openMatterServiceSettings },
           { label: '使用默认 Matter 服务', click: () => void useDefaultMatterService() },
           { label: '桌宠设置…', accelerator: 'CmdOrCtrl+,', click: () => companion?.openSettings() },
-          { label: '内置浏览器设置…', click: () => browserDeviceSettings?.open() },
           { label: '显示桌宠', click: () => void companion?.show().catch(console.error) },
           { label: '隐藏桌宠', click: () => void companion?.hide().catch(console.error) },
           ...(process.platform === 'darwin'
-            ? [{ label: '打开完全磁盘访问设置...', click: () => void openFullDiskAccessSettings() }, { type: 'separator' }]
+            ? [{ label: '完全磁盘访问授权...', click: () => void openFullDiskAccessSettings() }, { type: 'separator' }]
             : []),
           { role: 'quit' },
         ],
@@ -982,6 +1064,7 @@ function createMenu() {
 
 function createWindow() {
   shellReady = false
+  matterWorkspace = false
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -991,8 +1074,10 @@ function createWindow() {
     title: 'Minduck Matter',
     // Keep the native window controls without reserving a separate title-bar band.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: nativeCanvasColor(),
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 11 } : undefined,
+    backgroundColor: nativeFrameColor(),
     webPreferences: {
+      preload: path.join(__dirname, 'desktop-frame-preload.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -1036,6 +1121,7 @@ function createWindow() {
   })
   matterFrameView = new View()
   rightPanelView = new View()
+  rightPanelView.setBorderRadius(FRAME_RADIUS)
   // This small overlay is transparent while the browser panel is closed.
   shellView.setBackgroundColor('#00000000')
   shellView.webContents.on('before-input-event', handleBrowserShortcut)
@@ -1043,7 +1129,6 @@ function createWindow() {
   panelResizeView.setBackgroundColor('#00000000')
   browserHost = new ElectronBrowserHost({
     rightPanelView,
-    backgroundColor: nativeCanvasColor(),
     browserNavigationDisposition,
     isExtensionPage,
     onExternal: openExternal,
@@ -1061,13 +1146,21 @@ function createWindow() {
   mainWindow.contentView.addChildView(windowDragView)
   mainWindow.contentView.addChildView(shellView)
   mainWindow.contentView.addChildView(panelResizeView)
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  mainWindow.webContents.on('will-navigate', event => event.preventDefault())
+  mainWindow.webContents.on('will-redirect', event => event.preventDefault())
+  mainWindow.webContents.once('did-finish-load', publishDesktopFrameState)
+  void mainWindow.loadFile(path.join(__dirname, 'desktop-frame.html')).catch(error => console.error('Failed to load desktop frame:', error))
   windowDragView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   shellView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   panelResizeView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   void windowDragView.webContents.loadFile(path.join(__dirname, 'window-drag-region.html')).catch((error) => console.error('Failed to load window drag region:', error))
   const sharedShellPage = path.join(app.getAppPath(), 'web-dist', 'desktop-shell', 'index.html')
   void panelResizeView.webContents.loadFile(sharedShellPage, { query: { surface: 'resizer' } }).catch((error) => console.error('Failed to load panel resizer:', error))
-  shellView.webContents.once('did-finish-load', () => {
+  shellView.webContents.once('did-finish-load', async () => {
+    const sidebarIcon = pathToFileURL(path.join(__dirname, 'assets/sidebar-toggle.svg')).href
+    await shellView.webContents.insertCSS(`:root { --desktop-sidebar-icon: url("${sidebarIcon}"); }\n`
+      + fs.readFileSync(path.join(__dirname, 'browser-frame.css'), 'utf8'))
     shellReady = true
     layoutViews()
     publishShellState()
@@ -1081,7 +1174,8 @@ function createWindow() {
     layoutViews()
   })
   mainWindow.on('blur', finishPanelResize)
-  mainWindow.once('show', () => { void localExec?.refresh(); void browserDevice?.refresh() })
+  mainWindow.once('show', () => { void localExec?.refresh(); void browserDevice?.refresh(); refreshDesktopUpdate() })
+  mainWindow.on('focus', refreshDesktopUpdate)
   mainWindow.on('closed', () => {
     localExec?.suspend()
     browserDevice?.suspend()
@@ -1110,26 +1204,23 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   matterOrigin = loadMatterOrigin()
-  const requestPermission = createPermissionPrompt({ dialog, shell, getWindow: () => mainWindow })
-  localExec = createController({ app, safeStorage, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
-    getContents: () => matterTab?.view.webContents, onPermissionNeeded: requestPermission })
-  installBundledFrontend({ app, protocol, net, origin: matterOrigin, backendHeaders: (headers, url) => localExec.headers(headers, url) })
+  localExec = createController({ app, origin: matterOrigin, getContents: () => matterTab?.view.webContents,
+    openPath: filename => shell.openPath(filename), confirmAccess: createAccessDialog({ dialog, getWindow: () => mainWindow }) })
+  installBundledFrontend({ app, protocol, net, origin: matterOrigin, backendHeaders: (headers, url, referrer) => browserDevice?.headers(headers, url, referrer) || headers })
   const extensionRoot = app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked', 'extensions', 'matter-browser')
     : path.join(__dirname, '..', 'extensions', 'matter-browser')
-  browserDevice = createBrowserDevice({ app, safeStorage, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
+  browserDevice = createClientRuntime({ app, localExec, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
     getContents: () => matterTab?.view.webContents, compatibility: extensionCompatibility, extensionRoot, nativeImage })
-  browserDeviceSettings = createBrowserSettings({ BrowserWindow, ipcMain, controller: browserDevice, getWindow: () => mainWindow })
   try {
     await loadBuiltInExtensions(app, { matterBrowser: false })
   } catch (error) {
     console.error('Failed to load bundled browser extensions:', error)
   }
-  matterPresenceTimer = setInterval(() => void updateMatterPresence(), 1_000)
+  matterPresenceTimer = setInterval(() => { void updateMatterPresence(); publishDesktopFrameState() }, 1_000)
   configureIPC()
   createMenu()
   createWindow()
-  void requestPermission().catch(error => console.error('无法打开系统权限提示:', error))
   try {
     companion = createCompanion({ onMatterAction: (action, target) => {
       if (action.startsWith('chat-') || action === 'qa-answer' || action === 'qa-upload') return handleMatterQa({ bridge:matterTasks, dialog }, action, target)
@@ -1158,7 +1249,6 @@ let companionQuitting = false
 app.on('before-quit', (event) => {
   localExec?.dispose()
   browserDevice?.dispose()
-  browserDeviceSettings?.dispose()
   matterTasks?.dispose()
   if (companion && !companionQuitting) {
     event.preventDefault()

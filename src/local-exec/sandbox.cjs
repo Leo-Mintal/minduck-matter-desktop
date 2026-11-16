@@ -7,17 +7,17 @@ const SANDBOX_EXEC = '/usr/bin/sandbox-exec'
 function quoted(value) { return JSON.stringify(value) }
 function subpath(value) { return `(subpath ${quoted(value)})` }
 
-// Read user files only inside authorized projects. Toolchains stay readable;
-// caches are private to this workspace rather than shared executable caches.
-function profileFor({ roots, temporary, denied = sensitivePaths(), home = os.homedir(), network = false }) {
+function profileFor({ roots, temporary, denied = sensitivePaths(), restricted = [], grants = [], home = os.homedir(), network = false }) {
   const appEnd = process.execPath.indexOf('.app/')
   const runtime = appEnd >= 0 ? process.execPath.slice(0, appEnd + 4) : path.dirname(process.execPath)
   const readable = [...roots, temporary, '/System', '/usr', '/bin', '/sbin', '/dev', '/opt/homebrew',
     '/Library/Apple', '/Library/Developer', '/private/etc', '/private/var/db/timezone', runtime, __dirname,
     path.join(home, '.nvm/versions'), path.join(home, '.volta/tools'), path.join(home, '.local/bin')]
   const exclusions = [...denied, '/private/etc/master.passwd', '/private/etc/security', '/private/etc/ssh']
-  const readFilter = `(require-all (require-any ${readable.map(subpath).join(' ')}) ${exclusions.map(value => `(require-not ${subpath(value)})`).join(' ')})`
-  const writeFilter = `(require-all (require-any ${[...roots, temporary].map(subpath).join(' ')}) ${exclusions.map(value => `(require-not ${subpath(value)})`).join(' ')})`
+  const approvalFilter = access => restricted.map(root => `(require-any (require-not ${subpath(root)}) ${grants
+    .filter(grant => access === 'read' || grant.access === 'write').map(grant => subpath(grant.path)).join(' ')})`).join(' ')
+  const readFilter = `(require-all (require-any ${readable.map(subpath).join(' ')}) ${exclusions.map(value => `(require-not ${subpath(value)})`).join(' ')} ${approvalFilter('read')})`
+  const writeFilter = `(require-all (require-any ${[...roots, temporary].map(subpath).join(' ')}) ${exclusions.map(value => `(require-not ${subpath(value)})`).join(' ')} ${approvalFilter('write')})`
   return `(version 1)
 (deny default)
 (allow process-exec)
@@ -34,12 +34,12 @@ ${network ? '(allow network-outbound)\n(allow mach-lookup (global-name "com.appl
 `
 }
 
-async function sandboxOptions({ roots, denied, cwd, network, userPath, home = os.homedir() }) {
+async function sandboxOptions({ roots, denied, restricted, grants, cwd, network, userPath, home = os.homedir() }) {
   await fs.access(SANDBOX_EXEC, fs.constants.X_OK)
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'matter-exec-'))
   const tempRoot = await canonical(temporary)
   const canonicalRoots = await Promise.all(roots.map(canonical))
-  const cache = path.join(canonicalRoots[0], '.matter-cache')
+  const cache = path.join(tempRoot, 'cache')
   await fs.mkdir(cache, { recursive: true, mode: 0o700 })
   const env = {
     PATH: userPath || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
@@ -51,7 +51,7 @@ async function sandboxOptions({ roots, denied, cwd, network, userPath, home = os
     CARGO_HOME: path.join(cache, 'cargo'), XDG_CACHE_HOME: path.join(cache, 'xdg'),
   }
   return {
-    profile: profileFor({ roots: canonicalRoots, temporary: tempRoot, denied, home, network }), env, cwd,
+    profile: profileFor({ roots: canonicalRoots, temporary: tempRoot, denied, restricted, grants, home, network }), env, cwd,
     cleanup: () => fs.rm(temporary, { recursive: true, force: true }),
   }
 }

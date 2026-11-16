@@ -6,6 +6,26 @@ const { TextDecoder } = require('node:util')
 const MAX_BYTES = 256 * 1024
 
 function revision(text) { return crypto.createHash('sha256').update(text).digest('hex') }
+function transferRead(filename, args) {
+  if (!Number.isSafeInteger(args.offset) || args.offset < 0 || !Number.isSafeInteger(args.limit) || args.limit < 1 || args.limit > MAX_BYTES) throw new Error('文件分块参数无效')
+  const descriptor = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK)
+  const fingerprint = stat => [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':')
+  try {
+    const stat = fs.fstatSync(descriptor, { bigint: true })
+    if (!stat.isFile() || stat.size > 268435456n) throw new Error('只支持不超过 256MiB 的普通文件')
+    const size = Number(stat.size), version = fingerprint(stat)
+    if (args.offset > size || (args.offset !== 0 && !args.revision) || (args.revision && args.revision !== version)) throw new Error('文件已变化或分块位置无效')
+    const data = Buffer.alloc(Math.min(args.limit, size - args.offset))
+    let read = 0
+    while (read < data.length) {
+      const count = fs.readSync(descriptor, data, read, data.length - read, args.offset + read)
+      if (!count) throw new Error('文件在传输中发生变化')
+      read += count
+    }
+    if (fingerprint(fs.fstatSync(descriptor, { bigint: true })) !== version) throw new Error('文件在传输中发生变化')
+    return { filename: path.basename(filename), size, offset: args.offset, revision: version, data: data.toString('base64'), eof: args.offset + read === size }
+  } finally { fs.closeSync(descriptor) }
+}
 function read(filename) {
   const descriptor = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
   try {
@@ -19,6 +39,7 @@ function read(filename) {
 
 function operation(request) {
   const { action, filename, args = {} } = request
+  if (action === 'transfer-read') return transferRead(filename, args)
   let before = null
   try { before = read(filename) } catch (error) { if (error.code !== 'ENOENT') throw error }
   if (action === 'read') {
@@ -62,7 +83,7 @@ if (require.main === module) {
   })
   process.stdin.on('end', () => {
     try { process.stdout.write(JSON.stringify(operation(JSON.parse(input)))) }
-    catch (error) { process.stdout.write(JSON.stringify({ error: error.message })); process.exitCode = 1 }
+    catch (error) { process.stdout.write(JSON.stringify({ error: error.message, code: error.code, path: error.path })); process.exitCode = 1 }
   })
 }
 

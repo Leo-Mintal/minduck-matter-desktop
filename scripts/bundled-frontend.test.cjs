@@ -78,3 +78,15 @@ test('marks local responses, supports HEAD, and does not cache obsolete bundle f
   assert.equal((await handler(new Request('https://matter.example/%GG'))).status, 400)
   assert.equal((await handler(new Request('https://matter.example/assets/gone.js'))).status, 404)
 })
+
+test('passes the protocol request referrer to the scoped native header policy', async (t) => {
+  const { root } = await fixture(t)
+  let observed
+  const handler = createBundledFrontendHandler({
+    root, origin: 'https://matter.example',
+    backendHeaders(headers, url, referrer) { observed = { url, referrer }; return headers },
+    fetchImpl: async () => new Response('ok'),
+  })
+  await handler(new Request('http://127.0.0.1:19473/context', { referrer: 'https://matter.example/c/test' }))
+  assert.deepEqual(observed, { url: 'http://127.0.0.1:19473/context', referrer: 'https://matter.example/c/test' })
+})

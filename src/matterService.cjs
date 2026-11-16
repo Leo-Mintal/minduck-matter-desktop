@@ -1,6 +1,6 @@
 const DEFAULT_MATTER_ORIGIN = 'https://matter.minduck.com'
 const TEST_MATTER_ORIGIN = 'http://192.168.11.70:3001'
-const TRUSTED_HTTP_ORIGINS = new Set([TEST_MATTER_ORIGIN])
+const TRUSTED_HTTP_ORIGINS = new Set([TEST_MATTER_ORIGIN, 'http://192.168.11.70:8080'])
 
 function normalizeMatterOrigin(value) {
   if (typeof value !== 'string' || !value.trim() || value.length > 2_048) {

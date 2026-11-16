@@ -2,6 +2,7 @@ const VERSIONS = ['2025-06-18', '2025-11-25', '2025-03-26', '2024-11-05']
 
 function connectDesktop({ url, token, deviceId, version, execute, onState = () => {}, onRevoked = () => {},
   WebSocketImpl = globalThis.WebSocket, reconnectDelay = 1000, tools, mcpResults = false, maxActive = 4,
+  runtimeId, getCapabilities = () => ({}), onContext = () => {}, onInitialize = () => {},
   serverName = 'matter-desktop-local-exec', capabilities = { tools: {}, localExec: { version: 1, approval: 'local', sandbox: 'seatbelt' } } }) {
   let socket
   let timer
@@ -21,11 +22,12 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
     try { value = JSON.parse(raw) } catch { current.close(4004, 'invalid JSON'); return }
     if (!value || typeof value !== 'object') return
     if (value.type === 'auth_ok') {
-      if (value.device_id !== deviceId) { current.close(4004, 'device mismatch'); return }
+      if (runtimeId ? value.runtime_id !== runtimeId : value.device_id !== deviceId) { current.close(4004, 'device mismatch'); return }
       authenticated = true; attempt = 0
       return
     }
-    if (value.type === 'ping') { send(current, { type: 'pong' }); return }
+    if (value.type === 'runtime_ready') { onContext(value.runtime_context); return }
+    if (value.type === 'ping') { if (runtimeId && initialized) onContext(value.runtime_context); send(current, { type: 'pong' }); return }
     if (!authenticated || value.jsonrpc !== '2.0') return
     const { method, id, params = {} } = value
     if (method === 'notifications/cancelled') { active.get(String(params.requestId))?.abort(); return }
@@ -37,6 +39,7 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
     if (!(typeof id === 'string' && id.length > 0 && id.length <= 128) && !Number.isSafeInteger(id)) return fail(current, id, 'invalid request ID')
     if (method === 'initialize') {
       if (!VERSIONS.includes(params.protocolVersion)) return fail(current, id, 'unsupported protocol version')
+      onInitialize(params.capabilities)
       initialized = true
       return send(current, { jsonrpc: '2.0', id, result: { protocolVersion: params.protocolVersion,
         capabilities, serverInfo: { name: serverName, version } } })
@@ -75,7 +78,7 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
     }
     current.addEventListener('open', () => {
       if (socket !== current || stopped) return
-      send(current, { type: 'auth', token, device_id: deviceId, browser: 'Matter Desktop', extension_version: version }); watch()
+      send(current, runtimeId ? { type:'auth', token, runtime_id:runtimeId, ...getCapabilities() } : { type: 'auth', token, device_id: deviceId, browser: 'Matter Desktop', extension_version: version }); watch()
     })
     current.addEventListener('message', event => {
       if (socket !== current || stopped) return
@@ -90,7 +93,7 @@ function connectDesktop({ url, token, deviceId, version, execute, onState = () =
     })
   }
   open()
-  return { stop() { stopped = true; clearTimeout(timer); clearTimeout(heartbeat); cancelAll(); socket?.close(1000, 'local execution stopped') } }
+  return { updateCapabilities() { if (runtimeId && authenticated) send(socket,{type:'capabilities',...getCapabilities()}) }, stop() { stopped = true; clearTimeout(timer); clearTimeout(heartbeat); cancelAll(); socket?.close(1000, 'local execution stopped') } }
 }
 
 module.exports = { VERSIONS, connectDesktop }

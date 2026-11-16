@@ -64,7 +64,7 @@ export function seed(home: string, language: Language): void {
       web: { port: 17888 },
       companion: { telemetry: false, autoUpdate: false },
       worlds: { 'desktop-pet': {
-        enabled: true, port: 17897, rememberPosition: true,
+        enabled: true, port: 17897, rememberPosition: true, roam: 'calm',
         window: { enabled: true },
         skin: { figure: 'minduck-duck' },
         asr: { enabled: false },

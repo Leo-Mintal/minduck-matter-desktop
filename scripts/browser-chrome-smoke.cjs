@@ -5,23 +5,67 @@ const http = require('node:http')
 const os = require('node:os')
 const path = require('node:path')
 const electron = require('electron')
+const { EventEmitter } = require('node:events')
+const desktopUpdater = require('../src/desktopUpdater.cjs')
 const { app, BrowserWindow, WebContentsView, webContents } = electron
 const permissions = require('../src/fullDiskAccess.cjs')
 let permissionPrompts = 0
-const { MATTER_TOP_INSET } = require('../src/rightPanelLayout.cjs')
+const currentVersion = require('../package.json').version
+const nextVersion = currentVersion.replace(/\d+$/, patch => String(Number(patch) + 1))
+let updateVersion = nextVersion
+let updateFails = false
+const updateDownloads = []
+const updateDialogs = []
+let updateResponse = 1
+let finishUpdateDownload
+const updateLifecycle = []
+const fakeUpdater = new EventEmitter(), fakeNativeUpdater = new EventEmitter()
+fakeUpdater.checkForUpdates = async () => {
+  if (updateFails) throw new Error('fixture unavailable')
+  return { isUpdateAvailable: updateVersion !== currentVersion, updateInfo: { version: updateVersion,
+    files: [{ url: `MinduckMatter-${updateVersion}-arm64.zip`, size: 1024,
+      sha512: Buffer.alloc(64, 1).toString('base64') }] } }
+}
+fakeUpdater.downloadUpdate = () => new Promise(resolve => {
+  updateLifecycle.push('download')
+  fakeUpdater.emit('download-progress', { percent: 37 })
+  finishUpdateDownload = () => resolve(['/isolated-test/update.zip'])
+})
+fakeUpdater.quitAndInstall = () => updateLifecycle.push('install')
+fakeNativeUpdater.checkForUpdates = () => {
+  updateLifecycle.push('verify'); queueMicrotask(() => fakeNativeUpdater.emit('update-downloaded'))
+}
+const connectionDialogs = []
+const { MATTER_TOP_INSET, FRAME_RAIL_WIDTH, FRAME_EDGE, FRAME_GAP, FRAME_RADIUS } = require('../src/rightPanelLayout.cjs')
+const permissionSettings = []
+let permissionChecks = 0
+const permissionSettingsOnly = process.argv.includes('--permission-settings-only')
 const { verifyNewTab, verifySettings } = require('./browser-pages-probe.cjs')
 
 // Offscreen native surfaces keep real user mouse movement out of trusted-input assertions.
 const testElectron = Object.create(electron)
 Object.defineProperty(testElectron, 'dialog', { value: { ...electron.dialog, showMessageBox: async (...args) => {
   const options = args.at(-1)
-  assert.equal(options.title, '完全磁盘访问'); permissionPrompts++
+  if (options.title === '本机连接状态') {
+    connectionDialogs.push(options); return { response: options.cancelId }
+  }
+  if (options.title !== '完全磁盘访问') {
+    assert.ok(['检查更新', '发现新版本', '更新失败'].includes(options.title))
+    updateDialogs.push(options.title); return { response: updateResponse }
+  }
+  permissionPrompts++
   return { response: 1 }
+} } })
+Object.defineProperty(testElectron, 'shell', { value: { ...electron.shell, openExternal: async url => {
+  if (url === permissions.FULL_DISK_ACCESS_SETTINGS_URL) {
+    assert.ok(permissionChecks > 0, 'main process probes before opening Settings')
+    permissionSettings.push(url)
+  } else updateDownloads.push(url)
 } } })
 function TestWindow(options) {
   const window = new BrowserWindow({ ...options, show: false,
     webPreferences: { ...options.webPreferences, offscreen: true, backgroundThrottling: false } })
-  window.show = () => {}
+  window.show = () => window.emit('show')
   window.focus = () => {}
   return window
 }
@@ -35,14 +79,16 @@ Object.defineProperty(testElectron, 'WebContentsView', { value: function (option
 const root = path.resolve(__dirname, '..')
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'minduck-chrome-smoke-'))
 const settingsFile = path.join(temporary, 'agent-settings.json')
-fs.writeFileSync(settingsFile, JSON.stringify({ fullDiskAccessPromptAcknowledged: true, rightPanelWidth: 650 }))
+fs.writeFileSync(settingsFile, JSON.stringify({ fullDiskAccessPromptAcknowledged: !permissionSettingsOnly, rightPanelWidth: 650 }))
 process.env.MINDUCK_USER_DATA_DIR = temporary
 process.env.MINDUCK_MATTER_ORIGIN = 'https://matter.smoke.invalid'
 app.setAppPath(root)
+app.getVersion = () => currentVersion
 
 const server = http.createServer((request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8')
-  response.end(`<title>Browser fixture ${request.url}</title><body style="background:#fff;color:#111"><a href="/second">Navigation fixture</a></body>`)
+  response.end(`<title>Browser fixture ${request.url}</title><body style="background:#fff;color:#111">
+    <a href="/second">Navigation fixture</a><button id="fixed-action" style="position:fixed;bottom:16px;right:16px">Fixed action</button></body>`)
 })
 
 async function waitFor(read, predicate, label) {
@@ -60,8 +106,12 @@ const Module = require('node:module')
 const load = Module._load
 try {
   Module._load = function (request, ...args) {
-    if (request.endsWith('/fullDiskAccess.cjs')) return { ...permissions, hasFullDiskAccess: () => false,
-      createPermissionPrompt: options => permissions.createPermissionPrompt({ ...options, check: () => false }) }
+    const check = () => { permissionChecks++; return false }
+    if (request.endsWith('/fullDiskAccess.cjs')) return { ...permissions, hasFullDiskAccess: check }
+    if (request.endsWith('/desktopUpdater.cjs')) return { ...desktopUpdater,
+      macUpdateRuntime: () => ({ updater: fakeUpdater, nativeUpdater: fakeNativeUpdater }),
+      createDesktopUpdater: options => desktopUpdater.createDesktopUpdater({ ...options,
+        hasActiveTasks: () => false, prepareToQuit: async () => { updateLifecycle.push('stop') } }) }
     return request === 'electron' ? testElectron : load.call(this, request, ...args)
   }
   require('../src/main.cjs')
@@ -74,10 +124,31 @@ async function probe() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const fixture = `http://127.0.0.1:${server.address().port}`
   const window = await waitFor(() => BrowserWindow.getAllWindows().find((item) => item.contentView.children.length >= 5), Boolean, 'main window')
-  await waitFor(() => permissionPrompts, value => value === 1, 'native startup permission prompt')
+  assert.equal(permissionPrompts, 0, 'startup never opens a permission dialog')
+  assert.deepEqual(permissionSettings, [], 'startup never opens Full Disk Access settings')
+  assert.equal(permissionChecks, 0, 'startup does not probe Full Disk Access')
+  assert.equal(JSON.parse(fs.readFileSync(settingsFile)).fullDiskAccessPromptAcknowledged, !permissionSettingsOnly)
   const labels = electron.Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items.map(child => child.label) || [])
   assert.ok(!labels.includes('本机执行设置…'))
+  assert.ok(!labels.includes('内置浏览器设置…'))
+  const permissionMenu = electron.Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items || [])
+    .find(item => item.label === '完全磁盘访问授权...')
+  assert.ok(permissionMenu, 'direct permission settings remain available from the app menu')
+  const windowCount = BrowserWindow.getAllWindows().length
+  const openedBefore = permissionSettings.length, checksBefore = permissionChecks
+  permissionMenu.click()
+  await waitFor(() => permissionSettings.length, value => value === openedBefore + 1, 'direct System Settings navigation')
+  assert.ok(permissionChecks > checksBefore, 'menu probes again before opening Settings')
+  assert.ok(permissionSettings.every(url => url === permissions.FULL_DISK_ACCESS_SETTINGS_URL))
+  assert.equal(BrowserWindow.getAllWindows().length, windowCount, 'permission navigation creates no app window')
+  assert.equal(permissionPrompts, 0, 'permission navigation never shows an informational dialog')
+  if (permissionSettingsOnly) {
+    assert.equal(windowCount, 1, 'only the main app window exists')
+    console.log('PASS fresh startup does not probe FDA or open Settings, manual menu still opens exact permission page; no app permission window or dialog, real TCC unchanged')
+    return
+  }
   assert.equal(BrowserWindow.getAllWindows().some(item => item.webContents.getURL().endsWith('/local-exec/settings.html')), false)
+  assert.equal(BrowserWindow.getAllWindows().some(item => item.webContents.getURL().endsWith('/browser-device/settings.html')), false)
   const { getAgentBrowserSession, MATTER_BROWSER_EXTENSION_NAME } = require('../src/agentBrowser.cjs')
   assert.equal(getAgentBrowserSession().extensions.getAllExtensions().some(item => item.name === MATTER_BROWSER_EXTENSION_NAME), false,
     'default app uses the native browser device without starting a Matter Browser extension')
@@ -85,14 +156,138 @@ async function probe() {
   const resizer = await waitFor(() => webContents.getAllWebContents().find((item) => item.getURL().includes('surface=resizer')), Boolean, 'shared resizer')
   const state = () => chrome.executeJavaScript('minduckBrowserShell.getState()')
   const command = (type, extra = {}) => chrome.executeJavaScript(`minduckBrowserShell.command(${JSON.stringify({ type, ...extra })})`)
-  const view = (wc) => window.contentView.children.find((item) => item.webContents?.id === wc.id)
+  const verifyAddTabPosition = async () => {
+    const position = await chrome.executeJavaScript(`(() => {
+      const last = document.querySelector('.desktop-tab:last-child').getBoundingClientRect();
+      const strip = document.querySelector('.desktop-tab-scroll').getBoundingClientRect();
+      const add = document.querySelector('.pn-acts [aria-label="新建标签页"]').getBoundingClientRect();
+      const toggle = document.querySelector('.pn-ib-close').getBoundingClientRect();
+      return { gap: add.left - Math.min(last.right, strip.right), addRight: add.right,
+        toggleLeft: toggle.left, viewport: innerWidth };
+    })()`)
+    assert.ok(Math.abs(position.gap - 8) < 1, `new-tab follows the final visible tab: ${JSON.stringify(position)}`)
+    assert.ok(position.addRight <= position.toggleLeft && position.toggleLeft < position.viewport, JSON.stringify(position))
+  }
+  const descendants = (parent) => parent.children.flatMap(item => [item, ...descendants(item)])
+  const view = (wc) => descendants(window.contentView).find((item) => item.webContents?.id === wc.id)
   const matterFrame = () => window.contentView.children.find((item) => item.children.some((child) => child.webContents?.getURL().startsWith('https://matter.')))
   const rightFrame = () => window.contentView.children.find((item) => item !== matterFrame() && item.children.length)
 
-  await chrome.executeJavaScript('document.querySelector("[aria-label=打开浏览器]").click()')
+  const desktop = window.webContents
+  await waitFor(() => desktop.executeJavaScript('window.minduckDesktopFrame?.getState()'), value => value?.update.available, 'silent update detection')
+  assert.deepEqual(updateDownloads, [], 'automatic detection never opens a download')
+  assert.deepEqual(updateDialogs, [], 'automatic detection stays quiet')
+  const rail = await desktop.executeJavaScript(`({ buttons: document.querySelectorAll('.rail button').length,
+    pages: document.querySelectorAll('.rail-pages button').length,
+    tools: document.querySelectorAll('.rail-tools button').length,
+    width: document.querySelector('.rail').getBoundingClientRect().width,
+    geometry: [...document.querySelectorAll('.rail button')].map(button => {
+      const bounds = button.getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height, radius: getComputedStyle(button).borderRadius,
+        icons: [...button.querySelectorAll('.icon, .available-icon')].map(icon => {
+          const style = getComputedStyle(icon);
+          return { width: parseFloat(style.width), height: parseFloat(style.height) };
+        }) };
+    }),
+    home: document.querySelector('#matter-home'),
+    toolsBottom: document.querySelector('.rail-tools').getBoundingClientRect().bottom,
+    railBottom: document.querySelector('.rail').getBoundingClientRect().bottom,
+    available: document.querySelector('#check-update').dataset.available,
+    green: getComputedStyle(document.querySelector('.available-icon')).display,
+    toggle: getComputedStyle(document.querySelector('.sidebar-icon')).maskImage,
+    node: typeof require })`)
+  assert.equal(rail.buttons, 2)
+  assert.equal(rail.pages, 0)
+  assert.equal(rail.tools, 2)
+  assert.equal(rail.home, null, 'temporary home entry is removed')
+  assert.equal(rail.toolsBottom, rail.railBottom - 4, 'settings and updates stay anchored at the bottom')
+  assert.equal(rail.width, FRAME_RAIL_WIDTH)
+  assert.equal(rail.width, 36)
+  for (const button of rail.geometry) {
+    assert.equal(button.width, 28); assert.equal(button.height, 28); assert.equal(button.radius, '50%')
+    for (const icon of button.icons) assert.deepEqual(icon, { width: 16, height: 16 })
+  }
+  assert.equal(rail.available, 'true')
+  assert.equal(rail.green, 'block')
+  assert.ok(rail.toggle.includes('sidebar-toggle.svg'))
+  assert.equal(rail.node, 'undefined')
+  await waitFor(matterFrame, Boolean, 'committed Matter view')
+  const matter = matterFrame().children.find(item => item.webContents).webContents
+  const navigation = await desktop.executeJavaScript(`({ title: document.querySelector('.app-title'),
+    height: document.querySelector('.titlebar').getBoundingClientRect().height,
+    region: getComputedStyle(document.querySelector('.titlebar')).getPropertyValue('-webkit-app-region'),
+    buttons: [...document.querySelectorAll('.page-navigation button')].map(button => {
+      const bounds = button.getBoundingClientRect(); const icon = button.querySelector('.icon').getBoundingClientRect();
+      return { id: button.id, x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+        center: bounds.y + bounds.height / 2, radius: getComputedStyle(button).borderRadius,
+        icon: { width: icon.width, height: icon.height } };
+    }) })`)
+  assert.equal(navigation.title, null)
+  assert.equal(navigation.height, 36)
+  assert.equal(navigation.region, 'none', 'root titlebar cannot add a window-wide drag region beneath sibling browser controls')
+  assert.deepEqual(navigation.buttons.map(button => button.id), ['matter-back', 'matter-forward', 'matter-reload'])
+  const drag = await waitFor(() => window.contentView.children.find(item => item.webContents?.getURL().endsWith('window-drag-region.html')),
+    Boolean, 'native titlebar drag surface')
+  assert.equal(await drag.webContents.executeJavaScript(`getComputedStyle(document.body).getPropertyValue('-webkit-app-region')`), 'drag')
+  for (const button of navigation.buttons) {
+    assert.deepEqual(button.icon, { width: 16, height: 16 })
+    assert.equal(button.width, 28); assert.equal(button.height, 28)
+    assert.equal(button.radius, '50%'); assert.equal(button.center, 18)
+    assert.ok(button.x + button.width < drag.getBounds().x)
+  }
+  assert.equal(await desktop.executeJavaScript('document.querySelector("#local-exec-status")'), null, 'desktop frame has no local capability banner')
+  if (process.platform === 'darwin') assert.equal(window.getWindowButtonPosition().y, 11)
+  await waitFor(() => !matter.isLoading(), Boolean, 'Matter initial load settles before history fixture')
+  // Model user navigation so Chromium does not treat these as skippable script-only entries.
+  await matter.executeJavaScript(`history.pushState({}, '', '/frame-first'); history.pushState({}, '', '/frame-second')`, true)
+  await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'), value => value.navigation.canGoBack, 'Matter history enables back')
+  await waitFor(() => desktop.executeJavaScript('!document.querySelector("#matter-back").disabled'), Boolean, 'Matter back control rendered')
+  await desktop.executeJavaScript('document.querySelector("#matter-back").click()')
+  await waitFor(() => matter.getURL(), value => value.endsWith('/frame-first'), 'top back navigates Matter')
+  await waitFor(() => desktop.executeJavaScript('!document.querySelector("#matter-forward").disabled'), Boolean, 'Matter forward enabled')
+  await desktop.executeJavaScript('document.querySelector("#matter-forward").click()')
+  await waitFor(() => matter.getURL(), value => value.endsWith('/frame-second'), 'top forward navigates Matter')
+  let mainReloads = 0
+  matter.once('did-finish-load', () => mainReloads++)
+  await desktop.executeJavaScript('document.querySelector("#matter-reload").click()')
+  await waitFor(() => mainReloads, value => value === 1, 'top refresh reloads Matter')
+  assert.ok(await matter.executeJavaScript(`(() => {
+    const button = document.createElement('button');
+    button.style.cssText = 'position:fixed;bottom:16px;right:16px;width:40px;height:24px;z-index:2147483647';
+    document.body.append(button); const bounds = button.getBoundingClientRect();
+    const visible = Math.abs(bounds.bottom - (innerHeight - 16)) < 1
+      && document.elementFromPoint(bounds.x + 20, bounds.y + 12) === button;
+    button.remove(); return visible;
+  })()`), 'Matter corner clipping preserves fixed-position controls')
+  console.log('PASS compact titlebar: no app title, three 16px icons, circular buttons, native alignment and Matter history/reload')
+  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
+  await waitFor(() => updateDialogs.length, value => value === 1, 'update confirmation completed')
+  assert.deepEqual(updateDownloads, [], 'update actions never open the system browser')
+  assert.deepEqual(updateLifecycle, [], 'cancelling the confirmation never downloads or installs')
+  updateVersion = currentVersion
+  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
+  await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'), value => !value.update.checking && !value.update.available, 'up-to-date clears badge')
+  await waitFor(() => updateDialogs.length, value => value === 2, 'up-to-date dialog completed')
+  updateFails = true
+  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
+  await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'), value => value.update.error, 'failed check exposes retry state')
+  await waitFor(() => updateDialogs.length, value => value === 3, 'failed check dialog completed')
+  updateFails = false
+  await desktop.executeJavaScript('document.querySelector("#companion-settings").click()')
+  const petSettings = await waitFor(() => BrowserWindow.getAllWindows().find(item => item.getTitle() === 'Minduck 桌宠设置'), Boolean, 'rail opens companion settings')
+  petSettings.close()
+  console.log('PASS fixed icon rail, real settings route, quiet update badge, update confirmation and error retry')
+
+  await window.webContents.executeJavaScript('document.querySelector("#browser-toggle").click()')
   await waitFor(state, (value) => value.rightPanelOpen && value.panelMotion === 'opening' && value.tabs.length === 1, 'panel opening motion')
   assert.equal((await state()).tabs[0].url, '', 'first browser tab opens the local unbranded search page')
   await waitFor(state, (value) => value.rightPanelOpen && !value.panelMotion, 'panel open')
+  const chromeRegions = await waitFor(() => chrome.executeJavaScript(`[...document.querySelectorAll('button, input')].map(control => ({
+    label: control.getAttribute('aria-label') || control.title,
+    region: getComputedStyle(control).getPropertyValue('-webkit-app-region'),
+  }))`), value => value.length > 5, 'browser controls render before testing input regions')
+  for (const control of chromeRegions) assert.equal(control.region, 'no-drag', control.label)
+  console.log('PASS input regions: root titlebar has no drag region, bounded native drag retained and browser controls excluded')
   await verifyNewTab({ chrome, command, state, waitFor, temporary })
   await command('new-tab')
   await waitFor(state, (value) => value.tabs.length === 2, 'local page for settings cache check')
@@ -101,6 +296,29 @@ async function probe() {
   await command('open-address', { value: fixture })
   await waitFor(state, (value) => value.tabs[0].url === fixture + '/' && !value.tabs[0].loading, 'fixture navigation')
   const fixturePage = webContents.getAllWebContents().find((item) => item.getURL() === fixture + '/')
+  assert.equal(await fixturePage.executeJavaScript('getComputedStyle(document.documentElement).clipPath'), 'none')
+  assert.ok(await fixturePage.executeJavaScript(`(() => {
+    const button = document.querySelector('#fixed-action'); const bounds = button.getBoundingClientRect();
+    return document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) === button;
+  })()`), 'card corners do not clip fixed controls on short documents')
+  assert.ok(await fixturePage.executeJavaScript(`(() => {
+    document.body.style.minHeight = '2000px'; window.scrollTo(0, 600);
+    const button = document.querySelector('#fixed-action'); const bounds = button.getBoundingClientRect();
+    return window.scrollY > 0 && document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) === button;
+  })()`), 'scrolling keeps fixed controls interactive')
+  assert.equal(await fixturePage.executeJavaScript('typeof minduckDesktopFrame'), 'undefined')
+  for (const sender of [
+    { sender: fixturePage, senderFrame: fixturePage.mainFrame },
+    { sender: desktop, senderFrame: fixturePage.mainFrame },
+  ]) {
+    for (const type of ['toggle-browser', 'check-update', 'companion-settings', 'matter-go-back', 'matter-go-forward', 'matter-reload']) {
+      electron.ipcMain.emit('desktop-frame:command', sender, type)
+    }
+  }
+  assert.equal((await state()).rightPanelOpen, true)
+  assert.equal(updateDialogs.length, 3)
+  assert.equal(BrowserWindow.getAllWindows().some(item => item.getTitle() === 'Minduck 桌宠设置'), false)
+  console.log('PASS desktop frame bridge absent from browser pages and commands reject untrusted senders/subframes')
   const shortcut = (contents, key) => {
     // CDP dispatch targets renderer input; this offscreen probe exercises Electron's registered native event route.
     let prevented = false
@@ -138,14 +356,23 @@ async function probe() {
 
   for (const width of [960, 1280, 1440]) {
     window.setContentSize(width, 800)
-    await waitFor(() => matterFrame().getBounds().width + rightFrame().getBounds().width, (value) => value === width, 'adjacent native surfaces')
+    await waitFor(() => matterFrame().getBounds().width + rightFrame().getBounds().width, (value) => value === width - FRAME_EDGE - FRAME_GAP, 'framed native surfaces')
     const [contentWidth, contentHeight] = window.getContentSize()
-    assert.deepEqual(matterFrame().children[0].getBounds(), {
+    assert.deepEqual(view(matter).getBounds(), {
       x: 0,
-      y: process.platform === 'darwin' ? MATTER_TOP_INSET : 0,
-      width: contentWidth - rightFrame().getBounds().width,
-      height: contentHeight - (process.platform === 'darwin' ? MATTER_TOP_INSET : 0),
+      y: 0,
+      width: contentWidth - FRAME_EDGE - FRAME_GAP - rightFrame().getBounds().width,
+      height: contentHeight - MATTER_TOP_INSET - FRAME_EDGE,
     }, 'Matter content avoids macOS window controls')
+    assert.equal(matterFrame().getBounds().x, 0, 'native Matter surface includes the shared workspace rail')
+    const businessBounds = await matter.executeJavaScript(`(() => {
+      const r = document.querySelector('.desktop-workspace-content').getBoundingClientRect();
+      return { x: r.x, width: r.width, viewport: innerWidth };
+    })()`)
+    // Offscreen child renderers report the parent viewport, unlike visible native views.
+    assert.equal(businessBounds.x, FRAME_RAIL_WIDTH)
+    assert.equal(businessBounds.width, businessBounds.viewport - FRAME_RAIL_WIDTH,
+      'Web composition reserves exactly one rail inside its renderer viewport')
     const start = view(resizer).getBounds()
     const before = rightFrame().getBounds().width
     window.focus()
@@ -177,7 +404,7 @@ async function probe() {
     })
     const layout = await chrome.executeJavaScript(`({ scroll: document.body.scrollWidth, width: innerWidth,
       shared: Boolean(document.querySelector('.panel .input-control') && document.querySelector('.ui-icon')),
-      round: [...document.querySelectorAll('.b-icon')].every((item) => parseFloat(getComputedStyle(item).borderTopLeftRadius) >= item.getBoundingClientRect().height / 2),
+      round: getComputedStyle(document.querySelector('.pn-ib-close')).borderRadius === '8px',
       pillInput: parseFloat(getComputedStyle(document.querySelector('.input-control')).borderTopLeftRadius) > 100,
       projectInput: document.querySelector('.input').classList.contains('input--pill') && !document.querySelector('.input--address'),
       addressHeight: document.querySelector('.input-control').getBoundingClientRect().height,
@@ -209,26 +436,86 @@ async function probe() {
         const rect = item.getBoundingClientRect(); return rect.left < 0 || rect.right > innerWidth || rect.bottom > innerHeight;
       }) })`)
     assert.ok(layout.shared && layout.round && layout.pillInput && !layout.clipped && layout.scroll <= layout.width, JSON.stringify(layout))
-    assert.ok(layout.projectInput && layout.addressHeight === 36 && layout.addressFont === layout.panelFont && layout.addressIcons === 0, JSON.stringify(layout))
+    const opener = await desktop.executeJavaScript(`(() => {
+      const button = document.querySelector('#browser-toggle');
+      const bounds = button.getBoundingClientRect(); const style = getComputedStyle(button);
+      const icon = button.querySelector('.icon').getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height, radius: style.borderRadius,
+        background: style.backgroundColor, iconWidth: icon.width, iconHeight: icon.height };
+    })()`)
+    const headerActions = await chrome.executeJavaScript(`[...document.querySelectorAll('.pn-acts > .b')].map(button => {
+      const bounds = button.getBoundingClientRect(); const style = getComputedStyle(button);
+      const icon = button.classList.contains('pn-ib-close')
+        ? getComputedStyle(button, '::before') : getComputedStyle(button.querySelector('.pn-icon'));
+      return { width: bounds.width, height: bounds.height, radius: style.borderRadius,
+        background: style.backgroundColor, iconWidth: parseFloat(icon.width), iconHeight: parseFloat(icon.height) };
+    })`)
+    assert.equal(headerActions.length, 2)
+    assert.deepEqual(opener, { width: 28, height: 28, radius: '8px',
+      background: opener.background, iconWidth: 16, iconHeight: 16 })
+    for (const action of headerActions) assert.deepEqual(action, opener, 'open/close/new-tab share compact rounded squares')
+    assert.ok(layout.projectInput && layout.addressHeight === 34 && layout.addressFont === layout.panelFont && layout.addressIcons === 0, JSON.stringify(layout))
     assert.equal(layout.bodyUsesOverlayScroll, false, 'fixed browser navigation does not mount OverlayScroll')
     assert.equal(layout.horizontalThumbs, 0, 'browser chrome has no horizontal scroll thumb')
     assert.ok(layout.navigationOverflow && layout.navigationOverflow.scroll <= layout.navigationOverflow.client, JSON.stringify(layout))
     assert.equal(layout.tabScrollbarWidth, 'none', 'tab strip keeps native overflow available without a visible scrollbar')
-    assert.ok(parseFloat(layout.tabRadius) > 100, 'original Matter tabs use the shared pill radius')
-    assert.equal(layout.tabBottomRadius, layout.tabRadius, 'tabs retain a pill shape on every corner')
+    assert.equal(layout.tabRadius, '8px', 'tabs use the reference rounded rectangle')
+    assert.equal(layout.tabBottomRadius, layout.tabRadius)
     assert.equal(layout.navigationDisplay, 'flex', 'navigation restores the original shared-control arrangement')
-    assert.equal(layout.headerPadding, '12px', 'header restores the shared Panel spacing')
+    assert.equal(layout.headerPadding, '4px', 'tabs fit the shared native titlebar')
     assert.equal(layout.closePadding, '2px')
     assert.equal(layout.closeSize, 20)
-    assert.deepEqual(layout.tabInsets, { left: 6, right: 6 }, 'tab keeps equal horizontal padding')
-    assert.equal(matterFrame().getBounds().width, rightFrame().getBounds().x)
-    console.log(`PASS ${width}px: two live native resize frames before release, no gap, shared controls fit`)
+    assert.deepEqual(layout.tabInsets, { left: 11, right: 11 }, 'tab keeps equal padding inside its border')
+    assert.equal(matterFrame().getBounds().x + matterFrame().getBounds().width + FRAME_GAP, rightFrame().getBounds().x)
+    assert.equal(width - rightFrame().getBounds().x - rightFrame().getBounds().width, 4, 'right frame inset is compact')
+    assert.equal(window.getContentSize()[1] - rightFrame().getBounds().y - rightFrame().getBounds().height, 4, 'bottom frame inset is compact')
+    assert.equal(FRAME_GAP, 1, 'joined content has only a one-pixel seam')
+    assert.equal(await matter.executeJavaScript('getComputedStyle(document.querySelector(".desktop-workspace-content")).clipPath'),
+      `inset(0px round ${FRAME_RADIUS}px 0px 0px ${FRAME_RADIUS}px)`, 'Matter retains only its outer left corners while joined')
+    assert.ok(await matter.executeJavaScript(`getComputedStyle(document.documentElement).clipPath === 'none'
+      && document.documentElement.scrollWidth <= innerWidth`), 'outer Matter corners do not alter the root viewport or add horizontal scrolling')
+    assert.equal(view(chrome).getBounds().y, 0)
+    const rows = await chrome.executeJavaScript(`({ tabs: document.querySelector('.pn-top').getBoundingClientRect().height,
+      navigation: document.querySelector('.desktop-navigation').getBoundingClientRect().height,
+      divider: getComputedStyle(document.querySelector('.pn-top')).borderBottomWidth,
+      tabWidth: document.querySelector('.desktop-tab').getBoundingClientRect().width,
+      gutter: getComputedStyle(document.querySelector('.pn-body')).scrollbarGutter,
+      bodyRadius: getComputedStyle(document.querySelector('.pn-body')).borderTopLeftRadius,
+      card: (() => { const rect = document.querySelector('.desktop-navigation').getBoundingClientRect();
+        return { left: rect.left, right: rect.right, width: innerWidth, bottom: rect.bottom }; })(),
+      topRadius: getComputedStyle(document.querySelector('.desktop-navigation')).borderTopRightRadius,
+      innerRadius: getComputedStyle(document.querySelector('.desktop-navigation')).borderTopLeftRadius,
+      bottomRadius: getComputedStyle(document.querySelector('.desktop-navigation')).borderBottomRightRadius,
+      toggle: getComputedStyle(document.querySelector('.pn-ib-close'), '::before').maskImage })`)
+    assert.equal(rows.tabs, MATTER_TOP_INSET)
+    assert.equal(rows.navigation, 48)
+    assert.equal(rows.divider, '0px', 'no divider between tabs and content')
+    assert.equal(rows.tabWidth, 184, 'tabs use the narrower desktop width')
+    assert.equal(rows.gutter, 'auto', 'fixed navigation does not reserve a scrollbar gutter')
+    assert.equal(rows.bodyRadius, '0px', 'navigation corners are clipped only once')
+    assert.ok(Math.abs(rows.card.left) < 0.1 && Math.abs(rows.card.right - rows.card.width) < 0.1,
+      `navigation fills the browser card: ${JSON.stringify(rows.card)}`)
+    const shellBounds = view(chrome).getBounds()
+    const pageBounds = view(fixturePage).getBounds()
+    const panelBounds = rightFrame().getBounds()
+    assert.equal(shellBounds.x, panelBounds.x + pageBounds.x, 'navigation and page share their left edge')
+    assert.equal(shellBounds.width, pageBounds.width, 'navigation and page share their right edge')
+    assert.equal(shellBounds.y + rows.card.bottom, panelBounds.y + pageBounds.y, 'navigation meets the page without a gap')
+    assert.equal(rows.topRadius, '12px')
+    assert.equal(rows.innerRadius, '0px', 'browser navigation meets Matter with a square inner corner')
+    assert.equal(rows.bottomRadius, '0px')
+    assert.ok(rows.toggle.includes('sidebar-toggle.svg'))
+    assert.equal(view(chrome).getBounds().height, 84, 'no extra tab row beneath the titlebar')
+    await verifyAddTabPosition()
+    console.log(`PASS ${width}px: titlebar tabs, continuous navigation/page card, live resize and shared controls`)
     // Restore a useful starting width for the next size.
     await chrome.executeJavaScript('document.querySelector(".pn-ib-close").click()')
     await waitFor(state, (value) => !value.rightPanelOpen && value.panelMotion === 'closing', 'collapse motion')
     assert.equal(rightFrame().getVisible(), true, 'browser page remains visible during panel exit')
     await waitFor(state, (value) => !value.rightPanelOpen && !value.panelMotion, 'collapse')
-    assert.equal(matterFrame().getBounds().width, width)
+    await waitFor(() => matter.executeJavaScript('getComputedStyle(document.querySelector(".desktop-workspace-content")).clipPath'),
+      value => value === `inset(0px round ${FRAME_RADIUS}px)`, 'closed Matter restores all outer corners')
+    assert.equal(matterFrame().getBounds().width, width - FRAME_EDGE)
     const tabs = (await state()).tabs.map((item) => item.id)
     await command('open-panel')
     await waitFor(state, (value) => value.rightPanelOpen && value.panelMotion === 'opening', 'restore motion')
@@ -245,8 +532,18 @@ async function probe() {
     }
   }
 
-  await command('new-tab')
+  await chrome.executeJavaScript('document.querySelector(".pn-acts [aria-label=新建标签页]").click()')
   await waitFor(state, (value) => value.tabs.length === 2, 'new tab')
+  await verifyAddTabPosition()
+  const pairedTabs = (await state()).tabs.map(tab => tab.id)
+  for (let count = 3; count <= 6; count++) {
+    await command('new-tab')
+    await waitFor(state, value => value.tabs.length === count, 'overflow tabs')
+  }
+  await verifyAddTabPosition()
+  for (const tab of (await state()).tabs.filter(tab => !pairedTabs.includes(tab.id))) await command('close-tab', { tabId: tab.id })
+  await waitFor(state, value => value.tabs.length === 2, 'restore tab pair')
+  await verifyAddTabPosition()
   assert.equal((await state()).tabs.at(-1).url, '', 'new browser tab opens the local search page')
   assert.equal(await chrome.executeJavaScript('document.querySelectorAll(".desktop-chrome .overlay-scroll-thumb--horizontal").length'), 0, 'new tabs do not add a chrome scrollbar')
   assert.equal(await chrome.executeJavaScript('getComputedStyle(document.querySelector(".desktop-navigation")).animationName'), 'desktop-navigation-in')
@@ -284,11 +581,18 @@ async function probe() {
   }
 
   for (const theme of ['light', 'dark']) {
-    const matter = matterFrame().children[0].webContents
+    const matter = matterFrame().children.find(item => item.webContents).webContents
     await matter.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
     await waitFor(state, (value) => value.theme === theme, 'theme sync')
     await waitFor(() => chrome.executeJavaScript('document.documentElement.dataset.theme'), (value) => value === theme, 'shared theme')
+    await waitFor(() => desktop.executeJavaScript('document.documentElement.dataset.theme'), value => value === theme, 'frame theme')
+    await waitFor(() => desktop.executeJavaScript('document.getAnimations().filter(item => item.playState === "running").length'), value => value === 0, 'frame theme transition completes')
+    assert.equal(await desktop.executeJavaScript('document.querySelector("#matter-home")'), null)
+    fs.writeFileSync(path.join(temporary, `rail-top-${theme}.png`),
+      (await desktop.capturePage({ x: 0, y: MATTER_TOP_INSET, width: FRAME_RAIL_WIDTH, height: 64 })).toPNG())
     await waitFor(() => chrome.executeJavaScript('document.getAnimations().filter((item) => item.playState === "running").length'), (value) => value === 0, 'theme transition completes')
+    assert.equal(await chrome.executeJavaScript('getComputedStyle(document.querySelector(".desktop-chrome .panel")).backgroundColor'),
+      'rgba(0, 0, 0, 0)', 'panel backing preserves the navigation corners in both themes')
     const capture = await chrome.capturePage()
     assert.ok(!capture.isEmpty(), 'toolbar image has pixels')
     fs.writeFileSync(path.join(temporary, `chrome-${theme}.png`), capture.toPNG())
@@ -310,13 +614,42 @@ async function probe() {
       const input = document.querySelector('#address'); const style = getComputedStyle(input);
       return { height: input.getBoundingClientRect().height, border: style.borderColor, ring: style.boxShadow };
     })()`)
-    assert.equal(focused.height, 36)
+    assert.equal(focused.height, 34)
     assert.equal(focused.ring, 'none', 'public inputs keep their shadow-free appearance')
     assert.equal(focused.border, 'rgb(58, 131, 247)', 'public field focus border')
     fs.writeFileSync(path.join(temporary, `chrome-${theme}-focused.png`), (await chrome.capturePage()).toPNG())
     await chrome.executeJavaScript('document.querySelector("#address").blur()')
   }
   console.log('PASS: no inline address icon, transparent tab label states, 2px close padding, equal tab insets, navigation, round buttons, live resize cleanup, light/dark; previews:', temporary)
+  updateVersion = nextVersion
+  updateResponse = 0
+  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
+  await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'),
+    value => value.update.phase === 'downloading' && value.update.percent === 37, 'in-app download progress')
+  for (const theme of ['dark', 'light']) {
+    await desktop.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
+    const progress = await desktop.executeJavaScript(`(() => {
+      const button = document.querySelector('#check-update'), value = document.querySelector('#update-progress');
+      const bounds = button.getBoundingClientRect(), text = value.getBoundingClientRect();
+      return { disabled: button.disabled, label: button.title, percent: value.textContent,
+        value: value.getAttribute('aria-valuenow'), shown: !value.hidden && getComputedStyle(value).display !== 'none',
+        width: bounds.width, height: bounds.height, clipped: text.left < bounds.left || text.right > bounds.right,
+        icon: getComputedStyle(button.querySelector('.update-icon')).display,
+        available: getComputedStyle(button.querySelector('.available-icon')).display };
+    })()`)
+    assert.equal(progress.percent, '37%')
+    assert.equal(progress.value, '37')
+    assert.ok(progress.disabled && progress.shown && !progress.clipped, JSON.stringify(progress))
+    assert.equal(progress.width, 28); assert.equal(progress.height, 28)
+    assert.equal(progress.icon, 'none'); assert.equal(progress.available, 'none')
+    fs.writeFileSync(path.join(temporary, `update-progress-${theme}.png`),
+      (await desktop.capturePage({ x: 0, y: window.getContentSize()[1] - 100, width: 80, height: 100 })).toPNG())
+  }
+  assert.deepEqual(updateDownloads, [], 'in-app downloading never launches the browser')
+  finishUpdateDownload()
+  await waitFor(() => updateLifecycle.at(-1), value => value === 'install', 'verified install handoff')
+  assert.deepEqual(updateLifecycle, ['download', 'verify', 'stop', 'install'])
+  console.log('PASS in-app progress, disabled repeat clicks, light/dark sizing, native verification before child shutdown and install handoff')
   resizer.debugger.detach()
   chrome.debugger.detach()
 }

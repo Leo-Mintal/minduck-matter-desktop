@@ -9,6 +9,14 @@ This file stays aligned with `AGENTS.md`.
 - Fast-path keywords use the smallest safe scoped change.
 - Record unexpected command and integration failures in `.learnings/ERRORS.md`.
 
+## macOS Installation and Build Copies
+
+- Keep the installed application at `/Applications/Minduck Matter.app`; replace that same path and name when an installation is authorized. Quit the installed app before replacing it and preserve its user-data directory.
+- Do not create or retain rollback application backups, including `.app` copies or additional ZIP archives, unless the user explicitly requests them. After verifying the new installation artifact, replace the installed app directly; preserve its user data and normal release artifacts.
+- Use `pnpm dist:mac` and its temporary build directory. Manual signing or packaging workarounds must also clean up their temporary application bundles and detach their mounted DMGs after verification. Preserve required artifacts as DMG/ZIP, plus validation records.
+- If duplicate application entries remain, inspect native application resolution and unregister only the verified obsolete Minduck paths; preserve the installed app and avoid global LaunchServices resets.
+- Keep these rules synchronized with `AGENTS.md`; see `docs/macos-distribution.md` for the installation procedure.
+
 ## Global Default Addendum
 
 - This is Claude Code's project rules file; keep its behavior rules synchronized with the Codex-facing `AGENTS.md`, preserving existing constraints.

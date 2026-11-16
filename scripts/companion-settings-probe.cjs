@@ -13,11 +13,11 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
     await waitFor(() => evaluate('location.hash'), (hash) => hash === '#/pet', 'hidden route returns to habits')
   }
   await waitFor(() => evaluate('({hash:location.hash,scheme:document.documentElement.dataset.themeScheme})'),
-    (value) => value.hash === '#/pet' && value.scheme === 'coo-whale-claude', 'default habits and Claude scheme')
+    (value) => value.hash === '#/pet' && value.scheme === 'minduck-matter', 'default habits and Matter scheme')
   const theme = await evaluate('fetch("/api/theme").then(r=>r.json())')
-  assert.equal(theme.theme.selectedId, 'coo-whale-claude')
-  assert.match(theme.theme.custom.find((scheme) => scheme.id === 'coo-whale-claude').name, /DeepSeek 大肥鱼.*claude/i)
-  let expectedGlow = 0
+  assert.equal(theme.theme.selectedId, 'minduck-matter')
+  assert.equal(theme.theme.custom.find((scheme) => scheme.id === 'minduck-matter').name, 'Matter')
+  let expectedGlow = 0, expectedRoam = '多待机'
   const checkHabits = async () => {
     const state = await evaluate(`({nav:[...document.querySelectorAll('#companion-navigation a')].map(a=>a.textContent.trim()),
       mode:!!document.querySelector('.companion-mode'),
@@ -27,6 +27,8 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
       labels:[...document.querySelectorAll('.featureslot-pet .companion-label')].map(el=>el.textContent.trim()),
       visibleLabels:[...document.querySelectorAll('.featureslot-pet .companion-label')].filter(el=>el.checkVisibility()).map(el=>el.textContent.trim()),
       soundKinds:[...document.querySelector('.featureslot-pet .companion-checks').children].map(el=>el.textContent.trim()),
+      roamOptions:[...document.querySelector('.featureslot-pet .segwrap').querySelectorAll('button')].map(el=>el.textContent.trim()),
+      roam:document.querySelector('.featureslot-pet .segwrap .active')?.textContent.trim(),
       glow:Number(document.querySelector('[role="slider"][aria-label="外发光"]').getAttribute('aria-valuenow')),
       scheme:document.documentElement.dataset.themeScheme,
       overflow:document.documentElement.scrollWidth>innerWidth})`)
@@ -34,20 +36,22 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
     assert.equal(state.mode, false)
     assert.equal(state.sidebarChrome, 0, 'branding, footer actions and profile are omitted from the sidebar')
     assert.equal(state.titlebarRelease, 0, 'version, GitHub release links and separator are omitted from the titlebar')
-    assert.deepEqual(state.sections, ['显示', '音效'])
+    assert.deepEqual(state.sections, ['行为与互动', '显示', '音效'])
+    assert.deepEqual(state.roamOptions, ['多走动', '多待机', '不乱动'])
+    assert.equal(state.roam, expectedRoam)
     for (const label of ['使用统计', '声道', '语言', '字体尺寸', '气泡速度', 'Coo 的名字', '称呼', '呼噜时长']) {
       assert.ok(!state.labels.includes(label), `${label} is omitted from settings`)
     }
-    for (const label of ['大小', '气泡尺寸', '外发光', '帧率', '位置', '音效', '分类']) {
+    for (const label of ['走动', '大小', '气泡尺寸', '外发光', '帧率', '位置', '音效', '分类']) {
       assert.ok(state.visibleLabels.includes(label), `${label} remains visible`)
     }
     assert.deepEqual(state.soundKinds, ['动作', '互动', '表情', '打呼噜'])
     assert.equal(state.glow, expectedGlow)
-    assert.equal(state.scheme, 'coo-whale-claude')
+    assert.equal(state.scheme, 'minduck-matter')
     assert.equal(state.overflow, false)
   }
   await waitFor(() => evaluate('document.querySelectorAll(".featureslot-pet > .sheet").length'),
-    (count) => count === 2, 'habits sections ready')
+    (count) => count === 3, 'habits sections ready')
   const waitForGlow = () => waitFor(() => evaluate('document.querySelector(\'[role="slider"][aria-label="外发光"]\')?.getAttribute("aria-valuenow")'),
     value => value === String(expectedGlow), 'glow preferences have loaded')
   await waitForGlow()
@@ -55,7 +59,7 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
   await evaluate('localStorage.setItem("companion.mode","advanced");void 0')
   contents.reload()
   await waitFor(() => evaluate('document.querySelectorAll(".featureslot-pet > .sheet").length'),
-    (count) => count === 2, 'old advanced preference returns to compact settings')
+    (count) => count === 3, 'old advanced preference returns to compact settings')
   await waitForGlow()
   await checkHabits()
   for (const hidden of ['home', 'voice', 'prompts', 'usage', 'chat', 'world', 'extensions', 'providers', 'settings', 'page/world:desktop-pet']) {
@@ -72,17 +76,61 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
     }
   }
   try {
+    window.setContentSize(1040, 760)
+    fs.writeFileSync(path.join(directory, 'companion-settings-roaming-default.png'), (await contents.capturePage()).toPNG())
+    const configFile = path.join(data, 'home/companion/config.json')
+    const readPrefs = () => {
+      try { return JSON.parse(fs.readFileSync(configFile, 'utf8')).worlds['desktop-pet'] }
+      catch (error) { if (error.code === 'ENOENT') return {}; throw error }
+    }
+    assert.equal(readPrefs().roam, 'calm', 'fresh profiles default to more idle time')
+    await click('.featureslot-pet .segwrap button:nth-child(1)')
+    await waitFor(readPrefs, value => value.roam === 'free', 'walking choice saves through the real control')
+    expectedRoam = '多走动'
+    contents.reload()
+    await waitFor(() => evaluate('document.querySelector(".featureslot-pet .segwrap .active")?.textContent'),
+      value => value === expectedRoam, 'walking choice survives settings reload')
+    await waitForGlow()
+    await checkHabits()
+    await click('.featureslot-pet .segwrap button:nth-child(2)')
+    await waitFor(readPrefs, value => value.roam === 'calm', 'more idle time can be selected and saved')
+    await click('.featureslot-pet .segwrap button:nth-child(1)')
+    await waitFor(readPrefs, value => value.roam === 'free', 'explicit walking choice is retained for restart')
     window.setMinimumSize(375, 560)
     for (const width of [375, 768, 1024, 1440]) for (const appearance of ['light', 'dark']) {
       window.setContentSize(width, 760)
       await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: appearance }] })
+      await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
       await waitFor(() => evaluate('document.documentElement.dataset.colorMode'), (value) => value === appearance, 'theme follows system').catch(async error => {
         console.error('Settings appearance diagnostic:', { width, expected: appearance,
           actual: await evaluate('({mode:document.documentElement.dataset.colorMode,dark:matchMedia("(prefers-color-scheme: dark)").matches})') })
         throw error
       })
       await checkHabits()
+      await waitFor(() => evaluate(`[...document.querySelectorAll('.companion-control>.check>input,.companion-switchbox>.check>input')]
+        .every(el=>el.getAnimations().every(animation=>animation.playState!=='running'))`),
+        value => value, 'switch color transitions settle after appearance change')
+      const colors = await evaluate(`(()=>{
+        const background=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
+        const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        return {accent,body:background('body'),rail:background('#rail'),titlebar:background('.companion-titlebar'),
+          selected:getComputedStyle(document.querySelector('#rail .navitem.active .navicon')).color,
+          switches:[...document.querySelectorAll('.companion-control>.check>input:checked,.companion-switchbox>.check>input:checked')].map(el=>getComputedStyle(el).backgroundColor),
+          sliders:[...document.querySelectorAll('[role="slider"]')].map(el=>[el,...el.querySelectorAll('*')].map(node=>getComputedStyle(node).backgroundColor))};
+      })()`)
+      const accent = appearance === 'dark' ? '#ff9500' : '#ff9a2e'
+      const accentRGB = appearance === 'dark' ? 'rgb(255, 149, 0)' : 'rgb(255, 154, 46)'
+      const canvas = appearance === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(247, 247, 248)'
+      assert.equal(colors.accent, accent)
+      for (const area of ['body', 'rail', 'titlebar']) assert.equal(colors[area], canvas, `${area} ${appearance} background`)
+      assert.equal(colors.selected, accentRGB, 'selected navigation uses Matter accent')
+      assert.ok(colors.switches.length > 0)
+      assert.ok(colors.switches.every(color => color === accentRGB), 'checked switches use Matter accent')
+      assert.ok(colors.sliders.length >= 3)
+      assert.ok(colors.sliders.every(colors => colors.includes(accentRGB)), 'slider thumbs use Matter accent')
+      assert.equal(window.getBackgroundColor().slice(0, 7).toLowerCase(), appearance === 'dark' ? '#000000' : '#f7f7f8')
       if (width === 1024) {
+        await evaluate('for(let el=document.querySelector(".featureslot-pet");el;el=el.parentElement)el.scrollTop=0;window.scrollTo(0,0);new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
         fs.writeFileSync(path.join(directory, `companion-settings-${appearance}.png`), (await contents.capturePage()).toPNG())
         await evaluate('document.querySelector(".companion-checks").scrollIntoView({block:"center"})')
         await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
@@ -109,7 +157,7 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
     for (let step = 0; step < 12; step++) for (const type of ['keyDown', 'keyUp']) {
       await send('Input.dispatchKeyEvent', { type, key:'ArrowRight', code:'ArrowRight', windowsVirtualKeyCode:39 })
     }
-    const readBubble = () => JSON.parse(fs.readFileSync(path.join(data, 'home/companion/config.json'), 'utf8')).worlds['desktop-pet'].window.bubbleSize
+    const readBubble = () => readPrefs().window?.bubbleSize
     await waitFor(readBubble, value => value === 1.5, 'real slider saves and caps bubble size at 150%')
     const invalid = await evaluate(`fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({group:'world:desktop-pet',values:{'worlds.desktop-pet.window.bubbleSize':1.55}})}).then(r=>r.ok)`)
@@ -131,8 +179,6 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
     await waitFor(() => evaluate('document.querySelector(\'[role="slider"][aria-label="外发光"]\')?.getAttribute("aria-valuenow")'),
       value => value === '5', 'explicit glow remains configurable after reload')
     await checkHabits()
-    const configFile = path.join(data, 'home/companion/config.json')
-    const readPrefs = () => JSON.parse(fs.readFileSync(configFile, 'utf8')).worlds['desktop-pet']
     const previousMove = readPrefs().sounds.move ?? true
     await evaluate('document.querySelector(".companion-checks").scrollIntoView({block:"center"})')
     await click('.companion-checks input')
@@ -155,20 +201,35 @@ module.exports = async function probeSettings({ companion, data, waitFor }) {
     assert.ok(!figures.titles.some((title) => title === 'Coo' || title.includes('大肥鱼')))
     assert.equal(figures.theme, 'dark')
     fs.writeFileSync(path.join(directory, 'companion-settings-dress.png'), (await contents.capturePage()).toPNG())
-    await evaluate('fetch("/api/theme",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({selectedId:"navigator",mode:"light",custom:[]})}).then(r=>{if(!r.ok)throw Error("theme save failed")})')
-    await waitFor(() => evaluate('document.documentElement.dataset.themeScheme'), (value) => value === 'navigator', 'explicit palette remains selectable')
+    await evaluate('fetch("/api/theme",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({selectedId:"coo-whale-claude",mode:"dark",custom:[]})}).then(r=>{if(!r.ok)throw Error("legacy theme save failed")})')
   } finally {
     contents.debugger.detach()
   }
-  // Restart the actual Core to check that the default does not replace an explicit palette.
-  const port = companion.status().port
-  await evaluate('fetch("/api/run/restart",{method:"POST"}).then(r=>{if(!r.ok)throw Error("restart failed")})')
-  await waitFor(() => companion.status(), (value) => value.state !== 'running' || value.port !== port, 'Core begins restarting')
-  await waitFor(() => companion.status(), (value) => value.state === 'running', 'Core restarted')
-  await waitFor(() => evaluate('document.documentElement.dataset.themeScheme'), (value) => value === 'navigator', 'explicit palette survives Core restart')
+  const reloadSettings = async () => {
+    await waitFor(() => contents.isLoadingMainFrame(), loading => !loading, 'prior settings navigation finishes')
+    const loaded = new Promise(resolve => contents.once('did-finish-load', resolve))
+    contents.reload()
+    await loaded
+  }
+  const restartCore = async (scheme) => {
+    const port = companion.status().port
+    await evaluate('fetch("/api/run/restart",{method:"POST"}).then(r=>{if(!r.ok)throw Error("restart failed")})')
+    await waitFor(() => companion.status(), (value) => value.state !== 'running' || value.port !== port, 'Core begins restarting')
+    await waitFor(() => companion.status(), (value) => value.state === 'running', 'Core restarted')
+    await reloadSettings()
+    await waitFor(() => evaluate('document.documentElement.dataset.themeScheme'), (value) => value === scheme, 'palette after Core restart')
+  }
+  await restartCore('minduck-matter')
+  assert.equal((await evaluate('fetch("/api/theme").then(r=>r.json())')).theme.mode, 'dark', 'legacy migration retains appearance')
+  // Explicit independent palettes still survive, while the old automatic Claude scheme migrates.
+  await evaluate('fetch("/api/theme",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({selectedId:"navigator",mode:"light",custom:[]})}).then(r=>{if(!r.ok)throw Error("theme save failed")})')
+  await reloadSettings()
+  await waitFor(() => evaluate('document.documentElement.dataset.themeScheme'), (value) => value === 'navigator', 'explicit palette remains selectable')
+  await restartCore('navigator')
   const persisted = JSON.parse(fs.readFileSync(path.join(data, 'home/companion/theme.json'), 'utf8'))
   assert.equal(persisted.selectedId, 'navigator')
   assert.equal(JSON.parse(fs.readFileSync(path.join(data, 'home/companion/config.json'), 'utf8')).worlds['desktop-pet'].window.bubbleSize, 1.5)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(data, 'home/companion/config.json'), 'utf8')).worlds['desktop-pet'].roam, 'free')
   await waitFor(() => companion.panel('state'), (value) => value?.connected && value.skin.figure === 'minduck-duck', 'default duck reconnects')
-  console.log('PASS: bubble slider 100–150% and persistence; compact settings, Chinese field/category filtering, default-off and saved glow, retained sound changes preserve hidden values, 4 widths/light-dark, navigation and theme restart')
+  console.log('PASS: Matter accent on navigation/sliders/switches and black dark canvas/native chrome, legacy theme migration; walking choices/default calm/save/reload/restart; bubble slider 100–150% and persistence; compact settings, Chinese field/category filtering, default-off and saved glow, retained sound changes preserve hidden values, 4 widths/light-dark, navigation and explicit theme restart')
 }

@@ -276,34 +276,46 @@
       "reason": "Scale from top-left and constrain panel widths to fit the viewport at up to 150%."
     },
     {
-      "file": "node_modules/cortico-world-desktop-pet/host/content-window.cjs",
-      "upstreamSha256": null,
-      "integratedSha256": "078739fd1d0b6725031e4f4fa229b41d2f9dd1c452b1e5dfaef40bff0dd5824b",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
-    },
-    {
       "file": "node_modules/cortico-world-desktop-pet/host/electron-main.cjs",
       "upstreamSha256": "5b88cfd25e85a4a2be985a366db5bab6be38f260f5a6e540d513dc93278c6353",
-      "integratedSha256": "0e159a45d0bfc29401f7fd2728242af6b11392cbcff0f0bff5f8fc38cdafee88",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "e7ec018f73e8a0d0564407e550710800002cf186a71ce03fba2fb178010ce6bf",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/host/preload.cjs",
       "upstreamSha256": "57038ad911784af5d2f5073e6831691a59b6a8ff44afb39a2c6741576c4374f8",
-      "integratedSha256": "9d740f020e96283c94b1d4468d26aae043c3b464a98f3c4deec9b898ee6453e6",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "57038ad911784af5d2f5073e6831691a59b6a8ff44afb39a2c6741576c4374f8",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/host/overlay.cjs",
       "upstreamSha256": "fe2be2eda6bc758c3d4509bdac7f9db8a29f3f1b69c6adbaed6f1b8e781d7199",
-      "integratedSha256": "e4763f10a1ebeabd1ec1a4691bd760a6b0ad86b4a9f4f478fa1ebd5672ed1fb4",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "fe2be2eda6bc758c3d4509bdac7f9db8a29f3f1b69c6adbaed6f1b8e781d7199",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
-      "integratedSha256": "254e526c653e58a5e9367701123ffdbff1930db5df20592de8bd2061c4878bcb",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "de04e908b7d0dcead2ffa02cda9556207489d6b51128272b7b6431ef604bfbe2",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "104b1517e5a9020ba1e8114a56ad600aeefab9364a24487758e0ebf2f8c5383d",
+      "integratedSha256": "9ebc55c63a814459481abe28f6a680accdccb66ec0d9470047d244382b871560",
+      "reason": "Restore only the walking preference row in Habits, retaining the original segmented control and API. Simplified Chinese offers 多走动 / 多待机 / 不乱动; absent preferences select calm and explicit saved choices remain unchanged."
+    },
+    {
+      "file": "core/seed.ts",
+      "upstreamSha256": "d4c241f078621fea09c2d548e6e0916dd54f24ac6eaa13a42d54d4ffe3244d6c",
+      "integratedSha256": "b9f300e2a38d7ff92ff0cab5bf374be98158a24643f5d3b3c7a0822dbd7784bd",
+      "reason": "Explicitly seed calm (多待机) for fresh profiles. Existing saved walking preferences remain unchanged."
+    },
+    {
+      "file": "core/console-theme.ts",
+      "upstreamSha256": "e28db26be5abb0c0aa1ad1a813a4dde5a46905685870e4912d41ce6ba417ed36",
+      "integratedSha256": "e789d618b40ac077510794835066dce9e8cb16c5ae71ebf02cf8c3c81fdf5389",
+      "reason": "Use a dedicated Matter Web palette for the bundled ducks: dark accent #ff9500, light accent #ff9a2e and pure-black dark settings canvas/sidebar/titlebar. Migrate the former automatic Claude palette on startup, retain explicit independent palettes and saved appearance, and keep figure artwork unchanged."
     }
   ]
 }

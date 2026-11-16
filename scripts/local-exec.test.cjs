@@ -94,6 +94,50 @@ test('file edits require a prior matching read, unique context, and preserve lit
   assert.equal(revision('same'), revision('same'))
 })
 
+test('binary transfer reads bounded chunks, pins source revision and preserves source bytes', async t => {
+  const root = await temporary(t), filename = path.join(root, 'installer.deb')
+  const data = Buffer.alloc(700000)
+  for (let i = 0; i < data.length; i++) data[i] = i % 256
+  await fs.writeFile(filename, data)
+  const chunks = []
+  let version
+  for (let offset = 0; offset < data.length; offset += 262144) {
+    const result = operation({ action: 'transfer-read', filename, args: { offset, limit: 262144, ...(version ? { revision: version } : {}) } })
+    version = result.revision
+    assert.equal(result.filename, 'installer.deb')
+    assert.equal(result.size, data.length)
+    assert.equal(result.eof, offset + 262144 >= data.length)
+    chunks.push(Buffer.from(result.data, 'base64'))
+  }
+  assert.deepEqual(Buffer.concat(chunks), data)
+  assert.deepEqual(await fs.readFile(filename), data)
+  assert.throws(() => operation({ action: 'read', filename }), /二进制|256KB/)
+  for (const args of [{ offset: -1, limit: 1 }, { offset: 0, limit: 262145 }, { offset: data.length + 1, limit: 1 }, { offset: 1, limit: 1 }]) {
+    assert.throws(() => operation({ action: 'transfer-read', filename, args }))
+  }
+  await fs.writeFile(filename, Buffer.alloc(data.length, 1))
+  assert.throws(() => operation({ action: 'transfer-read', filename, args: { offset: 262144, limit: 262144, revision: version } }), /变化/)
+  const link = path.join(root, 'link'); await fs.symlink(filename, link)
+  assert.throws(() => operation({ action: 'transfer-read', filename: link, args: { offset: 0, limit: 1 } }))
+})
+
+test('binary transfer uses local authorization and never treats a chunk as a text edit', { skip: process.platform !== 'darwin' }, async t => {
+  const f = await controllerFixture(t)
+  const filename = path.join(f.root, 'installer.deb'), bytes = Buffer.from([0, 255, 2, 128])
+  await fs.writeFile(filename, bytes)
+  const result = await f.call('local_transfer_read', { path: filename, offset: 0, limit: 262144 })
+  assert.deepEqual(Buffer.from(result.data, 'base64'), bytes)
+  assert.equal(result.eof, true)
+  const secret = path.join(f.root, '.ssh'); await fs.mkdir(secret)
+  await fs.writeFile(path.join(secret, 'key'), bytes)
+  await assert.rejects(f.call('local_transfer_read', { path: path.join(secret, 'key'), offset: 0, limit: 1 }), /敏感/)
+  const cancelled = new AbortController(); cancelled.abort()
+  await assert.rejects(f.call('local_transfer_read', { path: filename, offset: 0, limit: 1 }, cancelled.signal), /取消/)
+  await f.controller.setEnabled(false)
+  await assert.rejects(f.call('local_transfer_read', { path: filename, offset: 0, limit: 1 }), /执行器|关闭/)
+  assert.deepEqual(await fs.readFile(filename), bytes)
+})
+
 test('pairing uses desktop kind, pins endpoint and encrypts token; revoke failures retain retry credential', async t => {
   const store = memoryStore(await temporary(t)), calls = []
   let failRevoke = false
@@ -223,57 +267,70 @@ async function controllerFixture(t, initiallyGranted = true, options = {}) {
     url: value => { url = value }, prompts: () => prompts, pairs: () => pairs, stops: () => stops, revoke: () => connectionOptions.onRevoked() }
 }
 
-test('missing FDA prevents pairing and execution even with old saved enabled flags', async t => {
+test('missing FDA does not block the executor or open global settings', async t => {
   const f = await controllerFixture(t, false)
-  f.store.update({ enabled: true, executionPolicy: EXECUTION_POLICY })
-  await f.controller.refresh()
-  assert.equal(f.pairs(), 0); assert.equal(f.controller.snapshot().enabled, false)
-  await assert.rejects(f.controller.setEnabled(true), /完全磁盘访问/)
-  await assert.rejects(f.call('local_shell', { command: 'touch never' }))
-  f.permission(true); await f.controller.refresh()
-  assert.equal(f.pairs(), 1); assert.equal(f.controller.snapshot().enabled, true)
+  assert.equal(f.pairs(), 0); assert.equal(f.controller.snapshot().enabled, true)
+  assert.equal(f.controller.snapshot().permissionRequired, false)
+  assert.equal(f.prompts(), 0)
+  await f.controller.setEnabled(true)
 })
 
-test('system permission automatically pairs; repeated refresh and version upgrade reuse encrypted identity', async t => {
+test('native permission cannot be invoked by stale accounts or cancelled calls', async t => {
+  let probes = 0
+  const f = await controllerFixture(t, false, { probeAccess: async () => { probes++ } })
+  const aborted = new AbortController(); aborted.abort()
+  await assert.rejects(f.call('local_request_permission', { path: '~/Documents' }, aborted.signal), /取消/)
+  f.token('u2')
+  await assert.rejects(f.call('local_request_permission', { path: '~/Documents' }), /账号/)
+  assert.equal(probes, 0)
+})
+
+test('native executor readiness and restart never register a device', async t => {
   const f = await controllerFixture(t)
-  assert.equal(f.controller.snapshot().enabled, true); assert.equal(f.pairs(), 1); assert.equal(f.prompts(), 0)
+  assert.equal(f.controller.snapshot().enabled, true); assert.equal(f.pairs(), 0)
   await f.controller.refresh(); await f.controller.refresh()
-  assert.equal(f.pairs(), 1)
-  const previous = f.store.get().pairing
   f.controller.dispose()
   const restarted = await controllerFixture(t, true, { store: f.store })
-  assert.equal(restarted.pairs(), 0); assert.deepEqual(restarted.store.get().pairing, previous)
-  assert.equal(JSON.stringify(restarted.controller.snapshot()).includes('encryptedToken'), false)
+  assert.equal(restarted.pairs(), 0); assert.equal(restarted.controller.snapshot().enabled, true)
 })
 
-test('revocation stops transport and blocks execution; regrant reconnects without pairing again', async t => {
+test('resource permission does not control the global executor and explicit disable remains effective', async t => {
   const f = await controllerFixture(t)
-  f.permission(false)
-  await assert.rejects(f.call('local_shell', { command: 'touch never' }))
-  await f.controller.refresh()
-  assert.equal(f.controller.snapshot().enabled, false); assert.equal(f.stops(), 1)
-  f.permission(true); await f.controller.refresh()
-  assert.equal(f.controller.snapshot().enabled, true); assert.equal(f.pairs(), 1)
-  f.revoke(); await f.controller.refresh()
-  assert.equal(f.controller.snapshot().enabled, false); assert.equal(f.pairs(), 1, 'server revocation is not silently repaired in this session')
+  f.permission(false); await f.controller.refresh()
+  assert.equal(f.controller.snapshot().enabled, true)
+  assert.equal(f.controller.snapshot().permissionRequired, false)
+  await f.controller.setEnabled(false); await f.controller.refresh()
+  assert.equal(f.controller.snapshot().enabled, false)
 })
 
-test('account or origin changes invalidate old execution and pair only the current Matter account', async t => {
+test('account or origin changes invalidate previous local execution context', async t => {
   const f = await controllerFixture(t)
   f.token('u2')
   await assert.rejects(f.call('local_shell', { command: 'touch never' }))
   await f.controller.refresh()
-  assert.equal(f.store.get().pairing.account, 'u2'); assert.equal(f.pairs(), 2)
+  assert.equal(f.pairs(), 0)
   f.url('https://untrusted.test/c/conv1'); await f.controller.refresh()
   assert.equal(f.controller.snapshot().enabled, false)
   await assert.rejects(f.call('local_read_file', { path: 'hello.txt' }))
 })
 
-test('failed automatic pairing backs off and cannot enable execution', async t => {
+test('local controller makes no registration or pairing HTTP calls', async t => {
   let requests = 0
-  const f = await controllerFixture(t, true, { fetchImpl: async () => { requests++; throw Error('offline') } })
+  const f = await controllerFixture(t, true, { fetchImpl: async () => { requests++; throw Error('unexpected HTTP') } })
   await f.controller.refresh(); await f.controller.refresh()
-  assert.equal(requests, 1); assert.equal(f.controller.snapshot().enabled, false)
+  assert.equal(requests, 0); assert.equal(f.controller.snapshot().enabled, true)
+})
+
+test('refresh and explicit retry never invoke retired pairing endpoints', async t => {
+  let requests = 0
+  const f = await controllerFixture(t, true, { fetchImpl: async () => {
+    requests++
+    throw new Error('retired pairing endpoint must not be called')
+  } })
+  await f.controller.refresh()
+  await f.controller.retry()
+  assert.equal(requests, 0)
+  assert.equal(f.controller.snapshot().state, '在线')
 })
 
 test('automatic workspace writes and Shell preserve file conflicts and cancellation', { skip: process.platform !== 'darwin' }, async t => {
@@ -281,7 +338,7 @@ test('automatic workspace writes and Shell preserve file conflicts and cancellat
   const write = await f.call('local_write_file', { path: 'hello.txt', content: 'hello' })
   assert.ok(write.diff.includes('+hello'))
   assert.equal((await f.call('local_shell', { command: 'cat hello.txt' })).stdout, 'hello')
-  const workspace = path.join(f.store.get().root, f.store.get().workspaces.conv1)
+  const workspace = f.root
   await fs.writeFile(path.join(workspace, 'hello.txt'), 'external change')
   await assert.rejects(f.call('local_write_file', { path: 'hello.txt', content: 'stale overwrite' }))
   await f.call('local_read_file', { path: 'hello.txt' })
@@ -292,7 +349,7 @@ test('automatic workspace writes and Shell preserve file conflicts and cancellat
   await assert.rejects(f.call('local_shell', { command: 'touch never' }))
 })
 
-test('FDA mode accesses external projects and standard folders without a picker or per-folder consent', { skip: process.platform !== 'darwin' }, async t => {
+test('native mode accesses ordinary projects and system-authorized standard folders without a picker', { skip: process.platform !== 'darwin' }, async t => {
   const f = await controllerFixture(t)
   for (const folder of ['project', 'Desktop', 'Documents', 'Downloads']) {
     const directory = path.join(f.root, folder); await fs.mkdir(directory)

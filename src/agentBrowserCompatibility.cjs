@@ -1,4 +1,5 @@
 const { AgentCursorOverlay } = require('./agentCursorOverlay.cjs')
+const { browserInputParams } = require('./browserViewport.cjs')
 
 const TAB_GROUP_ID_NONE = -1
 // webContents.debugger is browser-wide: Target.* reaches every page and session, including Matter.
@@ -400,7 +401,7 @@ class AgentBrowserCompatibility {
     if (method === 'Page.captureScreenshot') {
       return cursor.withHidden(() => webContents.debugger.sendCommand(method, commandParams))
     }
-    return webContents.debugger.sendCommand(method, commandParams)
+    return webContents.debugger.sendCommand(method, browserInputParams(webContents, method, commandParams))
   }
 }
 

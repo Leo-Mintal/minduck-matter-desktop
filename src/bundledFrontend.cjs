@@ -40,7 +40,7 @@ function createBundledFrontendHandler({ root, origin, fetchImpl, logger = consol
     if (url.origin !== matterOrigin || isBackendPath(url.pathname)) {
       // Keep POST bodies, auth headers, uploads and SSE streams unchanged.
       if (backendHeaders) {
-        const headers = backendHeaders(Object.fromEntries(request.headers), request.url)
+        const headers = backendHeaders(Object.fromEntries(request.headers), request.url, request.referrer)
         request = new Request(request, { headers })
       }
       return fetchImpl(request, { bypassCustomProtocolHandlers: true })

@@ -16,12 +16,12 @@ const http = require('node:http')
 const assert = require('node:assert/strict')
 const { WebSocketServer } = require('../vendor/coopanion/runtime/node_modules/ws')
 const { createController } = require('../src/local-exec/controller.cjs')
-const { createPermissionPrompt } = require('../src/fullDiskAccess.cjs')
+const { createClientRuntime } = require('../src/client-runtime.cjs')
 const { createBundledFrontendHandler } = require('../src/bundledFrontend.cjs')
 const { canonical } = require('../src/local-exec/workspace.cjs')
 
 app.setPath('userData', path.join(process.argv[2], 'profile'))
-let root, window, controller, server, wsServer
+let root, window, controller, runtime, server, wsServer
 const pending = new Map()
 const networkRequests = []
 let sequence = 0
@@ -45,60 +45,56 @@ app.whenReady().then(async () => {
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
-  wsServer = new WebSocketServer({ server, path: '/api/extensions/device-link/ws' })
+  wsServer = new WebSocketServer({ server, path: '/api/client-runtime/ws' })
   let socket
   wsServer.on('connection', ws => {
     socket = ws
     ws.on('message', raw => {
       const value = JSON.parse(raw)
       if (value.type === 'auth') {
-        ws.send(JSON.stringify({ type: 'auth_ok', device_id: 'smoke-desktop' }))
-        ws.send(JSON.stringify({ jsonrpc: '2.0', id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18' } }))
+        ws.send(JSON.stringify({ type: 'auth_ok', runtime_id: value.runtime_id }))
+        ws.send(JSON.stringify({ jsonrpc: '2.0', id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: { localPermissions: { version: 1, mode: 'macos-native' } } } }))
       } else if (value.id === 'init') {
-        assert.equal(value.result.capabilities.localExec.sandbox, 'seatbelt')
-        ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))
+        assert.equal(value.result.capabilities.clientRuntime.version, 1)
+        ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })); ws.send(JSON.stringify({type:'runtime_ready',runtime_context:'smoke-runtime-proof'}))
       } else if (value.id) {
         pending.get(value.id)?.(value); pending.delete(value.id)
       }
     })
   })
-  function call(name, args) {
+  function call(name, args, run = 'smoke-run') {
     const id = 'smoke-' + ++sequence
     const result = new Promise(resolve => pending.set(id, resolve))
     socket.send(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args,
-      _matter: { conversation_id: 'smoke-conv', conversation_title: '本机执行测试' } } }))
+      _matter: { conversation_id: 'smoke-conv', conversation_title: '本机执行测试', run_id: run } } }))
     return result
   }
   window = new BrowserWindow({ show: false, width: 1000, height: 760, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } })
-  let stored = { root: path.join(root, 'Matter'), enabled: false, grants: {}, workspaces: {}, pairing: {
-    account: 'smoke-user', origin, deviceId: 'smoke-desktop', encryptedToken: Buffer.from('test-secret').toString('base64'), wsURL: origin.replace('http:', 'ws:') + '/api/extensions/device-link/ws',
-  } }
+  let stored = { root: path.join(root, 'Matter'), enabled: false, grants: {}, workspaces: {} }
   const store = { get: () => stored, update: patch => (stored = { ...stored, ...patch }) }
   const external = path.join(root, 'External'); await fs.mkdir(external)
   let granted = true, prompts = 0
   const home = path.join(root, 'test-home'), documents = path.join(home, 'Documents')
   await fs.mkdir(documents, { recursive: true })
-  const requestPermission = createPermissionPrompt({ check: () => granted, getWindow: () => window,
-    dialog: { showMessageBox: async () => { prompts++; return { response: 1 } } },
-    shell: { openExternal: async () => assert.fail('must not open real system settings') } })
   controller = createController({ app, safeStorage: { isEncryptionAvailable: () => true, decryptString: value => value.toString() },
     fetchImpl: net.fetch.bind(net), origin, getContents: () => window.webContents, store, home,
-    checkPermission: () => granted, onPermissionNeeded: requestPermission })
-  await requestPermission()
+    checkPermission: () => assert.fail('FDA must not be queried'),
+    probeAccess: async () => { prompts++; if (!granted) throw Object.assign(new Error('native access denied'), { code: 'EPERM' }) } })
+  runtime = createClientRuntime({app,origin,localExec:controller,getContents:()=>window.webContents,fetchImpl:net.fetch.bind(net),bridgePort:19476, toolkit:{schemas:[],release(){},execute:async()=>({content:[]})}})
   window.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const own = details.webContentsId == null || details.webContentsId === window.webContents.id || details.webContentsId === -1
     if (details.url.endsWith('/api/echo')) networkRequests.push({ webContentsId: details.webContentsId, resourceType: details.resourceType, own })
-    callback({ requestHeaders: controller.headers(details.requestHeaders, own ? details.url : 'https://invalid.local/') })
+    callback({ requestHeaders: runtime.headers(details.requestHeaders, own ? details.url : 'https://invalid.local/') })
   })
-  protocol.handle('http', createBundledFrontendHandler({ root: path.join(root, 'web'), origin, fetchImpl: net.fetch.bind(net), backendHeaders: (headers, url) => controller.headers(headers, url) }))
+  protocol.handle('http', createBundledFrontendHandler({ root: path.join(root, 'web'), origin, fetchImpl: net.fetch.bind(net), backendHeaders: (headers, url) => runtime.headers(headers, url) }))
   await window.loadURL(origin + '/c/smoke-conv')
   await window.webContents.executeJavaScript(`localStorage.setItem('matter.token',${JSON.stringify(token)})`)
   await controller.refresh(); assert.equal(prompts, 0); assert.equal(controller.snapshot().enabled, true)
-  await until(() => controller.snapshot().state === '在线')
+  await runtime.refresh(); await until(() => runtime.snapshot().available)
   const request = await window.webContents.executeJavaScript(`fetch('/api/echo',{method:'POST',body:'native payload',headers:{Authorization:'Bearer '+localStorage.getItem('matter.token'),'X-Matter-Desktop':'spoof'}}).then(r=>r.json())`)
-  assert.equal(request.headers['x-matter-desktop'], 'smoke-desktop', JSON.stringify(networkRequests))
+  assert.equal(request.headers['x-matter-runtime'], 'smoke-runtime-proof', JSON.stringify(networkRequests)); assert.equal(request.headers['x-matter-desktop'], undefined)
   assert.equal(request.body, 'native payload')
-  const workspace = path.join(stored.root, stored.workspaces['smoke-conv'] || '本机执行测试-smoke-conv')
+  const workspace = home
   const write = await call('local_write_file', { path: 'hello.txt', content: 'hello from Electron\n' })
   assert.equal(write.result.isError, false)
   assert.ok(JSON.parse(write.result.content[0].text).diff.includes('+hello from Electron'))
@@ -117,7 +113,7 @@ app.whenReady().then(async () => {
   const blocked = await call('local_shell', { command: 'cat ' + JSON.stringify(path.join(secret, 'key')) })
   const denied = JSON.parse(blocked.result.content[0].text)
   assert.equal(denied.sandbox_denied, true)
-  assert.ok(denied.permission_hint.includes('完全磁盘访问'))
+  assert.ok(denied.permission_hint.includes('系统权限'))
   assert.deepEqual(denied.allowed_directories, [workspace, '/'])
   // Disposable home and injected grant avoid changing the user's real TCC permissions.
   const standard = await call('local_shell', { cwd: documents, command: 'printf system-folder-ok' })
@@ -133,22 +129,34 @@ app.whenReady().then(async () => {
   assert.equal(JSON.parse((await call('local_shell', { command, needs_network: true })).result.content[0].text).exit_code, 0)
   assert.equal(BrowserWindow.getAllWindows().length, 1, 'no local execution settings window')
   assert.equal(await window.webContents.executeJavaScript('typeof window.localSettings'), 'undefined')
-  void call('local_shell', { command: 'touch started; sleep 10; touch should-not-exist' })
+  const interrupted = call('local_shell', { command: 'touch started; sleep 10; touch should-not-exist' })
   await until(() => fs.stat(path.join(workspace, 'started')).then(() => true, () => false))
-  granted = false; await controller.refresh()
-  assert.equal(controller.snapshot().enabled, false); assert.equal(prompts, 1)
-  await controller.refresh(); assert.equal(prompts, 1, 'missing permission is prompted only once in this launch')
-  await assert.rejects(controller.execute({ name: 'local_shell', arguments: { command: 'touch never' }, _matter: { conversation_id: 'smoke-conv' } }))
-  granted = true; await controller.refresh()
-  await until(() => controller.snapshot().state === '在线')
+  await controller.setEnabled(false); await controller.refresh()
+  assert.equal(controller.snapshot().enabled, false)
+  assert.equal((await interrupted).result.isError, true)
+  await assert.rejects(controller.execute({ name: 'local_shell', arguments: { command: 'touch never' }, _matter: { conversation_id: 'smoke-conv', conversation_title: '' } }))
+  await controller.setEnabled(true)
+  granted = false
+  const before = prompts
+  const permission = JSON.parse((await call('local_request_permission', { path: documents })).result.content[0].text)
+  assert.equal(permission.status, 'os_access_denied'); assert.equal(permission.denied, true)
+  assert.equal(permission.command_executed, false); assert.equal(prompts, before + 1)
+  const repeated = JSON.parse((await call('local_request_permission', { path: documents })).result.content[0].text)
+  assert.equal(repeated.status, 'os_access_denied'); assert.equal(prompts, before + 1)
+  assert.equal(controller.snapshot().enabled, true); assert.equal(controller.snapshot().permissionRequired, false)
+  const unaffected = await call('local_shell', { command: 'printf workspace-still-ready' })
+  assert.equal(JSON.parse(unaffected.result.content[0].text).stdout, 'workspace-still-ready')
+  granted = true
+  const continued = JSON.parse((await call('local_request_permission', { path: documents }, 'user-continue')).result.content[0].text)
+  assert.equal(continued.status, 'granted'); assert.equal(continued.command_executed, false)
   const cancelled = await call('local_shell', { command: 'test ! -f should-not-exist && printf cancelled' })
   assert.equal(JSON.parse(cancelled.result.content[0].text).stdout, 'cancelled')
   await controller.setEnabled(false)
   const disabled = await window.webContents.executeJavaScript(`fetch('/api/echo',{headers:{Authorization:'Bearer '+localStorage.getItem('matter.token'),'X-Matter-Desktop':'spoof'}}).then(r=>r.json())`)
   assert.equal(disabled.headers['x-matter-desktop'], undefined)
-  console.log('PASS native permission prompt once, automatic execution, external/standard folders without pickers, protected credentials, network declaration, cancellation on revocation, regrant and protocol headers; no settings window or renderer IPC')
+  console.log('PASS native permission protocol, no FDA prerequisite, real Electron Shell/file worker, target denial stops before execution, unrelated workspace remains ready, explicit continuation, protected credentials, network restrictions and cancellation; permission decisions injected without changing real TCC')
 }).catch(error => { console.error(error); process.exitCode = 1 }).finally(async () => {
-  clearTimeout(watchdog); controller?.dispose()
+  clearTimeout(watchdog); runtime?.dispose(); controller?.dispose()
   for (const client of wsServer?.clients || []) client.terminate()
   await new Promise(resolve => wsServer ? wsServer.close(resolve) : resolve())
   await new Promise(resolve => server ? server.close(resolve) : resolve())

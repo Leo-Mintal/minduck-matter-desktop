@@ -1,0 +1,31 @@
+/* Native host decoration; the shared Web components still own browser controls. */
+:root { --desktop-frame: #202222; --desktop-tab: #303232; --desktop-control: #242626; --desktop-line: #ffffff0d; }
+:root[data-theme='light'] { --desktop-frame: #e7e7e9; }
+:root[data-theme='light'] { --desktop-tab: #fafafa; --desktop-control: #eeeeef; --desktop-line: #0000000d; }
+:root[data-surface='chrome'] .desktop-chrome .panel { border: 0; background: transparent; }
+.desktop-chrome .pn-top { height: 36px; min-height: 36px; padding: 4px 4px 4px 8px; gap: 8px; border-bottom: 0; background: var(--desktop-frame); -webkit-app-region: drag; }
+.desktop-chrome .pn-acts { flex: 1; margin-left: 0; align-items: center; gap: 8px; }
+.desktop-chrome .pn-acts > .b { width: 28px; height: 28px; border-radius: 8px; background: #ffffff08; }
+.desktop-chrome .pn-acts > .b:hover { background: #ffffff14; }
+.desktop-chrome .pn-acts > .b:active { background: #ffffff1c; }
+:root[data-theme='light'] .desktop-chrome .pn-acts > .b { background: #00000006; }
+:root[data-theme='light'] .desktop-chrome .pn-acts > .b:hover { background: #00000010; }
+:root[data-theme='light'] .desktop-chrome .pn-acts > .b:active { background: #00000011; }
+.desktop-chrome .pn-acts .pn-icon { width: 16px; height: 16px; }
+.desktop-chrome .pn-acts .b.pn-ib-close { margin-left: auto; }
+.desktop-chrome .pn-ib-close .pn-icon { display: none; }
+.desktop-chrome .pn-ib-close::before { content: ''; width: 16px; height: 16px; background: currentColor; mask: var(--desktop-sidebar-icon) center / contain no-repeat; transform: scaleX(-1); }
+.desktop-opener { display: none; }
+.desktop-chrome .pn-top > .desktop-tabs { flex: 0 1 auto; width: max-content; max-width: calc(100% - 80px); }
+.desktop-chrome .desktop-tab-list { gap: 4px; }
+.desktop-chrome .desktop-tab { width: 184px; height: 28px; border: 1px solid transparent; border-radius: 8px; padding-inline: 10px; }
+.desktop-chrome .desktop-tab.is-active { background: var(--desktop-tab); border-color: var(--desktop-line); }
+.desktop-chrome .desktop-tab-select.b { flex: 1; height: 26px; min-height: 26px; max-width: 220px; font-weight: 400; }
+.desktop-chrome .desktop-navigation { height: 48px; padding: 7px 8px; gap: 6px; border: 0; border-radius: 0 12px 0 0; background: var(--canvas); }
+.desktop-chrome .desktop-navigation > .b { --icon-button-size: 32px; width: 32px; height: 32px; }
+.desktop-chrome .desktop-navigation > .b:nth-child(-n+3) { background: var(--desktop-control); margin-right: -6px; border-radius: 0; }
+.desktop-chrome .desktop-navigation > .b:first-child { border-radius: 18px 0 0 18px; }
+.desktop-chrome .desktop-navigation > .b:nth-child(3) { border-radius: 0 18px 18px 0; margin-right: 2px; }
+.desktop-chrome .desktop-address .field-control { height: 34px; min-height: 34px; background: var(--desktop-control); border-color: var(--desktop-line); }
+.desktop-chrome .desktop-address .field-control:focus { border-color: #3a83f7; }
+.desktop-chrome .pn-body { scrollbar-gutter: auto; }
