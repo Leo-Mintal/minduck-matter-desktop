@@ -1,5 +1,12 @@
 node_modules/
 build/desktop-access/
+/build/browser-context-20261117/
+/build/desktop-source-push-20261117/
+/build/rail-20261116/
+/build/shell-test-comparison-20261117/
+/build/suit-duck-20261116/
+/build/update-green-20261117/
+/build/companion-*.png
 release/
 web-dist/
 .web-dist-*/

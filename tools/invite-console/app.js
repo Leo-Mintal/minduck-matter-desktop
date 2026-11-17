@@ -12,7 +12,7 @@
   const state = {
     items: [], current: null, filter: 'current', query: '', busy: false,
     loading: false, ready: false, revoking: null, editing: null, listError: false,
-    nextCursor: '',
+    nextCursor: '', authenticated: false,
   };
   const dateFormat = new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -23,6 +23,81 @@
   let listGeneration = 0;
   let searchTimer;
   let noteReturnFocus;
+
+  function showPassword(message = '') {
+    ++listGeneration;
+    clearTimeout(searchTimer);
+    state.authenticated = false;
+    state.items = [];
+    state.query = '';
+    $('search-input').value = '';
+    state.current = null;
+    state.ready = false;
+    state.loading = false;
+    state.nextCursor = '';
+    state.revoking = null;
+    state.editing = null;
+    $('revoke-dialog').close();
+    $('note-dialog').close();
+    $('revoke-code').textContent = '';
+    $('note-code').textContent = '';
+    $('note-input').value = '';
+    document.querySelectorAll('textarea[data-invite-copy]').forEach((field) => field.remove());
+    $('operation-message').textContent = '';
+    $('toast').hidden = true;
+    $('console-content').hidden = true;
+    $('logout-button').hidden = true;
+    $('password-gate').hidden = false;
+    $('password-error').textContent = message;
+    $('password-error').hidden = !message;
+    $('login-button').disabled = false;
+    $('login-button').textContent = '进入';
+    displayCode();
+    renderCaption();
+    renderHistory();
+    $('admin-password').focus();
+  }
+
+  function handleUnauthorized(error) {
+    if (error.status !== 401) return false;
+    showPassword('登录已过期，请重新输入管理员密码。');
+    return true;
+  }
+
+  async function enterConsole() {
+    state.authenticated = true;
+    $('password-gate').hidden = true;
+    $('console-content').hidden = false;
+    $('logout-button').hidden = config.mode === 'demo';
+    await refreshHistory();
+  }
+
+  $('password-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if ($('login-button').disabled) return;
+    $('login-button').disabled = true;
+    $('login-button').textContent = '正在验证…';
+    $('password-error').hidden = true;
+    try {
+      await adapter.login($('admin-password').value);
+      $('admin-password').value = '';
+      await enterConsole();
+    } catch (error) {
+      $('admin-password').value = '';
+      showPassword(error.status === 401 ? '管理员密码错误，请重试。' : error.message);
+    } finally {
+      $('login-button').disabled = false;
+      $('login-button').textContent = '进入';
+    }
+  });
+
+  $('logout-button').addEventListener('click', async () => {
+    if (state.busy || state.loading || $('logout-button').disabled) return;
+    $('logout-button').disabled = true;
+    try { await adapter.logout(); showPassword(); }
+    catch (error) { if (!handleUnauthorized(error)) notify(error.message); }
+    finally { $('logout-button').disabled = false; }
+  });
 
   function updateThemeButton() {
     const next = document.documentElement.dataset.theme === 'dark' ? '浅色' : '深色';
@@ -46,7 +121,8 @@
   }
 
   function updateControls() {
-    const locked = state.busy || state.loading || !state.ready;
+    const locked = state.busy || state.loading || !state.ready || !state.authenticated;
+    $('logout-button').disabled = state.busy || state.loading;
     $('generate-button').disabled = locked;
     $('copy-button').disabled = locked || state.current?.status !== 'active';
     $('refresh-button').disabled = state.busy || state.loading;
@@ -218,7 +294,7 @@
   }
 
   async function refreshHistory(append = false) {
-    if (!adapter || state.busy) return;
+    if (!adapter || state.busy || !state.authenticated) return;
     const generation = ++listGeneration;
     state.loading = true;
     state.listError = false;
@@ -241,6 +317,7 @@
       }
     } catch (error) {
       if (generation !== listGeneration) return;
+      if (handleUnauthorized(error)) return;
       state.listError = true;
       $('history-error').textContent = error.message;
       $('history-error').hidden = false;
@@ -268,6 +345,7 @@
       $('search-input').value = '';
       issued = true;
     } catch (error) {
+      if (handleUnauthorized(error)) return;
       displayCode(state.current?.code);
       $('operation-message').textContent = `${error.message}${issuer.hasPending() ? ' 请重试本次摇码。' : ''}`;
     } finally {
@@ -287,6 +365,7 @@
       // A selectable fallback also works on file:// and when clipboard permission is denied.
       const field = document.createElement('textarea');
       field.value = code;
+      field.dataset.inviteCopy = '';
       field.setAttribute('aria-label', '选中并复制邀请码');
       field.style.cssText = 'position:fixed;left:16px;bottom:16px;width:160px;z-index:20';
       document.body.append(field);
@@ -349,6 +428,7 @@
       notify(activation ? '设备激活资格已过期' : '邀请码已作废');
       renderCaption();
     } catch (error) {
+      if (handleUnauthorized(error)) return;
       $('revoke-error').textContent = error.message;
       $('revoke-error').hidden = false;
     } finally {
@@ -356,7 +436,7 @@
       ['confirm-revoke', 'cancel-revoke', 'close-dialog'].forEach((id) => { $(id).disabled = false; });
       $('confirm-revoke').textContent = activation ? '吊销' : '作废';
       renderHistory();
-      if (!$('revoke-dialog').open) $('generate-button').focus();
+      if (state.authenticated && !$('revoke-dialog').open) $('generate-button').focus();
     }
     if (changed) await refreshHistory();
   }
@@ -399,6 +479,7 @@
       saved = true;
       notify(note ? '备注已保存' : '备注已清空');
     } catch (error) {
+      if (handleUnauthorized(error)) return;
       $('note-error').textContent = error.message;
       $('note-error').hidden = false;
     } finally {
@@ -410,7 +491,7 @@
       if (saved) {
         state.editing = null;
         Array.from(document.querySelectorAll('button[data-action="note"]')).find((button) => button.dataset.id === target.id)?.focus();
-      } else $('note-input').focus();
+      } else if (state.authenticated) $('note-input').focus();
     }
   }
 
@@ -468,10 +549,13 @@
     issuer = core.createIssuer({
       adapter, storage: sessionStorage, pendingKey: `matter:invite-console:${config.mode}:pending:v1`,
     });
-    refreshHistory();
+    if (isDemo) void enterConsole();
+    else adapter.session().then(enterConsole).catch((error) => {
+      showPassword(error.status === 401 ? '' : error.message);
+    });
   } catch (error) {
-    $('operation-message').textContent = error.message;
-    $('generate-label').textContent = '暂时无法摇码';
-    $('refresh-button').disabled = true;
+    showPassword(error.message);
+    $('login-button').disabled = true;
+    $('login-button').textContent = '暂时无法连接';
   }
 })();

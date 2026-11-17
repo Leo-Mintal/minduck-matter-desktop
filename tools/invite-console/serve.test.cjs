@@ -86,3 +86,23 @@ test('local proxy rejects non-loopback targets and reports unavailable upstream'
   assert.equal((await fetch(`${origin}/api/desktop-access/invites`)).status, 502);
   assert.match(await (await fetch(`${origin}/internal/invites/config.js`)).text(), /mode: 'api'/);
 });
+
+
+test('session proxy preserves browser Host, cookies, CSRF header and logout method', async (t) => {
+  const api = await listen(t, http.createServer((req, res) => {
+    assert.equal(req.headers.host, new URL(req.headers.origin).host);
+    assert.equal(req.headers['x-invite-console'], '1');
+    assert.equal(req.headers.cookie, 'matter_invite_admin=test-session');
+    assert.equal(req.method, 'DELETE');
+    res.writeHead(200, { 'Content-Type': 'application/json',
+      'Set-Cookie': 'matter_invite_admin=; Path=/api/desktop-access/invites; HttpOnly; SameSite=Strict; Max-Age=0' });
+    res.end(JSON.stringify({ authenticated: false }));
+  }));
+  const origin = await listen(t, createInviteServer({ apiOrigin: api }));
+  const result = await fetch(`${origin}/api/desktop-access/invites/session`, {
+    method: 'DELETE', headers: { Origin: origin, 'X-Invite-Console': '1', Cookie: 'matter_invite_admin=test-session' },
+  });
+  assert.equal(result.status, 200);
+  assert.match(result.headers.get('set-cookie'), /HttpOnly/);
+  assert.deepEqual(await result.json(), { authenticated: false });
+});

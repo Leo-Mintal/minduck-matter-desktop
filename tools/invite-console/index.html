@@ -26,6 +26,7 @@
     <header class="page-header">
       <h1>邀请码</h1>
       <div class="header-actions">
+        <button class="b b-tertiary b-pill" id="logout-button" type="button" hidden>退出</button>
         <span class="mode-badge" id="mode-badge"><span class="status-dot"></span>演示 · 不可激活</span>
         <button class="b b-icon theme-toggle" id="theme-toggle" type="button" aria-label="切换为浅色模式" title="切换为浅色模式">
           <svg class="icon sun" aria-hidden="true"><use href="#icon-sun"/></svg>
@@ -34,6 +35,15 @@
       </div>
     </header>
 
+      <section class="password-gate" id="password-gate" aria-labelledby="password-title">
+        <form id="password-form">
+          <h2 id="password-title">管理员密码</h2>
+          <label class="field-control-wrap input input--square"><span class="sr-only">管理员密码</span><input class="field-control input-control" id="admin-password" type="password" autocomplete="current-password" placeholder="输入管理员密码" required /></label>
+          <p class="dialog-error" id="password-error" role="alert" hidden></p>
+          <button class="b b-contrast b-pill b-lg" id="login-button" type="submit" disabled>正在连接…</button>
+        </form>
+      </section>
+      <div id="console-content" hidden>
         <section class="generator" aria-labelledby="generator-title">
           <h2 id="generator-title" class="sr-only">摇码</h2>
           <div class="reels-area" id="reels-area" aria-hidden="true">
@@ -80,6 +90,7 @@
         </div>
         <div class="history-pagination"><button class="b b-tertiary b-pill b-lg" id="load-more" type="button" hidden>加载更多</button></div>
       </section>
+      </div>
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

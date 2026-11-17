@@ -113,3 +113,21 @@ For a future authorized icon correction, inspect actual corner colors and source
 - Source: conversation
 - Related Files: `build/sidebar-logo.svg`, `build/AppIcon.icon/icon.json`, `scripts/build-icon.sh`
 - Tags: macos, icon-composer, embedded-raster
+
+## [LRN-20261117-INVITE-DIRECT-ACCESS] correction
+
+**Logged**: 2026-11-17
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+Respect the requested standalone invitation page with direct, credential-free access.
+
+### Details
+The user explicitly requested a fixed localhost:4179 entry without login, roles, tokens or link keys. The earlier fragment-key guard added an unrequested access flow and blocked that entry. Remove the guard from both H5 and its dedicated issuance API instead of hiding credentials in a proxy. Preserve one-time redemption, request idempotency, storage keys and device proof; unrelated account/admin APIs keep their existing behavior.
+
+### Metadata
+- Source: user_feedback
+- Related Files: tools/invite-console/core.js, tools/invite-console/app.js, tools/invite-console/serve.cjs
+- Tags: scope, invitation, direct-access

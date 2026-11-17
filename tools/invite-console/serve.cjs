@@ -26,7 +26,7 @@ function loopbackOrigin(value) {
 function proxy(req, res, origin) {
   const upstream = http.request(new URL(req.url, origin), {
     method: req.method,
-    headers: { ...req.headers, host: new URL(origin).host },
+    headers: { ...req.headers },
     timeout: 15000,
   }, (response) => {
     res.writeHead(response.statusCode, response.headers);
@@ -90,7 +90,7 @@ if (require.main === module) {
   server.listen(port, '127.0.0.1', () => {
     const origin = `http://127.0.0.1:${server.address().port}`;
     console.log(`邀请码页面：${origin}/`);
-    console.log('真实发码模式：直接打开，无需登录或链接密钥。');
+    console.log('真实发码模式：输入服务端配置的管理员密码后进入。');
   });
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { server.close(); });
 }

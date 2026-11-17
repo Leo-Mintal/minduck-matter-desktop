@@ -1,5 +1,52 @@
 # Unexpected Errors
 
+## [ERR-20261117-R11] Incomplete release test snapshot
+
+**Logged**: 2026-11-17T03:30:00Z
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+- The first serial suite in the isolated 0.1.11 rebuild snapshot could not load `../minduck-matter-chromium/scripts/config.cjs`; that experimental directory was omitted when freezing the source inputs.
+- Added the existing launcher sources to the snapshot, preserving the original failing log as `release/0.1.11/metadata/rebuild-0.1.11-20261117/unit-tests-incomplete-snapshot.log`. The released application does not bundle this experimental directory; production code and test assertions were unchanged.
+- Rerun the complete serial suite before packaging. Isolated snapshots must include dependencies of all selected checks, in addition to packaged files.
+- Resolution: the corrected frozen snapshot passed all 277 serial tests, native AppKit gate checks, and both real Electron workspace/browser smoke suites.
+- The workspace smoke also reproduced a native visibility/animation clock stall. Diagnostic probes captured `document.visibilityState=hidden` and finite CSS transitions stuck at zero or without a start time. Reapplying `matter.setBackgroundThrottling(false)` at each fixture settle restored animation progress; a clean rerun passed all original assertions. The production Matter view already has background throttling disabled; only the smoke fixture changed. Diagnostic and original timeout logs are preserved beside the final logs.
+- The final wiki insertion initially used stale surrounding text after concurrent documentation updates; the patch was rejected without modifying either target. Re-read both files and insert beneath their unique section headings, preserving the concurrent entries.
+
+## 2026-11-17 - Browser context and sidebar regression checks
+
+- Confirmed the bundled index hash against the actual `desktop-update-ring` Web worktree before rebuilding; the default sibling checkout does not contain DesktopWorkspace. Bounded inspection corrected missing guessed source/test names and a shell glob; no source was changed by those failed reads.
+- The old staged Web bundle reproduced the rail divider assertion. Updated sidebar source assertions only for the requested browser-driven collapse/Logo behavior; the retained 1px chat-sidebar border gives the action an odd pixel width, so its center can differ by half a pixel from the fixed-size brand target.
+- The existing parallel desktop suite repeated the documented local-exec process-group `kill EPERM` failure. Its retained test process finished before a targeted termination could act. The isolated 25-case local-exec rerun and the serial 276-case full desktop rerun passed; no Shell implementation was changed.
+- The chrome history fixture formerly stopped on `/frame-second`, a non-conversation URL that must now suppress the browser. Moved that fixture to real `/c/frame-*` routes while retaining its visibility assertions. SPA navigation probes now preserve Electron’s `userGesture` argument so Chromium does not skip script-only history entries during the back/forward checks.
+- Native fixture rAF/finite-animation waits could stall. Added bounded renderer probes, a total deadline, and an explicit `--visible` isolated-window mode; forcing that fixture window visible allowed the real viewport/route/paint regression to complete. A disposable bridge uses port 0 rather than contending for the installed app's bridge. No production user data or existing bridge process was changed.
+
+## 2026-11-16 - Expired activation prompt cannot receive input
+
+- The reported input problem was reproduced by the gate test: the revoked state explicitly disabled the NSTextField and confirmation. The user then confirmed that a fresh invitation must be allowed to reactivate the same device; the former server rule also rejected that flow. Updated both rules, retained old-code invalidation/history, and kept the unsupported-signing state blocked.
+- Native AppKit checks use isolated Electron user data and actual key events. They verify initial focus after business-window destruction, input preservation through checks, confirmation, re-enabling, and refocusing an existing prompt; no real device key or installed app was changed.
+- Inspection corrected guessed `prompt.cjs`, native-prompt tests, a nonexistent PostgreSQL test filename, module-relative paths and unmatched shell globs using the actual inventory. The quality skill's documented executable is `quality_checker.js`, not the guessed Python path; `--help` performs a default scan instead of printing help. The reported scoped result uses four byte-identical source copies (including `.cjs` renamed `.js` because the checker omits `.cjs`), and those copies were removed. Native compilation and PostgreSQL/race tests provide the substantive platform/transaction validation.
+
+## 2026-11-16 - Invite console device revocation
+
+- Read probes corrected an absent `console.go` and an unmatched desktop script glob before using the actual files. The first gofmt call used repository-relative paths inside `services/api`; it changed nothing, and was rerun with module-relative paths.
+- `ego-browser` was absent from the shell PATH although its existing executable was available at `/Users/mintal/.local/bin/ego-browser`; used that path and the matching usage guide, without installing or changing configuration. A zsh application glob with no matches was replaced by a bounded directory search.
+- Backend `make verify` and relevant PostgreSQL/race tests passed. `make project-boundaries` remains blocked by the existing `cloud_exec.go` user/org isolation finding; `make env-example-contract` independently reports the pre-existing duplicate `MATTER_LOCAL_EXEC`. No unrelated checks were suppressed or source changed.
+- The first browser fixture's devices had already become revoked before the planned confirmation click; the source of that concurrent state change was not established, and the interrupted run was not counted as a pass. Cleaned only this task's IDs, recreated fixtures, and reran cancellation, confirmation, filtering and unaffected-device recovery successfully. Apply emulation metrics in the same Ego invocation as each layout check because later invocations may restore the ordinary viewport.
+
+## 2026-11-16 - Invite link implementation inspection
+
+- An assumed `config_test.go` did not exist; config cases are in `protocol_test.go`. Located them before adding dedicated console coverage.
+- A local process check repeated `-sTCP:LISTEN`, which this macOS lsof rejects. Used one shared TCP state filter with both port selectors; no process was changed by the failed inspection.
+
+## 2026-11-16 - Native activation prompt quit lifecycle
+
+- AppKit application-modal sessions intercepted the real application menu/Command-Q quit path. The prior smoke used a fake `app.quit` and did not assert process termination through those inputs.
+- Prompt close always resolved `dismissed`, losing a native quit click when a policy response closed the window before the 50 ms poll. A focused regression reproduced the lost click before the behavior fix.
+- Keep the alert on Electron's existing event loop, preserve queued native actions on close, and dispose the controller before quit. Isolated real Electron processes now emit before-quit/will-quit/quit and exit from both Command-Q and the button while a slow policy request is pending.
+- Investigation corrections: `@electron/asar` is a transitive pnpm dependency, not a root import; use its verified existing package location. The isolated harness initially required Electron by npm package path, returning its executable path instead of runtime API; use `require('electron')`. CUA bundle-id lookup was ambiguous across development copies; use the verified exact app path. Querying an app through CUA after quit can relaunch it, so verify actual process termination without reacquiring the exited app. A documentation patch initially used the wrong existing heading; the tool rejected it without changing files, then the heading and target text were read back before correction.
+
 ## 2026-11-16 - Path access test packaging
 
 - The 245 unit tests passed, but a concurrent native smoke reached its next permission request before the deliberately interrupted Shell had returned and released the conversation's mutation guard. The fixture had discarded that request's Promise. Keep and await its cancellation response before re-enabling and testing the next operation; retain all permission and cancellation assertions. No production execution behavior was relaxed.
@@ -1203,3 +1250,226 @@ Corrected test-fixture and packaging-preflight errors while preserving the prior
 
 ### Metadata
 - Related Files: scripts/prepare-desktop-access-profile.cjs, scripts/desktop-access-smoke.cjs, src/desktop-access/, tools/invite-console/; backend internal/app/desktopaccess/.
+
+## [ERR-20261116-INVITE-NATIVE-PACKAGE] Native prompt packaging and validation
+
+- Status: resolved for source lookups, patch application and smoke timing; test artifact rebuilt after UI scope changed.
+- Read-only lookups used nonexistent `src/desktop-settings.cjs`, `src/desktop-access/device-key.cjs` and an unmatched shell glob. Enumerated actual paths afterward. No code or settings were changed by those failed reads.
+- An apply_patch request attempted delete/add on the same path and was rejected during verification; reread the targets, confirmed no partial writes, then applied scoped edits.
+- The first native modal smoke allowed only 250 ms for AppKit startup and observed too few timer ticks. A 1.5 s observation recorded 61 event-loop ticks; real native confirm and exit interactions then passed. Retained the responsiveness assertion.
+- The old build driver matched only TAP `# pass`, while the current Node reporter uses `ℹ pass`. Normalize/read the actual reporter count; do not reuse the previous release's hardcoded test count or native binary inventory.
+- When the user requested the native prompt, stopped the verified owned signing/notarization processes and removed their temporary source/app/submission archive. The superseded attempt's diagnostic records remain; no old UI artifact was delivered, installed or published.
+- See Also: ERR-20261116-I01.
+
+- Accelerated native policy acceptance found that disabling the input for `checking` surrendered keyboard focus. Split input-enabled and confirm-enabled state; preserve editing/focus while checking and disable only confirm. Set the initial first responder after beginning the modal session; CUA verified the field retained focus and native confirm still worked after repeated checks.
+- A superseded-build cancellation probe matched its own parent shell because its command text contained the search string. The actual build was stopped; the task shell was also stopped before source edits ran. Read process and file state, killed only that verified task shell, detached any task-owned image, and cleaned the prior stage. Use exact executable/argument identity rather than substring matching of embedded shell source. No shared service or installed application was affected.
+
+- The final frozen-source full suite reproduced the existing Shell process-group `kill EPERM` baseline flake. Its isolated case passed unchanged, followed by all 259 tests passing in 6.2 s. Retained the failed log and reused the verified pass against byte-identical frozen inputs; did not alter Shell code or weaken assertions. A retry initially referenced the already-cleaned failed stage; checked its actual lifetime and recreated an owned snapshot.
+
+- A read-only invitation-entry lookup assumed `tools/invite-console/api.js`; the adapter lives in `core.js`. Read the actual config/adapter and verified the local preview plus the backend policy status before giving an entry URL.
+
+## [ERR-20261116-UPDATE-RING] Update ring validation and packaging
+
+- Status: fixed harness and frozen-input preparation; no production behavior was bypassed.
+- The existing browser-chrome harness timed out before creating its business window after the invitation gate was introduced. Its nonexistent test origin supplied no policy. Inject a protocol-1 public-policy fixture through the real activation service for this UI-only harness; dedicated gate/service tests still assert fail-closed behavior. Real Electron update lifecycle, live tooltip and both-theme contrast then passed.
+- The first frozen-source full-suite run omitted the experimental Chromium launcher scripts needed by an existing test and failed with MODULE_NOT_FOUND. Confirmed the failed stage had been removed, recreated the owned snapshot including those scripts, compared its inputs, and reran all 264 tests successfully. Failure logs are retained under the test package validation/attempt-1.
+- Read-only lookups initially assumed the shared DesktopWorkspace lived in the desktop or current Web checkout. Located the actual preserved shared-workspace revision and used an isolated Web worktree. Incorrect guessed paths, an unmatched zsh glob and an unrelated temporary-directory permission error caused no writes; subsequent reads used explicit verified paths.
+
+- Final cleanup found LaunchServices retained the task-owned temporary application after the build stage was removed. Unregistering a missing path returned -10814. Inspected its exact canonical registration, recreated only its original metadata/launcher from the verified ZIP, unregistered that one obsolete entry, and removed the stub; no global reset or installed-app registration was changed.
+
+## [ERR-20261116-INVITE-PROFILE-NOTARY] Profile-enabled activation and missing notarization credentials
+
+**Logged**: 2026-11-16
+**Priority**: high
+**Status**: resolved for this package via direct API-key authentication
+**Area**: infra
+
+### Summary
+
+Real Developer ID signed Secure Enclave activation passed with the correct supplied profile, but the existing notarization Keychain profile could not be found.
+
+### Error
+
+`notarytool history --keychain-profile MinduckNotary` returned exit 69, `No Keychain password item found`. Explicitly selecting the login Keychain did not restore it. API-key authentication without an issuer returned HTTP 401; this does not establish whether the key is a valid team key or has the required role.
+
+### Context
+
+- The earlier supplied profile's display name resembled the application ID, but its entitlement authorized a different app. The subsequent `matter.provisionprofile` authorizes the actual app ID and matches the installed Developer ID certificate. Inspect entitlements and certificate bytes rather than trusting filenames or display names.
+- The first profile-enabled attempt reached real native activation successfully before notarization failed. Do not attribute that failure to Secure Enclave or to the new profile, and do not claim the user deleted credentials.
+- The new supplied `.p8` path contains the same bytes as the earlier key. A file path is not an Issuer ID, and the private-key file does not supply that missing UUID.
+- An initial QA script lookup and a backend source lookup used wrong assumed paths. Enumerated the actual validation files and `services/api/internal/app/desktopaccess/` before continuing; no unsafe write was retried.
+- A CUA field edit was interrupted by a user state change; reread the actual native tree before continuing. The native valid-code alphabet excludes ambiguous characters; use a format-valid dummy value for an enabled-button check without submitting it. Reading native state after a successful exit may return `procNotFound`; separately verify the exact owned process has exited.
+- The first notarization finalizer assumed the packaged `package.json` retained `build`; electron-builder strips that build-only metadata. Freeze the current validated builder config separately, preserve the already signed prepackaged app and compare its entire payload before and after packaging. That attempt failed before any Apple submission.
+- An unregistered but existing task-owned app can make `lsregister -u` return -10814. Confirm the exact canonical path is absent from the registration database, and always clean the stage in a nested `finally` even if unregister fails. The failed first stage was inspected and removed before retry.
+- After the user supplied the actual Issuer ID, `store-credentials` and a separate history call succeeded, but a subsequent subprocess still could not read that Keychain profile. Direct API-key authentication in the same Python subprocess context succeeded; use that verified path for this finalization without embedding the key or persisting credential values in the script.
+- The final handoff check initially matched any staging-directory text in the LaunchServices dump; its historical disk-image volume metadata caused a false positive after successful unmount. Check exact owned `.app` paths for application registrations and `hdiutil info` for actual current mounts. Do not reset LaunchServices or recreate deleted apps to clear harmless cached volume metadata.
+
+### Suggested Fix
+
+Validate notarization authentication before submission. If the Keychain profile cannot be read reliably, use the authorized API key directly from its existing external file with the actual issuer supplied only at runtime. Reuse the already verified signed artifact, and never print or commit private keys or credential values. Distinguish authentication, Apple processing, acceptance and final ticket validation in artifact records.
+
+### Resolution to date
+
+The user supplied the actual issuer. Direct API authentication completed both application and DMG notarization with Accepted results; final stapling, distribution checks, 27 packaged regressions, worker/Shell/native-module checks, 5,555 matching archive entries and 9,408 final DMG block checks passed. The signed activation payload is byte-identical to the earlier hardware-verified package; QA keys/devices remain removed/revoked. Task-owned finalization apps and mounts were cleaned. The Keychain profile's inconsistent cross-process retrieval was not repaired or attributed to a cause without evidence; the ordinary packaging script's authentication behavior is unchanged. Full uninstall/reinstall, lock-screen and new-user acceptance remain untested.
+
+### Metadata
+
+- Reproducible: yes for missing Keychain profile during this run.
+- Related Files: docs/macos-distribution.md, docs/desktop-invite-activation-plan.md; ignored release/invite-profile-ring-test-20261116/validation/.
+- See Also: ERR-20261116-UPDATE-RING, ERR-20261116-I01.
+
+## [ERR-20261116-SUIT-SVG] New Suit Duck source conversion and sandbox fixtures
+
+- Status: resolved; source files preserved, generated pack and real sandbox verified.
+- The existing global SVG compiler does not support the supplied Success `offset-distance` tracks. Added support in the project-local compiler and retained static motion-path properties; did not remove confetti or modify the global tool.
+- Work/Success/Failure sources contain 188/4/4 invalid `inf/-inf` filter regions. Measure each unique owner's local Chromium geometry plus blur padding, bind calibration to source SHA-256 and replace only those region attributes in generated files. Tests reject changed or unmeasured sources and verify unchanged artwork/filter primitives.
+- A first source-parity fixture mixed original and compiled IDs/styles in one document. Isolate reference SVGs in a shadow root. DOMRect requires explicit numeric-property extraction rather than JSON serialization. The official pointer message uses `p`; activity starts after the current render, so sample its source frame on the next tick.
+- Existing terminal tests required only `expression`, although the actual adapter accepts a matching `expression` or `gesture`. Updated those assertions while retaining exact action, once-only playback and completion checks.
+- Full-suite visible dress controls could change the shared fixture's selected pack or destroy a cached frame, including in serial runs. After validating the real settings window, hide it and disable background throttling while isolated probes run, then verify reopening/reuse. Full regression passes with this fixture isolation; production behavior is unchanged.
+- Initial path guesses, an unsupported same-path Delete/Add patch and a final error-log patch with a nonexistent context failed without writes. Inspected exact files before correcting them; no blind retry after uncertain writes.
+- `ego-browser` was absent from shell PATH; the existing absolute executable works. The quality scanner expects a directory: a zero-file result is not validation. Rechecked four actual handwritten files; retained the real report and removed misleading empty reports.
+- Validation logs and screenshots are retained under `build/suit-duck-20261116/` and `build/companion-suit-*.png`; no installed application, signed package or production service was changed.
+
+## [ERR-20261116-DESKTOP-RAIL] SVG rail geometry and existing shared styles
+
+- Status: fixed; desktop-only styles, geometry and real Electron checks updated.
+- Initial read-only discovery guessed some nonexistent file paths and zsh globs. Enumerated actual modules (`rightPanelLayout.cjs`, `desktop-frame.css`, `workspace-shell-smoke.cjs`) before editing; no uncertain writes were retried.
+- The first real geometry check found 38px row cadence instead of the supplied 36px. The existing shared `--sp-0` means 2px, not zero. Scoped an explicit adjacent-row margin reset to the desktop navigation; ordinary Web spacing is unchanged. Failed assertions were preserved in `build/rail-20261116/workspace-smoke.log`. Connection-refused messages followed fixture shutdown after this assertion, not a production backend failure.
+- Visual QA found that the shared light selected-icon rule had equal specificity and overrode the rail's gray icon filter. Increased only the scoped desktop selector specificity and added a computed-filter regression. Final screenshots wait for finite animations to settle.
+- The workspace fixture predates the invitation gate. Added a protocol-1 public-policy response to its isolated HTTP fixture, retaining the real service/controller path and all production fail-closed behavior; native activation tests remain separate.
+- Existing Fast Refresh lint warning and Vite chunk-size warnings are unchanged; no new dependency or global design-token change was introduced.
+
+## [ERR-20261116-R11] release snapshot validation
+
+**Logged**: 2026-11-16T10:24:14.124169+00:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+0.1.11 isolated build snapshot omitted extensions and embedded Chromium test scripts.
+
+### Error
+`MODULE_NOT_FOUND: ../minduck-matter-chromium/scripts/config.cjs`; extension path ENOENT. The first recovery probe assumed the missing directory already existed. A separate exploratory zsh glob also matched no src/*Origin* files.
+
+### Resolution
+Copied both missing input groups from the source checkout, recorded extension hashes and reran the exact test suite before packaging. Use discovered paths instead of unverified shell globs. Original app and source files were not changed by these failures.
+
+### Metadata
+- Related Files: release/metadata/build-0.1.11-20261116/initial-incomplete-snapshot-tests.log
+
+## [ERR-20261116-R1N] notary Keychain credential lookup
+
+**Logged**: 2026-11-16T10:25:19.272504+00:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+`notarytool history --keychain-profile MinduckNotary` succeeded during initial preflight but the packaging subprocess could not find the same credential.
+
+### Error
+`No Keychain password item found for profile: MinduckNotary`
+
+### Resolution
+Added an explicit direct API key mode to the existing macOS packaging script. Preflight, builder app notarization and DMG notarization use the same selected authentication method; inherited Apple credential variables are cleared. Existing Keychain default remains unchanged. No key content is logged or bundled.
+
+### Metadata
+- Related Files: scripts/package-macos.sh; release/metadata/build-0.1.11-20261116/initial-keychain-packaging.log
+
+## [ERR-20261116-R1C] final checksum command working directory
+
+**Logged**: 2026-11-16T10:34:05.945269+00:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+Final shasum list verification was first invoked from the project root, but release checksum lists contain artifact basenames relative to release/.
+
+### Resolution
+Reran the unchanged checksum lists from release/; both final DMG and ZIP match. Final manifest verification and mount cleanup also passed.
+
+## [ERR-20261117-UGC] shared update icon color override
+
+**Logged**: 2026-11-17T02:33:22.410211+00:00
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+The first green upgrade icon rule had the same specificity as the shared `.ui-icon { color: inherit }`; later stylesheet loading restored the parent white color.
+
+### Error
+Real Electron regression: `dark green upgrade arrow; last: rgb(255, 255, 255)`. The old bundled frontend separately reproduced the original missing-arrow/orange-dot state.
+
+### Resolution
+Scope the update accent selector under `.desktop-workspace-tools` so shared Icon defaults cannot override it. Rebuild both Web entries and rerun the real native/shared rail color and download checks. Initial exploratory reads also referenced nonexistent optional files; subsequent reads used discovered paths.
+
+### Metadata
+- Related Files: src/desktop/workspace.css (Web worktree); scripts/browser-chrome-smoke.cjs; build/update-green-20261117/inherited-icon-color-failure.log
+
+### Additional release-record check (2026-11-17)
+An optional check of yesterday's release metadata found `release/metadata/latest-mac.yml` absent from the current filesystem. This task did not modify or remove release artifacts; the old metadata was not recreated and no packaging/publication claim was made. The requested source/build and real Electron UI checks are independently recorded in `build/update-green-20261117/validation.json`.
+
+## [ERR-20261117-INVITE-DOC-PATH] documentation lookup
+
+**Logged**: 2026-11-17
+**Priority**: low
+**Status**: resolved
+**Area**: docs
+
+### Summary
+A targeted read assumed the backend desktop-access wiki path also existed in the desktop repository.
+
+### Resolution
+Used the desktop wiki index to locate its invitation plan and standalone README, and read the module wiki only in the backend repository. No file was created at the incorrect path.
+
+### Follow-up (2026-11-17)
+The notes task repeated mixed-repository relative documentation reads and initially ran a root Make target from the API module. Use absolute file paths for cross-repository reads and explicit repository-root workdirs for Make; the corrected verification passed. No source was written at the wrong path.
+
+## [ERR-20261117-EGO-PATH] browser CLI lookup
+
+**Logged**: 2026-11-17
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+`ego-browser` was installed but absent from this command shell's PATH.
+
+### Resolution
+Located the existing `/Users/mintal/.local/bin/ego-browser` symlink and used its absolute path for the guide and task 15. No install, upgrade or shell configuration change was needed. Browser checks completed and the task space was closed.
+
+## [ERR-20261117-NOTE-THEME] browser palette override
+
+**Logged**: 2026-11-17
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+Dark Reader injected styles changed the apparent light-theme colors in the first note-dialog screenshots.
+
+### Resolution
+Confirmed the injected stylesheet classes, temporarily disabled only their sheets in the owned task tab, asserted the application's computed dialog/background palette and recaptured mobile/desktop screenshots. The tab was closed after verification; user browser preferences and project styles were not changed for the extension.
+
+
+## 2026-11-17: Test-server SSH authentication unavailable
+
+Read-only SSH to yogee@192.168.11.70 failed with `Permission denied (publickey,password)` using default identities and the configured Minduck identity. The host is reachable, but its deployment, database and proxy configuration cannot be verified without an authorized server key or interactive login. Do not change local authentication or try other accounts. HTTP `/health` responds 200; `/api/desktop-access/policy` responds 404. An actual non-secure HTTP LAN browser lacks `crypto.randomUUID()`; H5 now falls back to `crypto.getRandomValues()` and was verified to issue, copy through the compatibility path, and revoke a test code. Server deployment still needs API-mode config and a same-origin invitation API proxy.
+
+## 2026-11-17: HTTP UUID compatibility verification
+
+The new VM regressions first reproduced missing `crypto.randomUUID` in both real and demo issuance, then passed using the shared Web Crypto UUID fallback. A browser wait used the guessed `history-body` selector and timed out after issuance had already succeeded; inspected the real DOM (`history-rows`) before continuing, so no duplicate issue request was sent. Actual non-secure LAN HTTP confirmed `randomUUID` and clipboard APIs absent, getRandomValues available, issue and legacy copy successful, and the single test invite revoked; the temporary preview process and Ego task were closed. A documentation patch had a mismatched context and a Python stdin write needed an explicit UTF-8 encoding declaration; both failed before writes and were corrected from exact file content. A final malformed JavaScript orchestration call did not execute any commands. The whole-tree whitespace check reports an unrelated pre-existing trailing blank in LEARNINGS.md; scoped patch whitespace checks pass without editing that file.
+
+## 2026-11-17 - Invite administrator password validation
+
+- Initial Go test invocation used module-relative package paths from the repository root and failed before running tests. Re-ran from `services/api`; focused race tests and dedicated PostgreSQL/race tests passed.
+- A pair of documentation/source read probes used the other repository root and found no files; corrected to the desktop H5 and API paths without modifying unrelated files.
+- `make project-boundaries` passed API/import/tenant/environment checks but its final topology check requires the absent independent `apps/minduck-matter-web-prod` checkout. Report this verification limit; do not create or modify an unrelated frontend to mask it.
+- Read-only delegated review payloads were unavailable to the workers. Completed the auth-boundary and bypass/regression review locally against production route registration, legacy admin routes, device paths, session lifecycle, CSRF checks, proxy behavior and focused execution.
+
+## 2026-11-17 - Screenshot ignore cleanup
+
+- A shell wildcard included ignored local screenshots that were not tracked, so `git rm --cached` stopped without changing files. Re-ran it using Git's tracked-file list; local screenshots remain untouched.

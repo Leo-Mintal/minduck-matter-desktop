@@ -12,7 +12,7 @@
 node tools/invite-console/serve.cjs
 ```
 
-然后直接访问 `http://127.0.0.1:4179/`，无需登录或 token。默认连接本地 `http://127.0.0.1:8080` 的真实邀请码 API；失败时显示实际错误，不生成演示码。修改端口可用 `PORT=4180 node tools/invite-console/serve.cjs`。仅查看离线样式时，可用浏览器直接打开本目录的 `index.html`，此时为演示模式。
+然后直接访问 `http://127.0.0.1:4179/`，输入管理员密码进入。默认连接本地 `http://127.0.0.1:8080` 的真实邀请码 API；失败时显示实际错误，不生成演示码。修改端口可用 `PORT=4180 node tools/invite-console/serve.cjs`。仅查看离线样式时，可用浏览器直接打开本目录的 `index.html`，此时为演示模式。
 
 ### 本机真实发码（2026-11-17 更新）
 
@@ -22,13 +22,25 @@ node tools/invite-console/serve.cjs
 INVITE_API_ORIGIN=http://127.0.0.1:8080 node tools/invite-console/serve.cjs
 ```
 
-入口固定为 `http://127.0.0.1:4179/`。打开即可摇码、查看记录、作废未使用码，以及吊销已使用码对应的设备激活资格；无需管理员账号、邮箱、Web 登录、URL 参数或 fragment 密钥。原 `/internal/invites/` 路径仍可直接打开。
+入口固定为 `http://127.0.0.1:4179/`。输入独立管理员密码后可摇码、查看记录、作废未使用码，以及吊销已使用码对应的设备激活资格；无需管理员账号、邮箱、Web 登录、URL 参数或 fragment 密钥。原 `/internal/invites/` 路径仍可直接打开。
 
-独立发码 API 不验证身份，也不读取链接密钥；页面请求使用 `credentials: 'omit'`，不发送账号 JWT、Cookie 或 `X-Invite-Console-Key`。已移除 `MATTER_DESKTOP_INVITE_CONSOLE_KEY` 配置。邀请码的 lookup/encryption 存储密钥和客户端设备签名验证继续保留。
+独立发码 API 统一验证管理员会话。后端环境变量 `MATTER_DESKTOP_INVITE_ADMIN_PASSWORD` 配置共享密码；留空时管理接口返回 503，客户端激活策略与设备接口不受影响。实际密码只保存在服务器环境文件，不写入 HTML、JS、URL、示例配置或 Git。页面无需 Matter 账号或 Web 登录。
+
+登录成功后由后端设置 HttpOnly、SameSite=Strict 的会话 Cookie，固定 24 小时过期，Redis 保存会话；页面刷新可恢复，退出会撤销，改密码并重启所有 API 实例后旧会话失效。H5 使用 `credentials: 'same-origin'` 和 `X-Invite-Console: 1`，不保存密码或读取 Cookie，不发送账号 JWT。过期自动回密码入口并清除页面中的完整邀请码。密码错误按连接来源限流（20 次/分钟），反代后同一代理共享预算。正式 HTTPS 配置启用 Secure Cookie，测试 HTTP 兼容非 Secure Cookie。
 
 本地覆盖文件 `.env.desktop-access.local` 保存邀请码存储配置，Git 忽略且权限 0600。本机服务仅监听回环、校验 Host、只代理邀请码 API，其他 API/页面返回 404；根路径直接返回摇码页。静态资产仍用白名单；API 故障不降级演示模式。已移除 `INVITE_WEB_ORIGIN` 和 Web 登录代理。
 
-客户端需将“配置 Matter 服务地址...”设为 `http://127.0.0.1:8080`。`192.168.11.70:8080` 为另一套服务，不是本机。公网未更新；本地回环链接不能直接发给其他电脑或手机使用。正式分享需将静态目录及对应 API 同源部署至 HTTPS 站点（无需改 Web SPA）。
+### 测试服局域网 HTTP 部署
+
+无 HTTPS 也可以通过 `http://192.168.11.70:<页面端口>/` 使用。使用 `tools/invite-console/` 下的整份静态文件，通过 Nginx、Caddy 或同类服务器同源提供页面，并把 `/api/desktop-access/invites` 及其所有子路径反向代理到该服务器的 API `http://127.0.0.1:8080`。把页面加载的 `config.js` 配成 `mode: 'api'` 和 `apiBasePath: '/api/desktop-access/invites'`。反代必须保留浏览器 Host、Origin、Cookie、`X-Invite-Console` 和 `Idempotency-Key` 请求头，并转发查询字符串、所有响应状态/JSON 与 Set-Cookie；同一路径支持 GET/POST/DELETE。Nginx 配置 `proxy_set_header Host $http_host;`，Caddy 默认保留 Host。请勿单独开放跨域 Cookie/CORS。
+
+修复后的摇码请求编号优先使用 `crypto.randomUUID()`，不可用时回退到 `crypto.getRandomValues()` 生成 UUID；后者在普通 HTTP 页面仍可用。因此 LAN HTTP 不会因为浏览器缺少 `randomUUID` 而无法发码，刷新/超时重试也继续复用同一个请求编号。H5 通过相对路径请求同源 API，反代在服务器内连接 `127.0.0.1:8080`，无需另配 CORS。手机浏览器不要直接请求 `127.0.0.1:8080`，该地址指向手机自己。`navigator.clipboard` 在 HTTP 下通常不可用，复制会使用兼容回退；不同手机浏览器可能要求用户确认或手动复制。
+
+上线前仍要先部署后端分支、应用 138/139 迁移，设置 `MATTER_DESKTOP_ACCESS=on`、精确的 `MATTER_DESKTOP_ACCESS_ORIGIN=http://192.168.11.70:8080` 、两把独立持久化的 32 字节邀请码存储密钥，以及 `MATTER_DESKTOP_INVITE_ADMIN_PASSWORD`。后端须从服务端环境读取数据库/Redis，不应把数据库地址、邀请码加密密钥放入静态文件。设备签名的 `MATTER_DESKTOP_ACCESS_ORIGIN` 按客户端实际访问 API 的地址配置，若页面使用独立端口，不要误填页面端口。
+
+**安全边界：**发码、查询、备注、作废和吊销均由服务端校验密码会话，不能通过绕过页面直接匿名调用。测试服内网 HTTP 可使用，但不能加密网络传输；手机在外网访问使用正式 HTTPS 站点。当前 `/api/desktop-access/policy` 为 404 时必须先部署兼容后端，H5 自身不能补上缺失的 API。
+
+客户端需将“配置 Matter 服务地址...”设为测试服 API origin。公网未更新；本机 `127.0.0.1:4179` 回环预览不能直接发给其他电脑或手机使用。静态 H5 可独立于 Web SPA 部署。
 
 0.1.10 测试包的有效 profile、Secure Enclave 激活、跨进程/包路径恢复及吊销已验收，详见桌面 wiki；正常卸载重装、锁屏和新系统用户环境仍待验收。本次 H5 吊销入口不修改安装包。
 
@@ -60,6 +72,9 @@ INVITE_API_ORIGIN=http://127.0.0.1:8080 node tools/invite-console/serve.cjs
 
 | 操作 | 接口 | 返回 |
 | --- | --- | --- |
+| 输入密码 | `POST /api/desktop-access/invites/session`，`{"password":"..."}` | 设置 HttpOnly Cookie，`{"authenticated":true}` |
+| 恢复登录 | `GET /api/desktop-access/invites/session` | 同上 JSON，失效返回 401 |
+| 退出 | `DELETE /api/desktop-access/invites/session` | 撤销会话、清 Cookie |
 | 加载记录 | `GET /api/desktop-access/invites?status=current&q=&cursor=` | `{ "items": [Invite], "nextCursor": "..." }`；末页可省略游标 |
 | 生成一码 | `POST /api/desktop-access/invites`，空 JSON body | `Invite` |
 | 保存/清空备注 | `POST /api/desktop-access/invites/:id/note`，`{"note":"发给张三"}` | 更新后的 `Invite`；空字符串清空，非法或超过 200 字符返回 400 |
@@ -80,13 +95,13 @@ INVITE_API_ORIGIN=http://127.0.0.1:8080 node tools/invite-console/serve.cjs
 
 发码返回 `active`；同一请求编号重试返回原记录的**当前状态**，已经核销或作废的码不会恢复为可用。固定每页 20 条，按 `(created_at,id)` 倒序游标；`q` 同时对邀请码和备注做不区分大小写的包含匹配，`%`、`_` 等按普通文字处理。邀请码继续以 HMAC/AES-GCM 存储，后端按状态与游标顺序分批读取、解密匹配，收集到下一页探测所需的 21 条匹配即停止，不将邀请码另存明文；匹配后再分页，不局限于首屏或当前已加载记录。当前灰测规模采用该无迁移实现，搜索少见片段可能遍历该状态的全部记录；数据量增长时需评估专用检索索引。演示适配器采用同一分页/搜索契约。
 
-独立发码接口无需任何身份凭证；吊销入口按邀请码 ID 定位其已激活设备，不能传任意设备 ID。原 `/api/admin/desktop-invites` 与 `/api/admin/desktop-activations/:id/revoke` 兼容接口仍受管理员 JWT 保护，H5 不调用它们。
+独立发码接口必须通过管理员密码会话验证；吊销入口按邀请码 ID 定位其已激活设备，不能传任意设备 ID。原 `/api/admin/desktop-invites` 与 `/api/admin/desktop-activations/:id/revoke` 兼容接口仍受管理员 JWT 保护，H5 不调用它们。
 
 数据库唯一约束保障跨实例/重启的发码幂等。独立发码继续使用固定 issuer `desktop-invite-console`，移除链接密钥后同一请求 UUID 仍返回原结果；不同 UUID 可以并发各生成一码。已有账号发码记录继续保留和可查询。旧页面如有未确认发码，先查询记录核对结果。
 
 API 模式网络失败、无权限或返回格式错误会报错，**不会降级成演示发码**。超时或结果未知时原请求编号保留，点击“重试本次摇码”执行同一次操作。清理 `sessionStorage` 或关闭标签页后恢复编号不再保留，先通过记录核对结果再决定是否新发码。服务端持久保留幂等记录和已用/作废码，不回收重发。
 
-本页是由用户自行分发链接的发码工具，没有账号权限、领取资格或抽奖概率机制。
+本页是由用户自行分发链接的发码工具，使用独立共享密码，不依赖 Matter 账号、领取资格或抽奖概率机制。
 
 ### 环境隔离与部署
 
@@ -110,4 +125,9 @@ node --test tools/invite-console/core.test.cjs
 node --test tools/invite-console/serve.test.cjs
 ```
 
-此前已重跑 375/390/430/768/1024/1440px 深浅主题，检查 20 条首屏、27 条继续加载、完整/部分搜索、作废与当前码不可复制，原记录路径为 `release/metadata/invite-activation-20261116/`（发布目录迁移见 wiki）。当前 H5 测试共 20 项通过，包含无凭证备注请求、校验和演示持久化，以及模糊搜索、特殊字符、筛选和跨页。备注此前通过真实本地接口 10 项与添加/编辑/取消/清空/刷新/超长/纯文本浏览器验证，记录在 `/tmp/matter-invite-notes-20261117/`。本次搜索和胶囊按钮验证记录在 `/tmp/matter-invite-search-20261117/`；真实 iPhone Safari 的触摸/剪贴板、正式 HTTPS 站点另行部署验收。
+此前已重跑 375/390/430/768/1024/1440px 深浅主题，检查 20 条首屏、27 条继续加载、完整/部分搜索、作废与当前码不可复制，原记录路径为 `release/metadata/invite-activation-20261116/`（发布目录迁移见 wiki）。原 H5 测试包含备注请求、校验和演示持久化，以及模糊搜索、特殊字符、筛选和跨页。备注此前通过真实本地接口 10 项与添加/编辑/取消/清空/刷新/超长/纯文本浏览器验证，记录在 `/tmp/matter-invite-notes-20261117/`。本次搜索和胶囊按钮验证记录在 `/tmp/matter-invite-search-20261117/`；真实 iPhone Safari 的触摸/剪贴板、正式 HTTPS 站点另行部署验收。
+
+
+### 管理员密码改造验证（2026-11-17）
+
+`node --test tools/invite-console/*.test.cjs` 共 24 项通过，覆盖会话 Cookie 传输、退出转发、401 幂等重试及 HTTP UUID 回退。后端专用 PostgreSQL/race 覆盖生产同一注册路由下匿名管理操作全部拒绝、已登录发码/备注/作废/吊销、旧 issuer 幂等、密码错误限流、跨站请求拒绝、Cookie 属性、改密码/退出/Redis 到期和故障，以及客户端激活兼容。真实浏览器通过 375px/1440px 登录、错误提示、刷新恢复、备注、作废、退出和会话失效清屏；非安全上下文 LAN HTTP（无 randomUUID）通过登录、刷新恢复及摇码，两枚测试码已作废。测试/正式服未部署。

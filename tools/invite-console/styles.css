@@ -212,3 +212,9 @@ h2 { font-size: 14px; font-weight: 500; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+.password-gate { width: 100%; max-width: 360px; margin: 64px auto; padding: 24px; background: var(--surface); border: 1px solid var(--line2); border-radius: 16px; }
+.password-gate form { display: grid; gap: 20px; }
+.password-gate h2 { font-size: 18px; }
+.password-gate input { min-width: 0; width: 100%; font-size: 16px; }
+.password-gate .b { width: 100%; }

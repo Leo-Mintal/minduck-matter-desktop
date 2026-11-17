@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { webcrypto } = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const { runInNewContext } = require('node:vm');
 const { ALPHABET, DEMO_KEY, generateCode, validateInvite, matchesFilter, statusLabel, createDemoAdapter, createApiAdapter, createIssuer } = require('./core.js');
 
 function memoryStorage() {
@@ -12,6 +14,53 @@ function memoryStorage() {
 
 const invite = { id: 'invite-1', code: 'ABC234', status: 'active', createdAt: '2026-11-16T08:00:00.000Z' };
 const response = (value, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => value });
+
+function httpPageCore() {
+  const context = {
+    crypto: { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) },
+    URLSearchParams, AbortController, setTimeout, clearTimeout,
+  };
+  runInNewContext(readFileSync(require.resolve('./core.js'), 'utf8'), context);
+  return context.InviteCore;
+}
+
+test('HTTP issuance without crypto.randomUUID preserves single-flight and retry IDs across reloads', async () => {
+  const core = httpPageCore();
+  const storage = memoryStorage();
+  const ids = [];
+  const adapter = core.createApiAdapter({ basePath: '/api/desktop-access/invites',
+    fetchImpl: async (_url, options) => {
+      const id = options.headers['Idempotency-Key'];
+      assert.equal(storage.getItem('http-pending'), id);
+      assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      ids.push(id);
+      if (ids.length === 1) throw new Error('connection lost');
+      return response(invite);
+    },
+  });
+  const issuer = core.createIssuer({ adapter, storage, pendingKey: 'http-pending' });
+  const first = issuer.issue();
+  assert.strictEqual(issuer.issue(), first);
+  await assert.rejects(first, /connection lost/);
+  assert.equal(ids.length, 1);
+  const reloaded = httpPageCore().createIssuer({ adapter, storage, pendingKey: 'http-pending' });
+  await reloaded.issue();
+  assert.equal(ids[0], ids[1]);
+  assert.equal(storage.getItem('http-pending'), null);
+  await reloaded.issue();
+  assert.notEqual(ids[1], ids[2]);
+});
+
+test('HTTP demo issuance without crypto.randomUUID remains persistent and idempotent', async () => {
+  const core = httpPageCore();
+  const storage = memoryStorage();
+  const adapter = core.createDemoAdapter({ storage });
+  const first = await adapter.issue('http-demo-1');
+  assert.match(first.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  const reopened = core.createDemoAdapter({ storage });
+  assert.equal((await reopened.issue('http-demo-1')).id, first.id);
+  assert.notEqual((await reopened.issue('http-demo-2')).id, first.id);
+});
 
 test('notes persist in demo records, can be cleared, and never revive a code', async () => {
   const storage = memoryStorage();
@@ -31,7 +80,7 @@ test('notes persist in demo records, can be cleared, and never revive a code', a
   assert.throws(() => validateInvite({ ...invite, note: 3 }), /备注/);
 });
 
-test('API note updates use JSON without credentials and validate their response', async () => {
+test('API note updates use JSON with a same-origin admin session and validate their response', async () => {
   const calls = [];
   const adapter = createApiAdapter({ basePath: '/api/desktop-access/invites', fetchImpl: async (url, options) => {
     calls.push({ url, ...options });
@@ -41,7 +90,7 @@ test('API note updates use JSON without credentials and validate their response'
   assert.equal(calls[0].url, '/api/desktop-access/invites/invite-1/note');
   assert.equal(calls[0].method, 'POST');
   assert.equal(calls[0].body, JSON.stringify({ note: '张三' }));
-  assert.equal(calls[0].credentials, 'omit');
+  assert.equal(calls[0].credentials, 'same-origin');
   assert.equal(calls[0].headers.Authorization, undefined);
   assert.equal(calls[0].headers['X-Invite-Console-Key'], undefined);
   assert.equal((await adapter.updateNote(invite.id, '')).note, '');
@@ -144,7 +193,7 @@ test('demo collision is retried without replacing an existing invite', async () 
   assert.deepEqual((await adapter.list()).find((item) => item.id === old.id), old);
 });
 
-test('API adapter works without credentials and preserves pagination and idempotency', async () => {
+test('API adapter works with a same-origin admin session and preserves pagination and idempotency', async () => {
   const requests = [];
   const adapter = createApiAdapter({ basePath: '/api/desktop-access/invites', fetchImpl: async (url, options) => {
     requests.push({ url, ...options });
@@ -160,7 +209,7 @@ test('API adapter works without credentials and preserves pagination and idempot
     assert.equal(request.headers.Cookie, undefined);
   }
   assert.equal(requests[1].referrerPolicy, 'no-referrer');
-  assert.equal(requests[1].credentials, 'omit');
+  assert.equal(requests[1].credentials, 'same-origin');
   assert.equal(requests[1].redirect, 'error');
   assert.equal(requests[1].cache, 'no-store');
   assert.equal(requests[1].body, '{}');
@@ -265,7 +314,7 @@ test('current and used filters hide invalidated codes and devices before paginat
   assert.equal(repeated.activation.revokedAt, result.activation.revokedAt);
 });
 
-test('API device revocation needs no credentials and preserves activation state safely', async () => {
+test('API device revocation uses a same-origin admin session and preserves activation state safely', async () => {
   const calls = [];
   const item = { ...invite, status: 'used', activation: { status: 'revoked', createdAt: invite.createdAt,
     revokedAt: invite.createdAt, publicKeySPKI: 'must-not-retain', id: 'device-id' } };
@@ -275,7 +324,7 @@ test('API device revocation needs no credentials and preserves activation state 
   assert.equal(calls[0].url, '/api/desktop-access/invites/invite-1/revoke-activation');
   assert.equal(calls[0].options.method, 'POST');
   assert.equal(calls[0].options.headers['X-Invite-Console-Key'], undefined);
-  assert.equal(calls[0].options.credentials, 'omit');
+  assert.equal(calls[0].options.credentials, 'same-origin');
   assert.equal(result.activation.status, 'revoked');
   assert.equal(result.activation.publicKeySPKI, undefined);
   assert.equal(result.activation.id, undefined);
@@ -284,4 +333,30 @@ test('API device revocation needs no credentials and preserves activation state 
     assert.throws(() => validateInvite({ ...item, activation }), /设备激活/);
   }
   assert.throws(() => validateInvite({ ...invite, activation: item.activation }), /设备激活/);
+});
+
+
+test('admin password session uses HttpOnly transport and preserves 401 for the gate', async () => {
+  const requests = [];
+  const adapter = createApiAdapter({ basePath: '/api/desktop-access/invites', fetchImpl: async (url, options) => {
+    requests.push({ url, ...options });
+    return response({ authenticated: options.method !== 'DELETE' });
+  } });
+  await adapter.session();
+  await adapter.login('test-password');
+  await adapter.logout();
+  assert.deepEqual(requests.map(({ method }) => method), ['GET', 'POST', 'DELETE']);
+  assert.equal(requests[1].body, JSON.stringify({ password: 'test-password' }));
+  for (const request of requests) {
+    assert.equal(request.url, '/api/desktop-access/invites/session');
+    assert.equal(request.credentials, 'same-origin');
+    assert.equal(request.headers['X-Invite-Console'], '1');
+    assert.equal(request.headers.Authorization, undefined);
+  }
+  const denied = createApiAdapter({ basePath: '/api/desktop-access/invites', fetchImpl: async () => response({}, 401) });
+  await assert.rejects(denied.session(), (error) => error.status === 401);
+  const storage = memoryStorage();
+  const issuer = createIssuer({ adapter: denied, storage, pendingKey: 'pending-auth', randomUUID: () => 'retry-after-login' });
+  await assert.rejects(issuer.issue(), (error) => error.status === 401);
+  assert.equal(storage.getItem('pending-auth'), 'retry-after-login');
 });

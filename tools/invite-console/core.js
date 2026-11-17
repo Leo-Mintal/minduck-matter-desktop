@@ -11,6 +11,16 @@
   const STATUSES = new Set(['active', 'used', 'revoked']);
   const MAX_NOTE_LENGTH = 200;
 
+  function createUUID(cryptoImpl = globalThis.crypto) {
+    if (typeof cryptoImpl.randomUUID === 'function') return cryptoImpl.randomUUID();
+    // getRandomValues also works on HTTP LAN pages, unlike randomUUID.
+    const bytes = cryptoImpl.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
   function normalizeNote(value) {
     if (typeof value !== 'string' || [...value.trim()].length > MAX_NOTE_LENGTH) {
       throw new Error('备注须为不超过 200 个字符的文本。');
@@ -121,7 +131,7 @@
           if (!codes.has(candidate)) { code = candidate; break; }
         }
         if (!code) throw new Error('暂时无法生成不重复的邀请码，请重试。');
-        const item = { id: cryptoImpl.randomUUID(), code, status: 'active', createdAt: new Date().toISOString() };
+        const item = { id: createUUID(cryptoImpl), code, status: 'active', createdAt: new Date().toISOString() };
         data.items.unshift(item);
         data.requests[requestId] = item.id;
         save(data);
@@ -164,7 +174,7 @@
     const base = basePath.replace(/\/$/, '');
 
     async function request(path, { method = 'GET', requestId, body = {} } = {}) {
-      const headers = { Accept: 'application/json' };
+      const headers = { Accept: 'application/json', 'X-Invite-Console': '1' };
       if (method !== 'GET') {
         headers['Content-Type'] = 'application/json';
         if (requestId) headers['Idempotency-Key'] = requestId;
@@ -173,21 +183,23 @@
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(`${base}${path}`, {
-          method, headers, credentials: 'omit', cache: 'no-store', redirect: 'error',
+          method, headers, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
           referrerPolicy: 'no-referrer',
           signal: controller.signal, ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
         });
         if (!response.ok) {
           const messages = {
             400: '请求内容不正确，请检查后重试。',
-            401: '邀请码接口仍要求身份验证，请确认后端已更新。',
-            403: '邀请码接口拒绝访问，请确认后端已更新。',
+            401: '密码错误或登录已过期，请重新输入管理员密码。',
+            403: '请从发码页面操作。',
             404: '邀请码接口不存在，请确认当前后端已更新。',
             409: '邀请码或设备状态已变化，请刷新记录后重试。',
             429: '操作有些频繁，请稍后重试。',
             503: '邀请码服务未启用或依赖未就绪，请联系管理员。',
           };
-          throw new Error(messages[response.status] || '服务暂时不可用，请稍后重试。');
+          const error = new Error(messages[response.status] || '服务暂时不可用，请稍后重试。');
+          error.status = response.status;
+          throw error;
         }
         return await response.json();
       } catch (error) {
@@ -201,6 +213,9 @@
     }
 
     return {
+      session: () => request('/session'),
+      login: (password) => request('/session', { method: 'POST', body: { password } }),
+      logout: () => request('/session', { method: 'DELETE' }),
       listPage: async ({ status = 'current', query = '', cursor = '' } = {}) => {
         const params = new URLSearchParams({ status, q: query, cursor });
         const data = await request(`?${params}`);
@@ -225,7 +240,7 @@
 
   // Single-flight plus a tab-scoped journal: reload/timeout retries reuse the same ID.
   // Actual exactly-once issuance must be implemented transactionally by the service.
-  function createIssuer({ adapter, storage, pendingKey, randomUUID = () => globalThis.crypto.randomUUID() }) {
+  function createIssuer({ adapter, storage, pendingKey, randomUUID = createUUID }) {
     let pendingId = storage.getItem(pendingKey);
     let inFlight = null;
     return {
