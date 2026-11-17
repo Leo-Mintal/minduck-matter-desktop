@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { webcrypto } = require('node:crypto');
-const { ALPHABET, DEMO_KEY, generateCode, createDemoAdapter, createApiAdapter, createIssuer } = require('./core.js');
+const { ALPHABET, DEMO_KEY, generateCode, validateInvite, matchesFilter, statusLabel, createDemoAdapter, createApiAdapter, createIssuer } = require('./core.js');
 
 function memoryStorage() {
   const map = new Map();
@@ -12,6 +12,57 @@ function memoryStorage() {
 
 const invite = { id: 'invite-1', code: 'ABC234', status: 'active', createdAt: '2026-11-16T08:00:00.000Z' };
 const response = (value, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => value });
+
+test('notes persist in demo records, can be cleared, and never revive a code', async () => {
+  const storage = memoryStorage();
+  const adapter = createDemoAdapter({ storage, cryptoImpl: webcrypto });
+  const item = await adapter.issue('note-request');
+  await adapter.revoke(item.id);
+  const note = '张三 <script>仅文本</script>';
+  const updated = await adapter.updateNote(item.id, `  ${note}  `);
+  assert.equal(updated.note, note);
+  assert.equal(updated.status, 'revoked');
+  const reopened = createDemoAdapter({ storage, cryptoImpl: webcrypto });
+  assert.equal((await reopened.list())[0].note, note);
+  assert.equal((await reopened.updateNote(item.id, ' \n ')).note, '');
+  await assert.rejects(adapter.updateNote(item.id, '鸭'.repeat(201)), /200/);
+  await assert.rejects(adapter.updateNote('missing', '备注'), /没有找到/);
+  assert.throws(() => validateInvite({ ...invite, note: null }), /备注/);
+  assert.throws(() => validateInvite({ ...invite, note: 3 }), /备注/);
+});
+
+test('API note updates use JSON without credentials and validate their response', async () => {
+  const calls = [];
+  const adapter = createApiAdapter({ basePath: '/api/desktop-access/invites', fetchImpl: async (url, options) => {
+    calls.push({ url, ...options });
+    return response({ ...invite, note: JSON.parse(options.body).note });
+  } });
+  assert.equal((await adapter.updateNote(invite.id, ' 张三 ')).note, '张三');
+  assert.equal(calls[0].url, '/api/desktop-access/invites/invite-1/note');
+  assert.equal(calls[0].method, 'POST');
+  assert.equal(calls[0].body, JSON.stringify({ note: '张三' }));
+  assert.equal(calls[0].credentials, 'omit');
+  assert.equal(calls[0].headers.Authorization, undefined);
+  assert.equal(calls[0].headers['X-Invite-Console-Key'], undefined);
+  assert.equal((await adapter.updateNote(invite.id, '')).note, '');
+  await assert.rejects(adapter.updateNote(invite.id, '鸭'.repeat(201)), /200/);
+  assert.equal(calls.length, 2);
+  assert.equal(validateInvite({ ...invite, note: '🦆'.repeat(200) }).note, '🦆'.repeat(200));
+});
+
+test('expired device history keeps the expired label after reactivation moves its device link', () => {
+  const used = { ...invite, status: 'used', usedAt: invite.createdAt,
+    activation: { status: 'revoked', createdAt: invite.createdAt } };
+  const history = validateInvite({ ...used, status: 'revoked', activation: undefined });
+  assert.equal(statusLabel(used), '已过期');
+  assert.equal(statusLabel(history), '已过期');
+  assert.equal(history.usedAt, invite.createdAt);
+  assert.equal(matchesFilter(history), false);
+  assert.equal(matchesFilter(history, 'revoked'), true);
+  assert.equal(statusLabel({ ...invite, status: 'revoked' }), '已作废');
+  assert.equal(statusLabel({ ...invite, status: 'used' }), '已使用');
+  assert.throws(() => validateInvite({ ...invite, usedAt: 'invalid' }), /核销时间格式/);
+});
 
 test('demo codes use six readable characters and contain both letters and digits', () => {
   assert.equal(ALPHABET.length, 32);
@@ -93,45 +144,45 @@ test('demo collision is retried without replacing an existing invite', async () 
   assert.deepEqual((await adapter.list()).find((item) => item.id === old.id), old);
 });
 
-test('API adapter sends the existing Bearer login, pagination and idempotency headers', async () => {
+test('API adapter works without credentials and preserves pagination and idempotency', async () => {
   const requests = [];
-  const adapter = createApiAdapter({ basePath: '/api/admin/desktop-invites', accessToken: () => 'test-jwt', fetchImpl: async (url, options) => {
+  const adapter = createApiAdapter({ basePath: '/api/desktop-access/invites', fetchImpl: async (url, options) => {
     requests.push({ url, ...options });
     return response(options.method === 'GET' ? { items: [invite] } : invite);
   } });
   assert.deepEqual(await adapter.listPage({ status: 'active', query: 'ABC234', cursor: 'next' }), { items: [invite], nextCursor: '' });
-  assert.equal(requests[0].url, '/api/admin/desktop-invites?status=active&q=ABC234&cursor=next');
+  assert.equal(requests[0].url, '/api/desktop-access/invites?status=active&q=ABC234&cursor=next');
   await adapter.issue('request-1');
   assert.equal(requests[1].headers['Idempotency-Key'], 'request-1');
-  assert.equal(requests[1].headers.Authorization, 'Bearer test-jwt');
-  assert.equal(requests[0].headers.Authorization, 'Bearer test-jwt');
+  for (const request of requests) {
+    assert.equal(request.headers['X-Invite-Console-Key'], undefined);
+    assert.equal(request.headers.Authorization, undefined);
+    assert.equal(request.headers.Cookie, undefined);
+  }
+  assert.equal(requests[1].referrerPolicy, 'no-referrer');
   assert.equal(requests[1].credentials, 'omit');
   assert.equal(requests[1].redirect, 'error');
   assert.equal(requests[1].cache, 'no-store');
   assert.equal(requests[1].body, '{}');
 });
 
-test('API configuration rejects remote endpoints and requests without a login', async () => {
+test('API configuration rejects remote endpoints', () => {
   for (const basePath of ['https://example.test/invites', '//example.test/invites', '/api?token=x', '/api\\evil']) {
     assert.throws(() => createApiAdapter({ basePath }), /同源/);
   }
-  let calls = 0;
-  const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => '', fetchImpl: async () => { calls += 1; } });
-  await assert.rejects(adapter.issue('request-1'), /登录管理员/);
-  assert.equal(calls, 0);
 });
 
 test('API errors and malformed success responses never produce a local invite', async () => {
-  for (const status of [401, 403, 409, 429, 500]) {
-    const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => 'test', fetchImpl: async () => response({}, status) });
+  for (const status of [401, 403, 404, 409, 429, 500, 503]) {
+    const adapter = createApiAdapter({ basePath: '/api/invites', fetchImpl: async () => response({}, status) });
     await assert.rejects(adapter.issue('request-1'));
   }
-  const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => 'test', fetchImpl: async () => response({ ...invite, code: '<img>' }) });
+  const adapter = createApiAdapter({ basePath: '/api/invites', fetchImpl: async () => response({ ...invite, code: '<img>' }) });
   await assert.rejects(adapter.issue('request-1'), /格式/);
 });
 
 test('API timeout aborts the transport and reports a retriable result', async () => {
-  const adapter = createApiAdapter({ basePath: '/api/invites', accessToken: () => 'test', timeoutMs: 5,
+  const adapter = createApiAdapter({ basePath: '/api/invites', timeoutMs: 5,
     fetchImpl: (_url, { signal }) => new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new DOMException('Timeout', 'AbortError')));
     }),
@@ -139,7 +190,7 @@ test('API timeout aborts the transport and reports a retriable result', async ()
   await assert.rejects(adapter.issue('request-1'), /请求超时/);
 });
 
-test('demo paging and full-code search match the server list contract', async () => {
+test('demo paging and partial-code search match the server list contract', async () => {
   const storage = memoryStorage();
   const items = Array.from({ length: 25 }, (_, index) => ({
     ...invite, id: 'item-' + index, code: 'ABC2' + ALPHABET[index] + '3',
@@ -152,8 +203,85 @@ test('demo paging and full-code search match the server list contract', async ()
   const last = await adapter.listPage({ cursor: first.nextCursor });
   assert.equal(last.items.length, 5); assert.equal(last.nextCursor, '');
   assert.equal(new Set([...first.items, ...last.items].map(item => item.id)).size, 25);
-  assert.equal((await adapter.listPage({ query: 'ABC' })).items.length, 0);
+  assert.equal((await adapter.listPage({ query: 'abc' })).items.length, 20);
   assert.deepEqual((await adapter.listPage({ query: items[0].code.toLowerCase() })).items, [items[0]]);
   assert.equal((await adapter.listPage({ status: 'active' })).items.length, 12);
   await assert.rejects(adapter.listPage({ cursor: '-1' }), /分页/);
+});
+
+test('note search is case-insensitive, literal, and applied before pagination and status filters', async () => {
+  const storage = memoryStorage();
+  const items = Array.from({ length: 23 }, (_, index) => ({
+    ...invite, id: 'note-' + index, code: 'ABC2' + ALPHABET[index] + '3',
+    note: '发给 Alice 团队参加灰测', createdAt: new Date(1700000000000 + index * 1000).toISOString(),
+  }));
+  const special = { ...invite, id: 'special', code: 'XYZ789', note: '100%_!\\ 正常文字' };
+  const revoked = { ...invite, id: 'revoked-note', code: 'DEF345', note: 'Alice 已作废', status: 'revoked' };
+  const codeInNote = { ...invite, id: 'code-in-note', code: 'GHJ456', note: `备注提到 ${items[0].code}` };
+  storage.setItem(DEMO_KEY, JSON.stringify({ items: [special, revoked, codeInNote, ...items], requests: {} }));
+  const adapter = createDemoAdapter({ storage });
+  const first = await adapter.listPage({ query: ' alice ' });
+  assert.equal(first.items.length, 20);
+  const tail = await adapter.listPage({ query: 'ALICE', cursor: first.nextCursor });
+  assert.equal(tail.items.length, 3);
+  assert.equal(new Set([...first.items, ...tail.items].map(item => item.id)).size, 23);
+  assert.equal((await adapter.listPage({ status: 'revoked', query: 'alice' })).items[0].id, revoked.id);
+  for (const query of ['%', '_', '!', '\\']) {
+    assert.deepEqual((await adapter.listPage({ query })).items, [special]);
+  }
+  assert.equal((await adapter.listPage({ query: items[0].code.toLowerCase() })).items.length, 2);
+  assert.equal((await adapter.listPage({ query: '发给 Alice 团队' })).items.length, 20);
+  assert.equal((await adapter.listPage({ query: '不存在的备注' })).items.length, 0);
+});
+
+test('current and used filters hide invalidated codes and devices before pagination', async () => {
+  const storage = memoryStorage();
+  const used = { ...invite, id: 'used', code: 'DEF345', status: 'used',
+    activation: { status: 'active', createdAt: invite.createdAt } };
+  const revoked = { ...used, id: 'revoked-device', code: 'GHJ456',
+    activation: { ...used.activation, status: 'revoked', revokedAt: invite.createdAt } };
+  const items = [invite, used, revoked, ...Array.from({ length: 25 }, (_, i) => ({
+    ...invite, id: 'void-' + i, code: 'XYZ2' + ALPHABET[i] + '3', status: 'revoked',
+    createdAt: '2026-11-16T09:00:00.000Z',
+  }))];
+  storage.setItem(DEMO_KEY, JSON.stringify({ items, requests: {} }));
+  const adapter = createDemoAdapter({ storage });
+  const page = await adapter.listPage();
+  assert.equal(page.items.length, 2);
+  assert.equal(page.nextCursor, '');
+  assert.deepEqual((await adapter.listPage({ status: 'used' })).items, [used]);
+  assert.equal((await adapter.listPage({ status: 'revoked' })).items.length, 20);
+  assert.deepEqual((await adapter.listPage({ status: 'revoked', query: revoked.code })).items, [revoked]);
+  assert.equal(matchesFilter(revoked), false);
+  assert.equal(matchesFilter(revoked, 'revoked'), true);
+  assert.equal(matchesFilter(revoked, 'all'), true);
+  await assert.rejects(adapter.revoke(used.id), /已使用/);
+  await assert.rejects(adapter.revokeActivation(invite.id), /没有找到/);
+  const result = await adapter.revokeActivation(used.id);
+  assert.equal(result.status, 'used');
+  assert.equal(result.activation.status, 'revoked');
+  assert.equal((await adapter.listPage()).items.length, 1);
+  const repeated = await adapter.revokeActivation(used.id);
+  assert.equal(repeated.activation.revokedAt, result.activation.revokedAt);
+});
+
+test('API device revocation needs no credentials and preserves activation state safely', async () => {
+  const calls = [];
+  const item = { ...invite, status: 'used', activation: { status: 'revoked', createdAt: invite.createdAt,
+    revokedAt: invite.createdAt, publicKeySPKI: 'must-not-retain', id: 'device-id' } };
+  const adapter = createApiAdapter({ basePath: '/api/desktop-access/invites',
+    fetchImpl: async (url, options) => { calls.push({ url, options }); return response(item); } });
+  const result = await adapter.revokeActivation('invite-1');
+  assert.equal(calls[0].url, '/api/desktop-access/invites/invite-1/revoke-activation');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['X-Invite-Console-Key'], undefined);
+  assert.equal(calls[0].options.credentials, 'omit');
+  assert.equal(result.activation.status, 'revoked');
+  assert.equal(result.activation.publicKeySPKI, undefined);
+  assert.equal(result.activation.id, undefined);
+  for (const activation of [{ status: 'active' }, { status: 'other', createdAt: invite.createdAt },
+    { status: 'revoked', createdAt: invite.createdAt, revokedAt: 'invalid' }]) {
+    assert.throws(() => validateInvite({ ...item, activation }), /设备激活/);
+  }
+  assert.throws(() => validateInvite({ ...invite, activation: item.activation }), /设备激活/);
 });

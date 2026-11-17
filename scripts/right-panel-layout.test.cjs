@@ -8,9 +8,9 @@ const {
 test('closed browser leaves a fixed icon rail and gray frame around Matter', () => {
   const layout = rightPanelLayout(1280, 800, false)
   assert.equal(FRAME_EDGE, 4)
-  assert.equal(FRAME_RAIL_WIDTH, 36)
+  assert.equal(FRAME_RAIL_WIDTH, 49)
   assert.equal(MATTER_TOP_INSET, 36)
-  assert.deepEqual(layout.matter, { x: FRAME_RAIL_WIDTH, y: MATTER_TOP_INSET, width: 1240, height: 760 })
+  assert.deepEqual(layout.matter, { x: FRAME_RAIL_WIDTH, y: MATTER_TOP_INSET, width: 1227, height: 760 })
   assert.equal(1280 - layout.matter.x - layout.matter.width, 4)
   assert.equal(800 - layout.matter.y - layout.matter.height, 4)
   assert.equal(layout.browser, null)
@@ -60,7 +60,7 @@ test('Web measurements determine toolbar size within the framed content bounds',
   assert.equal(layout.shell.height, 117)
   assert.equal(layout.browser.y, 117)
   assert.equal(layout.resizer.width, 13)
-  assert.equal(rightPanelLayout(1280, 800, true, 9999, metrics).panel.width, 868)
+  assert.equal(rightPanelLayout(1280, 800, true, 9999, metrics).panel.width, 859)
   for (const height of [0, 32, 60, 160]) {
     const short = rightPanelLayout(1280, height, true, 410, metrics)
     assert.ok(short.browser.height >= 0)

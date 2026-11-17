@@ -28,6 +28,19 @@ function artifactName(version, extension = 'dmg') {
   return `MinduckMatter-${version}-arm64.${extension}`
 }
 
+function localReleasePaths(version, releaseRoot = RELEASE_DIR) {
+  parseVersion(version)
+  const directory = path.join(releaseRoot, version)
+  const metadataDirectory = path.join(directory, 'metadata')
+  return {
+    directory,
+    dmgPath: path.join(directory, artifactName(version)),
+    zipPath: path.join(directory, artifactName(version, 'zip')),
+    manifestPath: path.join(metadataDirectory, 'latest-mac.yml'),
+    reportPath: path.join(metadataDirectory, `MinduckMatter-${version}-arm64.release.json`),
+  }
+}
+
 function releaseDownloadURL(version) {
   return new URL(artifactName(version), UPDATE_MANIFEST_URL).href
 }
@@ -116,7 +129,7 @@ function remoteCleanupScript() {
 }
 
 function verifyExistingNotarization({ version, checksum, zipChecksum, localDMG }) {
-  const reportFile = path.join(RELEASE_DIR, 'metadata', `MinduckMatter-${version}-arm64.release.json`)
+  const reportFile = localReleasePaths(version).reportPath
   if (fs.existsSync(reportFile)) {
     const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'))
     if (report.version === version && report.notarization?.app?.status === 'Accepted'
@@ -235,13 +248,11 @@ function publish(version, { uploadOnly = false } = {}) {
     }
 
     const dmg = artifactName(version)
-    const localDMG = path.join(RELEASE_DIR, dmg)
+    const { directory, dmgPath: localDMG, zipPath: localZIP, manifestPath: localManifest } = localReleasePaths(version)
     if (!fs.statSync(localDMG).isFile()) throw new Error(`打包后未找到 ${localDMG}`)
     const checksum = sha256(localDMG)
     const zip = artifactName(version, 'zip')
-    const localZIP = path.join(RELEASE_DIR, zip)
-    const localManifest = path.join(RELEASE_DIR, 'metadata', 'latest-mac.yml')
-    verifyUpdateArtifacts(RELEASE_DIR, localManifest, version)
+    verifyUpdateArtifacts(directory, localManifest, version)
     const zipChecksum = sha256(localZIP)
     const manifestChecksum = sha256(localManifest)
     if (uploadOnly) verifyExistingNotarization({ version, checksum, zipChecksum, localDMG })
@@ -294,6 +305,7 @@ module.exports = {
   REMOTE_RELEASE_DIR,
   artifactName,
   assertVersionProgression,
+  localReleasePaths,
   openReleaseSSH,
   releaseDownloadURL,
   remotePublishScript,

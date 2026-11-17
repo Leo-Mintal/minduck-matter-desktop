@@ -1,6 +1,6 @@
-// Keep demo mode until the new backend is deployed. API mode reads the existing
-// same-origin matter.token login; never put an administrator token in this file.
+// File previews use demo mode. serve.cjs supplies API-mode config for the local
+// invitation service without changing this file.
 window.InviteConsoleConfig = Object.freeze({
   mode: 'demo',
-  apiBasePath: '/api/admin/desktop-invites',
+  apiBasePath: '/api/desktop-access/invites',
 });

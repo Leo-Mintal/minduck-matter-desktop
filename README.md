@@ -120,7 +120,7 @@ pnpm dist:mac
 
 此命令会从 Web 仓库远端拉取最新 `dev` 分支到临时目录，按锁定依赖构建共享 Web、生成图标并打包；
 不会使用兄弟 Web 工作区当前分支或未提交的改动。输出为
-`release/MinduckMatter-<package.json 中的 version>-arm64.dmg` 和同版本 `.zip`，对应更新清单 `latest-mac.yml`、`.blockmap` 和 `.sha256` 保存在 `release/metadata/`。ZIP 用于应用内更新；发布记录 JSON 也归入 `metadata/`，已替代的旧包及其辅助文件归入 `release/archive/<版本>/`。
+`release/<version>/MinduckMatter-<version>-arm64.dmg` 和同目录的 `.zip`，其中 `<version>` 来自 `package.json`。ZIP 用于应用内更新；该版本的更新清单 `latest-mac.yml`、`.blockmap`、`.sha256`、发布报告和验证记录统一保存在 `release/<version>/metadata/`。独立测试构建放入同版本的 `tests/<构建名>/`，历史归档保留在同版本的 `archive/`；版本之间不共享或覆盖更新清单。
 默认会使用 Developer ID 签名整个 Electron 应用，提交最终 DMG 至 Apple 公证服务，等待结果并装订票据。
 打包机的“登录”钥匙串必须已安装 `Developer ID Application` 证书，且 Apple 公证凭据须已通过
 `xcrun notarytool store-credentials` 保存为 `MinduckNotary`。默认不会读取或保存 `.p8` 文件；凭据从 macOS 钥匙串中名为
@@ -230,7 +230,7 @@ pnpm chromium:start
 pnpm chromium:dist:mac
 ```
 
-The resulting Apple Silicon DMG is written to `release/`; it contains Electron,
+The resulting Electron Apple Silicon DMG is written to `release/<version>/`; it contains Electron,
 the shared Web build, the independent Coopanion runtime, and both unpacked extension directories,
 but not the Matter business service or a second Chromium runtime. Recipients only
 need to install the application and have network access to the configured Matter
@@ -242,9 +242,10 @@ the configured Matter deployment. The existing unavailable page is used if the
 local frontend itself cannot load.
 `scripts/package-macos.sh` is the manually runnable equivalent of `pnpm dist:mac`;
 it checks the local toolchain, rebuilds the Web frontend and icon, and prints the
-DMG SHA-256 after packaging. Block maps and checksum files are stored in
-`release/metadata/`; superseded installers and their sidecars are kept under
-`release/archive/<version>/`.
+DMG SHA-256 after packaging. DMG/ZIP files are stored in `release/<version>/`,
+with that version's manifests, block maps, checksums and verification records in
+`release/<version>/metadata/`. Distinct test builds and historical archives stay
+within the same version directory, under `tests/<build-name>/` and `archive/`.
 右侧面板只保留浏览器：标签页、地址栏、导航、分隔拖拽和 Matter Browser 扩展控制桥。
 独立 Local Agent 会话、模型配置、会话流、操作确认、本机文件/Bash 工具和 Go Gateway
 已经移除，启动和打包不再依赖 Go。Matter 后续通过保留的扩展与浏览器控制桥接入，

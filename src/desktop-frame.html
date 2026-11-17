@@ -29,8 +29,13 @@
       <div class="rail-tools" role="group" aria-label="客户端工具">
         <button id="check-update" class="icon-button" type="button" title="检查更新" aria-label="检查更新">
           <span class="icon update-icon" aria-hidden="true"></span>
-          <img class="available-icon" src="assets/update-available.svg" alt="" aria-hidden="true" />
-          <span id="update-progress" class="update-progress" role="progressbar" aria-label="下载更新" aria-valuemin="0" aria-valuemax="100" hidden></span>
+          <span class="icon available-icon" aria-hidden="true"></span>
+          <span id="update-progress" class="update-progress" role="progressbar" aria-label="下载更新" aria-valuemin="0" aria-valuemax="100" hidden>
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <circle class="update-progress-track" cx="10" cy="10" r="8"></circle>
+              <circle id="update-progress-value" class="update-progress-value" cx="10" cy="10" r="8" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"></circle>
+            </svg>
+          </span>
         </button>
         <button id="companion-settings" class="icon-button" type="button" title="桌宠设置" aria-label="桌宠设置">
           <span class="icon settings-icon" aria-hidden="true"></span>

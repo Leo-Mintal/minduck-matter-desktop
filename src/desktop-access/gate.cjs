@@ -1,40 +1,75 @@
 const path = require('node:path')
-const { pathToFileURL } = require('node:url')
 
-function createGate({ app, BrowserWindow, ipcMain, controller, checkUpdate = () => {} }) {
-  const filename = path.join(__dirname, 'gate.html')
-  const url = pathToFileURL(filename).href
-  let window, unsubscribe
-  const own = event => Boolean(window && !window.isDestroyed() && event.sender === window.webContents &&
-    event.senderFrame === event.sender.mainFrame && event.senderFrame.url === url)
-  ipcMain.handle('desktop-access:state', event => own(event) ? controller.snapshot() : null)
-  ipcMain.handle('desktop-access:submit', (event, code) => own(event) && typeof code === 'string' && code.length <= 32
-    ? controller.activate(code) : null)
-  ipcMain.handle('desktop-access:retry', event => own(event) ? controller.check() : null)
-  ipcMain.on('desktop-access:quit', event => { if (own(event)) app.quit() })
-  ipcMain.on('desktop-access:update', event => { if (own(event)) void checkUpdate() })
-  function show() {
-    if (controller.snapshot().status === 'active') return
-    if (window && !window.isDestroyed()) { window.show(); window.focus(); return }
-    window = new BrowserWindow({ width: 460, height: 360, useContentSize: true, minWidth: 400, minHeight: 340, resizable: false,
-      title: '激活 Minduck Matter', backgroundColor: '#161719', autoHideMenuBar: true,
-      webPreferences: { preload: path.join(__dirname, 'gate-preload.cjs'), contextIsolation: true,
-        nodeIntegration: false, sandbox: true, webSecurity: true } })
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-    window.webContents.on('will-navigate', event => event.preventDefault())
-    window.webContents.on('will-redirect', event => event.preventDefault())
-    window.on('closed', () => { window = undefined })
-    void window.loadFile(filename)
-  }
-  unsubscribe = controller.subscribe(state => {
-    if (state.status === 'active') { window?.close(); return }
-    show()
-    if (window && !window.isDestroyed()) window.webContents.send('desktop-access:changed', state)
+function presentNativePrompt({ app, error, code, editable, nativeModule }) {
+  const native = nativeModule || require(app.isPackaged
+    ? path.join(process.resourcesPath, 'native', 'desktop-access.node')
+    : path.join(__dirname, '../../build/desktop-access/desktop-access.node'))
+  native.openPrompt(error, code, editable)
+  let finish, timer
+  const result = new Promise((resolve, reject) => {
+    finish = resolve
+    timer = setInterval(() => {
+      try {
+        const response = native.pollPrompt()
+        if (response) { clearInterval(timer); resolve(response) }
+      } catch (error) {
+        clearInterval(timer); native.closePrompt(); reject(error)
+      }
+    }, 50)
   })
-  return { show, dispose() {
-    unsubscribe?.(); window?.destroy(); window = undefined
-    for (const key of ['state', 'submit', 'retry']) ipcMain.removeHandler('desktop-access:' + key)
-    ipcMain.removeAllListeners('desktop-access:quit'); ipcMain.removeAllListeners('desktop-access:update')
+  return { result, focus: () => native.focusPrompt(),
+    update: options => native.updatePrompt(options.error, options.editable, options.inputEnabled), close() {
+    clearInterval(timer)
+    const response = native.pollPrompt()
+    native.closePrompt(); finish(response || { action: 'dismissed' })
   } }
 }
-module.exports = { createGate }
+
+function createGate({ app, controller, dialog, presentPrompt = options => presentNativePrompt({ app, ...options }) }) {
+  let prompt, disposed = false, submitting = false, code = '', quitting = false
+  const message = state => state.status === 'revoked' ? '本机激活资格已过期，请输入新的邀请码。'
+    : ['unactivated', 'checking'].includes(state.status) ? '' : state.message
+  function quit() {
+    if (disposed || quitting) return
+    quitting = true
+    controller.dispose?.()
+    app.quit()
+  }
+  function show() {
+    const state = controller.snapshot()
+    if (disposed || submitting || quitting || ['checking', 'active'].includes(state.status)) return
+    if (prompt) { prompt.focus(); return }
+    try {
+      prompt = presentPrompt({ code, editable: state.status !== 'unsupported', error: message(state) })
+    } catch (error) { fail(error); return }
+    const current = prompt
+    void current.result.then(async response => {
+      if (disposed) return
+      if (response.action === 'quit') { quit(); return }
+      if (prompt !== current) return
+      prompt = undefined
+      if (response.action !== 'confirm') return
+      code = String(response.code || '').trim().toUpperCase()
+      submitting = true
+      try { await controller.activate(code) } finally { submitting = false }
+      show()
+    }).catch(fail)
+  }
+  function fail(error) {
+    if (disposed) return
+    prompt?.close(); prompt = undefined
+    dialog?.showErrorBox('无法显示激活弹窗', error.message || '请重新安装应用后重试')
+    quit()
+  }
+  const unsubscribe = controller.subscribe(state => {
+    if (state.status === 'active') { prompt?.close(); prompt = undefined; code = ''; return }
+    if (prompt) {
+      prompt.update({ editable: ['unactivated', 'retryable_error', 'revoked'].includes(state.status),
+        inputEnabled: state.status !== 'unsupported', error: message(state) })
+      return
+    }
+    show()
+  })
+  return { show, dispose() { disposed = true; unsubscribe(); prompt?.close(); prompt = undefined; code = '' } }
+}
+module.exports = { createGate, presentNativePrompt }

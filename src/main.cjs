@@ -49,6 +49,7 @@ const {
 } = require('./desktopSettings.cjs')
 const {
   DEFAULT_MATTER_ORIGIN,
+  isMatterConversationURL,
   isMatterWebURL,
   normalizeMatterOrigin,
   resolveMatterOrigin,
@@ -269,8 +270,12 @@ function navigateMatter(type) {
 function publishDesktopFrameState() {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop-frame:state', desktopFrameState())
   if (matterWorkspace && matterTab && !matterTab.view.webContents.isDestroyed()) {
-    matterTab.view.webContents.send('workspace-shell:state', { railWidth: FRAME_RAIL_WIDTH, update: desktopUpdate })
+    matterTab.view.webContents.send('workspace-shell:state', workspaceState())
   }
+}
+
+function workspaceState() {
+  return { railWidth: FRAME_RAIL_WIDTH, update: desktopUpdate, rightPanelOpen: browserHost?.isPanelOpen() ?? false }
 }
 
 function panelLayouts() {
@@ -482,7 +487,12 @@ async function updateMatterPresence() {
 function configureMatterTab(tab) {
   const { webContents } = tab.view
   for (const event of ['did-navigate', 'did-navigate-in-page', 'did-start-loading', 'did-stop-loading']) {
-    webContents.on(event, () => setImmediate(publishDesktopFrameState))
+    webContents.on(event, (_event, _url, isMainFrame) => {
+      if ((event === 'did-navigate' || event === 'did-navigate-in-page') && isMainFrame !== false) {
+        browserHost?.setPanelSuppressed(!isMatterConversationURL(webContents.getURL(), matterOrigin))
+      }
+      setImmediate(publishDesktopFrameState)
+    })
   }
   // One listener owned by this session; right-side browser tabs use another session.
   webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -944,7 +954,7 @@ function configureIPC() {
   ipcMain.handle('workspace-shell:get-state', event => {
     if (!isWorkspaceSender(event)) return null
     if (!matterWorkspace) { matterWorkspace = true; layoutViews(); publishDesktopFrameState() }
-    return { railWidth: FRAME_RAIL_WIDTH, update: desktopUpdate }
+    return workspaceState()
   })
   ipcMain.on('workspace-shell:command', (event, type) => {
     if (!isWorkspaceSender(event)) return
@@ -1284,7 +1294,7 @@ app.whenReady().then(async () => {
   desktopAccess = createAccessController({ service: desktopAccessService,
     onActive: async () => { businessAllowed = true; await startDesktopBusiness() },
     onBlocked: stopDesktopBusiness })
-  activationGate = createGate({ app, BrowserWindow, ipcMain, controller: desktopAccess, checkUpdate: checkForDesktopUpdate })
+  activationGate = createGate({ app, dialog, controller: desktopAccess })
   app.on('activate', () => {
     if (!businessAllowed) { activationGate.show(); return }
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()

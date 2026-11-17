@@ -4,13 +4,70 @@
 
 当前正式的打包入口是 `pnpm dist:mac`，实现位于 `scripts/package-macos.sh`。原生 Brave/Chromium 迁移仍是实验工作；本手册描述目前可交付的 Electron 安装包。
 
+## 版本目录规范（2026-11-17 起）
+
+所有打包产物按 `package.json` 的版本号归入 `release/<version>/`：根部放 DMG/ZIP，`metadata/` 放该版本的更新清单、SHA-256、blockmap、公证报告和验证记录；同版本的不同测试构建保留在 `tests/<构建名>/`，已有旧归档放在 `archive/`。手工打包也遵守此规则。`pnpm dist:mac` 自动按此目录输出，`pnpm release:mac` 和 `pnpm upload:mac` 从目标版本目录读取，服务器下载目录与公开 URL 保持原有结构。
+
+现有 119 项文件/目录已按版本归类，5,645 个文件逐一核对 SHA-256、权限、inode 和符号链接，内容未变。迁移记录在 `release/0.1.11/metadata/directory-layout-20261117.json`。以下日期记录中的旧路径保留为当时的事实；查找文件时以迁移记录为准，例如原 `release/metadata/build-0.1.11-20261116/` 现为 `release/0.1.11/metadata/build-0.1.11-20261116/`。旧记录附带的一次性脚本也原样归档，日常上传使用当前 `pnpm upload:mac`。
+
 ### 邀请码分支的签名先决条件（2026-11-16，尚未发布）
 
-- 打包现在编译 `native/desktop-access.mm`，仅使用系统 Foundation/Security.framework；需要 Xcode CLI 和 Node N-API 头文件（默认 `/opt/homebrew/include/node`，可设 `MINDUCK_NODE_HEADERS`）。产物为 `Resources/native/desktop-access.node`，afterPack 核对其与本次编译输出相同。
+- 打包现在编译 `native/desktop-access.mm`，仅使用系统 Foundation/Security/AppKit.framework；需要 Xcode CLI 和 Node N-API 头文件（默认 `/opt/homebrew/include/node`，可设 `MINDUCK_NODE_HEADERS`）。产物为 `Resources/native/desktop-access.node`，afterPack 核对其与本次编译输出相同。
 - 要发布可强制激活的客户端，设置 `MINDUCK_DESKTOP_ACCESS_PROFILE` 为授权此 App ID/Keychain Access Group 的 macOS profile 绝对路径，并设置 `MINDUCK_DESKTOP_ACCESS_REQUIRED=1`。预检拒绝非 macOS、过期、标识/访问组不匹配的 profile；主应用 entitlement 由原文件复制并追加，保留照片等现有能力。带 profile 的构建必须签名。
-- 当前没有适用的 macOS profile，未打邀请码签名包、未替换安装版或公开更新。原生编译与隔离 Electron 测试不能替代真实 Keychain 创建、升级/重装恢复和锁屏验收；未验收前后端 `MATTER_DESKTOP_ACCESS=off`。发布新客户端前须先部署 policy 兼容接口，详见[改造记录](desktop-invite-activation-plan.md)。
+- 用户随后提供的 `matter.provisionprofile` 已核对为 OSX、授权实际应用 ID `7KSLAKT33A.com.minduck.matter`，访问组覆盖本应用，证书与本机 Developer ID 一致，有效期至 2044-11-11。下述新签名测试包已嵌入该 profile，真实 Secure Enclave 创建、核销与跨进程恢复通过；正常卸载重装、锁屏和新用户环境仍待验收。仅本地 8080 已获授权开启 gate；生产仍须遵守先部署兼容接口、完成发布验收再切强制的顺序。详见[改造记录](desktop-invite-activation-plan.md)。
+
+### 公证认证方式
+
+`pnpm dist:mac` 默认使用 `MINDUCK_NOTARY_PROFILE` 指定的钥匙串条目（默认 `MinduckNotary`）。如果条目在构建子进程中不可读，可同时显式设置 `MINDUCK_NOTARY_KEY_FILE`、`MINDUCK_NOTARY_KEY_ID` 和 `MINDUCK_NOTARY_ISSUER`，直接使用 App Store Connect API 密钥。密钥文件保留在仓库外，不写入发布包或文档；配置不完整会在构建前失败。
+
+预检、应用公证和 DMG 公证使用同一认证方式；打包时清除无关的继承 Apple 认证变量。该备用方式不代表原钥匙串条目的跨进程读取问题已经修复。
 
 ## 当前本地发布记录
+
+### 0.1.11 侧栏与浏览器修复重打包（2026-11-17，已签名、公证及验证）
+
+- 按用户要求保持 `0.1.11`，从当前源码隔离快照通过 `pnpm dist:mac` 重打 arm64 DMG/ZIP；显式使用已验证的本地 Web 构建，index SHA-256 为 `b8da1404bb87db0a32d8c1099195e6e77ddaee03e2231541a882d834e28e4a2f`。包含浏览器打开时临时收起聊天侧栏及 Logo 居中、导航 2px 间距、移除外层导航/聊天列表分隔线、离开会话页隐藏浏览器并按原偏好恢复，以及绿色更新指示器。此条取代此前同日“源码及本地构建已更新、未重打包”的交付状态。
+- 沿用既有 Developer ID、22 个 Mach-O/8 个嵌套 bundle 定向签名与授权 macOS profile；应用公证 `51197f98-ddac-426e-bb6b-a5ca0b88388d`、DMG 公证 `3fe5a215-30be-40eb-98e6-7610340f6b7b` 均为 **Accepted**。签名、票据、系统分发检查、两个 `0.1.11` 版本字段与指定签名要求核验通过。
+- 277 项串行单测、真实 Electron 四宽×深浅工作区/浏览器回归、原生 AppKit 激活弹窗，以及最终 DMG 实际可执行文件的 worker/Shell/二进制读取/沙箱拒绝与 36 项包内回归通过；4,883 项输入哈希、DMG/ZIP 的 5,556 项内容/权限/链接、9,405 个最终 DMG 增量块与更新清单校验一致。界面 smoke 在原生可见性切换后重新关闭后台节流，修复测试动画时钟停滞，保留原断言。
+- 新 DMG：197,109,778 字节，SHA-256 `5cdc623814c282137ef5dad8e1e1885d3990a9e606e6312218afa912f6192d91`；新 ZIP：193,279,848 字节，SHA-256 `f531181dc571f378aa606d2b2d2ab50c059e4176b8189695fe6abddd849b4bf3`。新包位于 `release/0.1.11/`，权威报告为其 `metadata/MinduckMatter-0.1.11-arm64.release.json`；过程日志、截图与验证脚本位于 `metadata/rebuild-0.1.11-20261117/`。原正常 DMG/ZIP 与对应清单、校验已移动至同版本 `archive/before-ui-rebuild-20261117/`，无额外应用备份。
+- 正式默认后端保持 `https://matter.minduck.com`，无测试服务或隔离 profile 覆盖。构建时正式 `/api/desktop-access/policy` 仍返回 404，公开分发前仍需部署并验收配套后端。本次仅生成本地包，未安装、上传或切换线上清单。
+
+### 0.1.11 本地上传包（2026-11-16，已签名、公证及验证，未上传）
+
+- 当前源码版本升至 `0.1.11`；arm64 DMG/ZIP 位于 `release/0.1.11/`，新旧更新清单 `latest-mac.yml`、`latest.json`、最终 blockmap、SHA-256 和发布报告位于 `release/0.1.11/metadata/`。使用本次 Web 工作树的显式 prebuilt 产物，保留此前 0.1.8 起的修改，包含 49px 导航栏、圆形对话首页图标、更新圆环、新西装鸭 1.1.0，以及原生邀请码/退出和失效后重新激活修复。
+- 通过隔离快照的 `pnpm dist:mac` 构建；仅在该快照配置既有定向签名 hook，22 个 Mach-O、8 个嵌套 bundle 和主应用使用原 Developer ID、安全时间戳及 Hardened Runtime。嵌入实际 `matter.provisionprofile`，保留钥匙串访问组、照片等 entitlement，指定签名要求与当前安装版相同。标准脚本新增显式直接 API 密钥认证选项，绕过本机钥匙串条目跨进程不可读问题，私钥未进入仓库或发布包。
+- 应用公证 `548e8c4e-a3a1-426c-b839-bf303a4acb84`、DMG 公证 `c36acb4c-2290-4168-9199-75518d758923` 均为 **Accepted**。最终归档内的两个 macOS 版本字段均为 `0.1.11`；深度签名、原生模块签名、应用/DMG 票据、系统分发检查通过。
+- 269 项桌面单测、原生 gate smoke、西装鸭生成检查，以及最终 DMG 中实际可执行文件的 worker/Shell/沙箱、原生模块加载和 27 项包内回归通过。4,883 项输入哈希、DMG/ZIP 的 5,556 项 bundle 内容/权限/链接、9,418 个最终 DMG 增量块及更新清单大小/SHA-512 校验一致。沿用本轮已完成的共享前端构建、导航/圆环及桌宠视觉回归，不将其描述为生产激活验收。
+- DMG：197,112,485 字节，SHA-256 `6e2a0b8f4c7732e8276f36ae38bad39f62d5484c065e68782473c987c80bf243`；ZIP：193,296,108 字节，SHA-256 `f447baa7752cd00dcca5c7b1b91ae43f03bb114e1b84f86eeacaeb904b8928d6`。权威记录：`release/0.1.11/metadata/MinduckMatter-0.1.11-arm64.release.json`；日志及校验脚本：`release/0.1.11/metadata/build-0.1.11-20261116/`。
+- 正式默认后端为 `https://matter.minduck.com`，包内没有本地 8080 或隔离测试 profile 覆盖项。打包时生产 `/api/desktop-access/policy` 仍返回 404；安全 gate 保留，因此**公开发放或切换更新清单前必须部署并验收配套后端，否则无法进入登录**。没有部署生产、上传文件、替换安装版或切换公开清单；临时应用、挂载与构建快照已清理。
+
+### 0.1.10 有效 profile 与圆环更新测试包（2026-11-16，已签名、公证及验证）
+
+- 最新可用于本机激活联调的已签名、公证 DMG/ZIP 位于 `release/invite-profile-ring-test-20261116/`，替代下节缺 profile 的测试包和本轮 `pending-notarization/` 暂存包。保留已有圆环更新、动态 Tooltip、AppKit 邀请码弹窗、退出及其他桌面改动；版本仍为 0.1.10、arm64，应用 ID 和指定签名要求与安装版一致。仅冻结测试快照使用 `shellTestOrigin=http://127.0.0.1:8080` 和现有隔离测试数据目录，未覆盖原 Web 工作树、安装版或正式默认地址。
+- 按 `pnpm dist:mac` 生成隔离产物后，在 Developer ID 签名前嵌入已验证的实际 profile，并为主应用合并应用标识和访问组 entitlement，保留照片权限。22 个 Mach-O、8 个嵌套 bundle 与主应用完成签名；最终 DMG/ZIP 内 profile 字节、权限、身份和 5,555 项 bundle 内容/权限/链接一致。264 项桌面测试、最终公证包内 27 项回归、实际 worker/Shell/沙箱和 9,408 个最终 DMG 增量块检查通过。沿用本轮此前通过的共享前端构建/类型检查、15 项 H5 及真实圆环交互验证。
+- 从实际签名 Electron 和已签名原生模块完成：并发发码复用一个码、Secure Enclave 永久密钥创建与私钥导出拒绝、本地真实 API 核销、恢复/续期、已用码拒绝第二设备、复制公开凭证但缺少原私钥时拒绝、签名登录与重放拒绝、普通 Web 登录仍开放。另一个进程及最终 DMG/ZIP 的不同 bundle 路径能查回同一测试激活。专用 QA 设备已吊销、硬件测试密钥已删除，未激活用户的正常设备密钥。
+- 最终 DMG 的原生弹窗不再显示 profile 配置错误；标题、描述和管理员说明均匹配需求，输入可编辑，六位合法格式启用“确定”，点击“退出”后本任务进程正常结束。未在该界面提交或核销用户邀请码。实际正常卸载重装、升级、锁屏/解锁、新用户环境及真实照片/目录授权点击仍待验收；跨进程和更换 bundle 路径验证不等同于卸载重装验收。
+- 用户补充实际 Issuer ID 后，直接 API 密钥认证验证成功；应用公证 `12a9ea49-415a-4e01-ba0d-c322e16eb488`、DMG 公证 `2ca382c3-929e-4373-87ab-e32fb950a3a3` 均为 **Accepted**。复用已验证签名 ZIP 提交应用公证、装订应用后重新封装 DMG/ZIP，再签名、公证和装订 DMG；应用原有 5,554 项 payload 全部未变，仅增加 Apple 票据。最终两个归档中的应用均通过深度签名、票据和系统分发检查，更新元数据在 DMG 最终装订后刷新并复核。
+- 原 `MinduckNotary` profile 出现写入/验证成功但后续进程读取失败的情况，本次采用已有 `.p8` 在本机直接认证完成公证，未复制私钥进包或记录其内容。标准 `pnpm dist:mac` 仍按原约定使用钥匙串 profile；此次没有改造其认证机制，也未将钥匙串跨进程读取问题宣称为已修复。
+- DMG：195,771,912 字节，SHA-256 `ff60b04841c15fb7606fe7f205ff5cf4c6785d1e4a7b1853a32b300db525a979`；ZIP：192,134,731 字节，SHA-256 `82c0f24b2487b88f16e024ebbfdee905e0e1ae3fee6d68aff7ae1fc7e6be5de6`。权威最终记录为同级 `validation/notarized-result.json`；原 `validation/result.json` 仅记录公证前输入。暂存待公证二进制已移除，原始校验记录保留。临时构建应用、QA key/helper、挂载和测试应用注册已清理；未替换安装版、上传服务器或切换公开清单。
+
+### 0.1.10 圆环更新与邀请码本地测试包（2026-11-16）
+
+- 独立目录 `release/update-ring-invite-test-20261116/`，包含共享 Web/备用原生左栏的 18px 圆环和动态进度 Tooltip，以及当前邀请码、原生退出竞争修复和已有桌面改动。使用保留共享工作区的 Web `5c1d3792649a9e4344cd25216592b4ddfffc8cb4` 的隔离工作树构建，未覆盖原 Web 工作树未提交改动；完整源码保留在 `/Users/mintal/.codex/worktrees/desktop-update-ring/minduck-matter-web-prod`。
+- 测试快照 package.json 单独设置 `shellTestOrigin=http://127.0.0.1:8080`，沿用现有隔离测试数据目录机制，不改正常源码默认服务或安装版配置。实际签名包确认不再请求旧 LAN policy；本地 policy 为 200、required=true。**缺少 macOS profile，实际运行会显示签名配置错误并禁用激活输入，不能核销或进入登录；完整激活/重装恢复未验收，须补齐后重打包。** 未关闭 gate 或降级私钥。
+- 264 项桌面测试、15 项 H5 测试、共享前端类型检查/构建及相关 ESLint 通过（保留原有 Fast Refresh 导出警告）。真实 Electron 验证深浅主题、至少 3:1 圆环对比度、37%→62% 悬浮提示实时刷新、忙碌点击拦截及验证后安装交接；实际签名包原生退出按钮与 ⌘Q 后测试进程均结束，无强制退出。
+- 从冻结快照经 `pnpm dist:mac` 及既有定向签名流程构建；dd9efb90-9e6f-432b-8d14-0d98e142cb7c（应用）、076b508a-aaa5-458a-8ae7-be84174a2668（DMG）公证均 Accepted，票据、深度签名和系统分发检查通过。4,893 项打包输入、5,554 项 DMG/ZIP 内容/权限/链接、9,392 个 DMG 增量块和更新元数据通过；最终 DMG 二进制通过 worker/Shell/沙箱、27 项包内回归和原生模块加载。
+- DMG：195,764,986 字节，SHA-256 `cf03f2a41b717ed1e143c5af5adc930bf8b57c64a76b9059e98fa851af497698`；ZIP：192,126,800 字节，SHA-256 `413fc75c9225adc658d80bd34595a529021260825af186249dceae6db9396c2a`。
+- 冻结/校验第一次遗漏实验 Chromium 脚本后已补全并整套复跑，保留失败记录；临时应用、提交归档、挂载和本任务新增的失效应用注册已清理。未替换安装版、部署公网、上传或切换公开更新。
+
+### 0.1.10 macOS 原生邀请码弹窗测试包（2026-11-16，已签名、公证及验证）
+
+- 独立目录 `release/invite-native-test-20261116/`，版本 0.1.10、arm64。改用 AppKit NSAlert / NSTextField，按指定标题、描述、说明及“确定 / 退出”呈现；删除旧 HTML、CSS、preload 和激活 renderer IPC。错误保留输入，重检只禁用确定，保留编辑和焦点。既有业务状态机、核销规则和已验证的本地 Web 资源保留，没有模拟激活或软件私钥降级。
+- 冻结快照与已通过测试的 235 个输入逐文件一致。标准 `pnpm dist:mac` 构建后，按既有流程定向签名 22 个 Mach-O（含原生激活/弹窗模块）、8 个嵌套 bundle 和主应用。应用公证 `59252890-8807-4739-b86d-79041860d29e`、DMG 公证 `78b493dc-b0e9-4495-bf9a-54c8a1de2633` 均为 Accepted；票据、深度签名、系统分发及安装版指定签名要求一致性通过。
+- DMG：195,767,009 字节，SHA-256 `cc528de9e48b2dad53c0b2b65a3aca984a400e010c1843f83b121d3a8709f521`；ZIP：192,111,393 字节，SHA-256 `2ac95c1d3f3875d8ec8725673d96d7d836152104bf89c3ccb12697f0f72a0fed`。
+- 259 项桌面测试通过；原生弹窗真实输入/确定/退出（服务使用隔离夹具）及加速策略重检后的输入焦点验收通过。首次整套检查重现既有 Shell 进程组 `kill EPERM` 偶发问题，原用例与整套复跑均通过，未修改 Shell 或断言，失败日志保留。最终 DMG 的实际二进制通过 worker/Shell/沙箱、25 项包内回归及原生模块加载/参数拒绝检查；4,893 个打包输入、DMG/ZIP 的 5,554 项内容/权限/链接、9,392 个最终 DMG 增量块及更新元数据校验通过。
+- **此包用于原生界面和拦截验收，不能完成真实核销/重装恢复。** 交付时线上及本地 `8080` 的 policy 接口仍返回 404；缺失适用 macOS profile，不能创建受所需授权保护的设备密钥。保留 fail-closed 行为，未部署后端、开启强制、修改 Web 源码、安装或公开发布。须先部署兼容 policy/API，再补齐 profile 重打包验收完整链路。
+- 测试说明、源码补丁/哈希和验证记录位于该目录。临时源码、应用、提交 ZIP 与验证挂载已清理；常规历史发布产物和用户数据保留。
 
 ### 0.1.10 本机目录与任务授权测试包（2026-11-16，已签名、公证及验证）
 
@@ -39,6 +96,7 @@
 
 ### 本机／云端协作测试客户端热更新（2026-11-13）
 
+- 2026-11-17 清理确认：已将此独立 `Minduck Shell Test` 0.1.9 `.app` 移到废纸篓，保留其隔离 profile、历史 DMG/ZIP 与验证记录。删除前直接比对实际 ASAR：Shell/文件执行、二进制传输及云电脑前端入口已包含在 0.1.11；当前安装版 ASAR 和 unpacked worker 与 0.1.11 发布 ZIP 一致。此次仅做包内代码核对，未重新验收远端服务；同日新增的侧栏/浏览器修复仍只在源码和本地 `web-dist`。记录见 `build/shell-test-comparison-20261117/`。
 - 在独立 `Minduck Shell Test` 0.1.9 测试应用中更新已验证的客户端执行／二进制传输模块和云电脑前端；保留 app ID、Developer ID 指定签名要求、原 profile 和正式安装版。仅热更测试 `.app`，下方原 DMG/ZIP 未重打，不能用旧安装包验收本次新增协议。
 - 修正手动 ASAR 打包的 worker 解包匹配，验证 642 项归档文件内容保持一致、实际 unpacked worker 与测试输入相符；真实签名 GUI 主进程经沙箱 worker 读取 NUL／非 UTF-8 临时二进制通过。应用已重启并确认窗口、登录、runtime 连接正常；当时该独立测试应用未获本机完全磁盘访问，未伪造或变更系统授权。
 - 真实模型明确云端后，使用 `cloud_shell` 返回退出码 0 和预期输出，无执行位置问答，不受本机 Shell 未授权影响；一次性验证会话已停止并删除。临时 loopback 主进程调试入口已关闭。
@@ -225,7 +283,7 @@ SSH 上传目标固定为 `root@124.70.149.30`，与公网下载域名分开配�
 cd "/Applications/File/WorkSpace/jomec/Minduck/minduck-matter-desktop" && pnpm upload:mac
 ```
 
-命令自动读取 `package.json` 的版本，使用 `release/MinduckMatter-<版本>-arm64.dmg`、对应 ZIP 和 `release/metadata/latest-mac.yml`，不会改版本、重新构建或重新提交公证。先校验安装包与清单；存在版本及两个 SHA-256 均匹配的 Accepted 公证记录时复用，否则验证 DMG 签名和票据。服务器 SSH 登录正常只需输入一次密码，后续上传、清单切换和清理复用连接。
+命令自动读取 `package.json` 的版本，使用 `release/<版本>/MinduckMatter-<版本>-arm64.dmg`、同目录的 ZIP 和 `release/<版本>/metadata/latest-mac.yml`，不会改版本、重新构建或重新提交公证。先校验安装包与清单；存在该版本 `metadata/` 下版本及两个 SHA-256 均匹配的 Accepted 公证记录时复用，否则验证 DMG 签名和票据。服务器 SSH 登录正常只需输入一次密码，后续上传、清单切换和清理复用连接。
 
 DMG、ZIP、`latest-mac.yml` 全部上传并在服务器校验成功后，切换安装包及两个更新清单，兼容旧客户端的下载地址字段继续保留。公网两个清单内容及 DMG/ZIP 响应验证成功后，再确认服务器清单 SHA-256 仍属于本次发布，才清理发布目录中版本更旧的 arm64 安装包及其匹配辅助文件、版本不高于当前版的旧清单备份。保留当前版、未来版、正在上传文件、符号链接、目录和其他文件；不清理本地包或其他服务。
 
@@ -240,12 +298,13 @@ cd /Applications/File/WorkSpace/jomec/Minduck/minduck-matter-desktop
 
 version=0.1.3
 dmg="MinduckMatter-${version}-arm64.dmg"
+local_dir="release/${version}"
 remote_dir=/root/minduck-matter-download/releases
 
-test -f "release/${dmg}" || { echo "找不到 release/${dmg}"; exit 1; }
-checksum="$(shasum -a 256 "release/${dmg}" | awk '{print $1}')"
+test -f "${local_dir}/${dmg}" || { echo "找不到 ${local_dir}/${dmg}"; exit 1; }
+checksum="$(shasum -a 256 "${local_dir}/${dmg}" | awk '{print $1}')"
 
-scp "release/${dmg}" \
+scp "${local_dir}/${dmg}" \
   "root@124.70.149.30:${remote_dir}/${dmg}.uploading"
 
 ssh root@124.70.149.30 'bash -s' -- "$version" "$checksum" <<'REMOTE_SCRIPT'
@@ -397,15 +456,15 @@ MINDUCK_WEB_ALLOW_PREBUILT=1 MINDUCK_WEB_DIST="$PWD/web-dist" pnpm dist:mac
 成功后的文件为：
 
 ```text
-release/MinduckMatter-<version>-arm64.dmg
-release/MinduckMatter-<version>-arm64.zip
-release/metadata/latest-mac.yml
-release/metadata/MinduckMatter-<version>-arm64.dmg.blockmap
-release/metadata/MinduckMatter-<version>-arm64.dmg.sha256
-release/metadata/MinduckMatter-<version>-arm64.zip.sha256
+release/<version>/MinduckMatter-<version>-arm64.dmg
+release/<version>/MinduckMatter-<version>-arm64.zip
+release/<version>/metadata/latest-mac.yml
+release/<version>/metadata/MinduckMatter-<version>-arm64.dmg.blockmap
+release/<version>/metadata/MinduckMatter-<version>-arm64.dmg.sha256
+release/<version>/metadata/MinduckMatter-<version>-arm64.zip.sha256
 ```
 
-`release/` 顶层保留当前可分发的 DMG/ZIP。发布记录 JSON、SHA-256 和增量 `.blockmap` 放在 `release/metadata/`；已被替代的旧包及其对应辅助文件放在 `release/archive/<版本>/`，整理时保留文件原内容。打包脚本自动将新生成的 `.blockmap` 和 `.sha256` 写入 `metadata/`；旧包归档仍在确认替代关系后进行。日常给收件人发包只需选择 DMG 或 ZIP，不必附带内部发布记录和增量文件。
+`release/` 的可见顶层只放版本目录。打包脚本自动把 DMG/ZIP 和其更新清单、`.blockmap`、`.sha256` 写入同一个版本目录，后续补充的兼容 `latest.json`、发布报告和验证记录也归入该版本的 `metadata/`。同版本的独立测试构建保留在 `tests/<构建名>/`，旧归档保留在该版本的 `archive/`，不合并覆盖不同构建。日常给收件人发包只需选择版本目录内的 DMG 或 ZIP。
 
 `pnpm dist:mac` 默认生成已签名且公证的对外发布包。只有不对外分发的本地调试场景，才使用 `MINDUCK_MACOS_SIGN=0 pnpm dist:mac` 生成无签名 DMG。
 
@@ -439,12 +498,12 @@ release/metadata/MinduckMatter-<version>-arm64.zip.sha256
 
 ## 发布前验证
 
-将 `<dmg>` 替换为实际输出文件：
+将 `<version>` 和 `<dmg>` 替换为实际版本与输出文件名：
 
 ```bash
-xcrun stapler validate "release/<dmg>"
-spctl --assess --type open --context context:primary-signature -vv "release/<dmg>"
-shasum -a 256 "release/<dmg>"
+xcrun stapler validate "release/<version>/<dmg>"
+spctl --assess --type open --context context:primary-signature -vv "release/<version>/<dmg>"
+shasum -a 256 "release/<version>/<dmg>"
 ```
 
 可额外挂载 DMG 并检查应用签名。挂载后请用“磁盘工具”或 `hdiutil detach` 卸载对应卷：
@@ -464,7 +523,7 @@ syspolicy_check distribution "/Volumes/<mounted-volume>/Minduck Matter.app"
 需要对照压缩包安装方式时，从已验证签名并装订票据的同一份 `.app` 生成 ZIP，而不是把未经验证的本机安装版重新打包：
 
 ```bash
-ditto -c -k --sequesterRsrc --keepParent "/path/to/verified/Minduck Matter.app" "/path/to/new/MinduckMatter-app.zip"
+ditto -c -k --sequesterRsrc --keepParent "/path/to/verified/Minduck Matter.app" "release/<version>/MinduckMatter-<version>-arm64-app.zip"
 ```
 
 发布前将 ZIP 解压到独立目录，比较完整文件内容、权限和符号链接，再验证解压后应用的深度签名、票据和发布状态。ZIP 外层不能装订票据，应用内的已有票据必须保留。安装时先解压，再将 `.app` 拖入“应用程序”替换旧版本。

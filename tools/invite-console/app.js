@@ -8,10 +8,10 @@
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const emptyRow = $('empty-row');
   const emptyState = $('empty-state');
-  const labels = { active: '未使用', used: '已使用', revoked: '已作废' };
+  const statusLabel = core.statusLabel;
   const state = {
-    items: [], current: null, filter: 'all', query: '', busy: false,
-    loading: false, ready: false, revoking: null, listError: false,
+    items: [], current: null, filter: 'current', query: '', busy: false,
+    loading: false, ready: false, revoking: null, editing: null, listError: false,
     nextCursor: '',
   };
   const dateFormat = new Intl.DateTimeFormat('zh-CN', {
@@ -22,6 +22,7 @@
   let toastTimer;
   let listGeneration = 0;
   let searchTimer;
+  let noteReturnFocus;
 
   function updateThemeButton() {
     const next = document.documentElement.dataset.theme === 'dark' ? '浅色' : '深色';
@@ -51,9 +52,9 @@
     $('refresh-button').disabled = state.busy || state.loading;
     $('load-more').disabled = locked;
     $('load-more').hidden = !state.nextCursor;
-    $('generate-label').textContent = state.busy && !state.revoking ? '正在摇码…'
+    $('generate-label').textContent = state.busy && !state.revoking && !state.editing ? '正在摇码…'
       : issuer?.hasPending() ? '重试本次摇码' : state.current ? '再摇一次' : '摇码';
-    $('reels-area').setAttribute('aria-busy', String(state.busy));
+    $('reels-area').setAttribute('aria-busy', String(state.busy && !state.revoking && !state.editing));
     document.querySelectorAll('[data-action]').forEach((button) => { button.disabled = locked; });
   }
 
@@ -113,7 +114,7 @@
     const dot = document.createElement('span');
     dot.className = 'status-dot';
     if (state.current.status !== 'active') dot.style.background = 'var(--ink3)';
-    caption.append(dot, document.createTextNode(`${state.current.code} · ${labels[state.current.status]}`));
+    caption.append(dot, document.createTextNode(`${state.current.code} · ${statusLabel(state.current)}`));
   }
 
   function makeCell(className = '') {
@@ -127,7 +128,8 @@
     button.type = 'button';
     button.dataset.action = action;
     button.dataset.id = item.id;
-    button.setAttribute('aria-label', `${label}邀请码 ${item.code}`);
+    button.setAttribute('aria-label', action === 'revoke-activation'
+      ? `吊销邀请码 ${item.code} 对应的设备激活资格` : `${label}邀请码 ${item.code}`);
     button.title = `${label} ${item.code}`;
     if (action === 'copy') {
       button.className = 'b b-icon b-sm row-copy';
@@ -136,7 +138,7 @@
       icon.setAttribute('aria-hidden', 'true');
       button.append(icon);
     } else {
-      button.className = 'text-button';
+      button.className = action === 'note' ? 'note-button' : 'b b-danger b-pill row-danger';
       button.textContent = label;
     }
     return button;
@@ -144,12 +146,20 @@
 
   function makeRow(item) {
     const row = document.createElement('tr');
-    const code = makeCell('code-value');
-    code.textContent = item.code;
+    const code = makeCell();
+    const value = document.createElement('span');
+    value.className = 'code-value';
+    value.textContent = item.code;
+    const note = rowAction(item, 'note', '备注');
+    note.className = `note-button${item.note ? ' has-note' : ''}`;
+    note.textContent = item.note || '添加备注';
+    note.title = item.note || '添加备注';
+    note.setAttribute('aria-label', `编辑邀请码 ${item.code} 的备注${item.note ? `：${item.note}` : ''}`);
+    code.append(value, note);
     const statusCell = makeCell();
     const status = document.createElement('span');
-    status.className = `status status-${item.status}`;
-    status.textContent = labels[item.status];
+    status.className = `status status-${core.recordStatus(item)}`;
+    status.textContent = statusLabel(item);
     statusCell.append(status);
     const dateCell = makeCell();
     const time = document.createElement('time');
@@ -169,10 +179,13 @@
     const actions = document.createElement('div');
     actions.className = 'row-actions';
     if (item.status === 'active') actions.append(rowAction(item, 'copy', '复制'), rowAction(item, 'revoke', '作废'));
+    else if (item.status === 'used' && item.activation?.status === 'active') {
+      actions.append(rowAction(item, 'revoke-activation', '吊销'));
+    }
     else {
       const text = document.createElement('span');
       text.className = 'row-unavailable';
-      text.textContent = item.status === 'used' ? '已核销' : '不可使用';
+      text.textContent = core.recordStatus(item) === 'revoked' ? '不可使用' : '已核销';
       actions.append(text);
     }
     actionsCell.append(actions);
@@ -182,12 +195,12 @@
 
   function renderHistory() {
     const items = state.items.filter((item) => (
-      (state.filter === 'all' || item.status === state.filter) && (!state.query || item.code === state.query)
+      core.matchesFilter(item, state.filter) && core.matchesQuery(item, state.query)
     ));
-    $('record-count').textContent = String(state.items.length);
-    $('record-count').setAttribute('aria-label', `已加载 ${state.items.length} 条记录`);
+    $('record-count').textContent = String(items.length);
+    $('record-count').setAttribute('aria-label', `已加载 ${items.length} 条记录`);
     $('history-rows').replaceChildren(...(items.length ? items.map(makeRow) : [emptyRow]));
-    const filtered = state.filter !== 'all' || state.query;
+    const filtered = state.filter !== 'current' || state.query;
     const unavailable = state.listError && !state.ready;
     emptyState.textContent = state.loading ? '加载中…'
       : unavailable ? '加载失败，请刷新重试' : filtered ? '无匹配记录' : '暂无记录';
@@ -218,7 +231,7 @@
       state.nextCursor = page.nextCursor;
       state.ready = true;
       if (state.current) {
-        const currentPage = await adapter.listPage({ query: state.current.code });
+        const currentPage = await adapter.listPage({ status: 'all', query: state.current.code });
         if (generation !== listGeneration) return;
         const current = currentPage.items.find((item) => item.id === state.current.id);
         // A missing record must never remain copyable as an active invite.
@@ -250,7 +263,7 @@
       state.current = item;
       mergeItem(item);
       // Keep a newly issued invite visible even if a previous filter hid it.
-      state.filter = 'all';
+      state.filter = 'current';
       state.query = '';
       $('search-input').value = '';
       issued = true;
@@ -292,10 +305,16 @@
     }
   }
 
-  function openRevoke(item) {
-    if (state.busy || state.loading || item.status !== 'active') return;
-    state.revoking = item;
+  function openRevoke(item, activation = false) {
+    if (state.busy || state.loading || (activation
+      ? item.status !== 'used' || item.activation?.status !== 'active' : item.status !== 'active')) return;
+    state.revoking = { item, activation };
+    $('revoke-title').textContent = activation ? '吊销这台设备的激活资格？' : '作废这个邀请码？';
     $('revoke-code').textContent = item.code;
+    $('revoke-effect').textContent = activation
+      ? ' 对应设备的激活资格将过期，需使用新的邀请码重新激活。原邀请码无法恢复使用。'
+      : ' 作废后将无法使用，此操作不可撤销。';
+    $('confirm-revoke').textContent = activation ? '吊销' : '作废';
     $('revoke-error').hidden = true;
     $('revoke-dialog').showModal();
     $('cancel-revoke').focus();
@@ -310,19 +329,24 @@
   async function confirmRevoke(event) {
     event.preventDefault();
     if (state.busy || !state.revoking) return;
+    const { item: target, activation } = state.revoking;
+    let changed = false;
     state.busy = true;
     $('revoke-error').hidden = true;
     ['confirm-revoke', 'cancel-revoke', 'close-dialog'].forEach((id) => { $(id).disabled = true; });
-    $('confirm-revoke').textContent = '正在作废…';
+    $('confirm-revoke').textContent = activation ? '正在吊销…' : '正在作废…';
     updateControls();
     try {
-      const item = await adapter.revoke(state.revoking.id);
-      if (item.status !== 'revoked') throw new Error('服务尚未确认作废，请刷新记录后核对。');
+      const item = activation ? await adapter.revokeActivation(target.id) : await adapter.revoke(target.id);
+      if (activation ? item.status !== 'used' || item.activation?.status !== 'revoked' : item.status !== 'revoked') {
+        throw new Error('服务尚未确认操作结果，请刷新记录后核对。');
+      }
       mergeItem(item);
       if (state.current?.id === item.id) state.current = item;
       $('revoke-dialog').close();
       state.revoking = null;
-      notify('邀请码已作废');
+      changed = true;
+      notify(activation ? '设备激活资格已过期' : '邀请码已作废');
       renderCaption();
     } catch (error) {
       $('revoke-error').textContent = error.message;
@@ -330,9 +354,63 @@
     } finally {
       state.busy = false;
       ['confirm-revoke', 'cancel-revoke', 'close-dialog'].forEach((id) => { $(id).disabled = false; });
-      $('confirm-revoke').textContent = '作废';
+      $('confirm-revoke').textContent = activation ? '吊销' : '作废';
       renderHistory();
       if (!$('revoke-dialog').open) $('generate-button').focus();
+    }
+    if (changed) await refreshHistory();
+  }
+
+  function closeNote() {
+    if (state.busy) return;
+    $('note-dialog').close();
+    state.editing = null;
+    if (noteReturnFocus?.isConnected) noteReturnFocus.focus();
+  }
+
+  function openNote(item) {
+    if (state.busy || state.loading) return;
+    noteReturnFocus = document.activeElement;
+    state.editing = item;
+    $('note-code').textContent = item.code;
+    $('note-input').value = item.note || '';
+    $('note-error').hidden = true;
+    $('note-dialog').showModal();
+    $('note-input').focus();
+  }
+
+  async function saveNote(event) {
+    event.preventDefault();
+    if (state.busy || !state.editing) return;
+    const target = state.editing;
+    state.busy = true;
+    $('note-error').hidden = true;
+    ['save-note', 'cancel-note', 'close-note', 'note-input'].forEach((id) => { $(id).disabled = true; });
+    $('save-note').textContent = '正在保存…';
+    updateControls();
+    let saved = false;
+    try {
+      const note = core.normalizeNote($('note-input').value);
+      const item = await adapter.updateNote(target.id, note);
+      if (item.id !== target.id || item.note !== note) throw new Error('服务尚未确认备注，请刷新记录后核对。');
+      mergeItem(item);
+      if (state.current?.id === item.id) state.current = item;
+      $('note-dialog').close();
+      saved = true;
+      notify(note ? '备注已保存' : '备注已清空');
+    } catch (error) {
+      $('note-error').textContent = error.message;
+      $('note-error').hidden = false;
+    } finally {
+      state.busy = false;
+      ['save-note', 'cancel-note', 'close-note', 'note-input'].forEach((id) => { $(id).disabled = false; });
+      $('save-note').textContent = '保存';
+      renderCaption();
+      renderHistory();
+      if (saved) {
+        state.editing = null;
+        Array.from(document.querySelectorAll('button[data-action="note"]')).find((button) => button.dataset.id === target.id)?.focus();
+      } else $('note-input').focus();
     }
   }
 
@@ -346,16 +424,19 @@
     const button = event.target.closest('button[data-action]');
     if (!button || button.disabled) return;
     const item = state.items.find((entry) => entry.id === button.dataset.id);
-    if (!item || item.status !== 'active') return;
-    if (button.dataset.action === 'copy') copyCode(item.code);
-    else openRevoke(item);
+    if (!item) return;
+    if (button.dataset.action === 'copy' && item.status === 'active') copyCode(item.code);
+    else if (button.dataset.action === 'note') openNote(item);
+    else if (button.dataset.action === 'revoke') openRevoke(item);
+    else if (button.dataset.action === 'revoke-activation') openRevoke(item, true);
   });
   document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
+    if (state.busy) return;
     state.filter = button.dataset.filter;
     void refreshHistory();
   }));
   $('search-input').addEventListener('input', (event) => {
-    state.query = event.target.value.trim().toUpperCase();
+    state.query = event.target.value.trim();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => void refreshHistory(), 250);
   });
@@ -365,6 +446,13 @@
   $('revoke-dialog').addEventListener('cancel', (event) => {
     if (state.busy) event.preventDefault();
     else state.revoking = null;
+  });
+  $('cancel-note').addEventListener('click', closeNote);
+  $('close-note').addEventListener('click', closeNote);
+  $('note-form').addEventListener('submit', saveNote);
+  $('note-dialog').addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeNote();
   });
   window.addEventListener('storage', (event) => {
     if (config?.mode === 'demo' && event.key === core.DEMO_KEY) refreshHistory();
@@ -376,10 +464,7 @@
     $('mode-badge').lastChild.textContent = isDemo ? '演示 · 不可激活' : '发码管理';
     adapter = isDemo
       ? core.createDemoAdapter({ storage: localStorage, locks: navigator.locks })
-      : core.createApiAdapter({
-        basePath: config.apiBasePath,
-        accessToken: () => localStorage.getItem('matter.token') || '',
-      });
+      : core.createApiAdapter({ basePath: config.apiBasePath });
     issuer = core.createIssuer({
       adapter, storage: sessionStorage, pendingKey: `matter:invite-console:${config.mode}:pending:v1`,
     });

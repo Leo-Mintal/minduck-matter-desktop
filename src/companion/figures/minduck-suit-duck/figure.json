@@ -2,13 +2,13 @@
   "manifest": 2,
   "api": 2,
   "id": "minduck-suit-duck",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": {
     "zh": "西装鸭",
     "en": "Suit Duck"
   },
   "about": {
-    "zh": "一只穿深蓝西装、白衬衫和红领带的黄色小鸭，有发光白眼和橙色鸭掌。"
+    "zh": "佩戴单片眼镜、深蓝西装和红领带的新西装鸭。"
   },
   "author": "Minduck",
   "entry": "figure.js",
@@ -22,28 +22,34 @@
       "kind": "expression",
       "names": {
         "zh": [
+          "待机",
           "平静"
+        ],
+        "en": [
+          "idle"
         ]
       },
       "about": {
-        "zh": "保留发光白眼，轻轻呼吸",
-        "en": "Keeps its glowing white eyes and breathes softly"
+        "zh": "播放提供的 6 秒待机呼吸与眨眼循环"
       },
-      "seconds": 0.9
+      "seconds": 6
     },
     {
       "id": "happy",
-      "kind": "expression",
+      "kind": "motion",
       "names": {
         "zh": [
+          "成功",
           "开心"
+        ],
+        "en": [
+          "success"
         ]
       },
       "about": {
-        "zh": "发光眼睛眯起，身体轻轻弹动",
-        "en": "Squints its glowing eyes and bounces softly"
+        "zh": "播放提供的 3 秒成功动画：庆祝、勾号和彩纸"
       },
-      "seconds": 0.9
+      "seconds": 3
     },
     {
       "id": "wink",
@@ -187,28 +193,45 @@
         ]
       },
       "about": {
-        "zh": "播放完整的待机到工作动作流：掏出电脑，持续打字 3 秒，再收回电脑并恢复待机。",
-        "en": "Plays the complete idle-to-work flow, types for 3 seconds, then puts the laptop away and returns to idle."
+        "zh": "播放提供的完整 6 秒掏电脑、工作与收回动画"
       },
-      "seconds": 5.85
+      "seconds": 6
     },
     {
       "id": "ask",
       "kind": "motion",
       "names": {
         "zh": [
+          "确认",
           "询问",
           "请求确认"
         ],
         "en": [
-          "confirm"
+          "confirm",
+          "confirmation"
         ]
       },
       "about": {
-        "zh": "播放完整的待机到询问动作流：掏出纸笔，显示勾号与问号，随后收好纸笔并恢复待机。",
-        "en": "Plays the complete idle-to-question flow, takes out paper and pen, shows check and question badges, then puts them away and returns to idle."
+        "zh": "播放提供的完整 6 秒纸笔确认动画"
       },
       "seconds": 6
+    },
+    {
+      "id": "sad",
+      "kind": "motion",
+      "names": {
+        "zh": [
+          "失败",
+          "难过"
+        ],
+        "en": [
+          "failure"
+        ]
+      },
+      "about": {
+        "zh": "播放提供的 2.6 秒失败动画：旗帜与叉号"
+      },
+      "seconds": 2.6
     }
   ],
   "sounds": {},

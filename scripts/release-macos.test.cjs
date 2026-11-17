@@ -5,10 +5,12 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 const { LEGACY_UPDATE_DOWNLOAD_BASE_URL, parseManifest } = require('../src/updateCheck.cjs')
+const { refreshUpdateManifest, verifyUpdateArtifacts } = require('./macos-update-artifacts.cjs')
 const {
   REMOTE_RELEASE_DIR,
   artifactName,
   assertVersionProgression,
+  localReleasePaths,
   openReleaseSSH,
   releaseDownloadURL,
   remoteCleanupScript,
@@ -32,6 +34,76 @@ test('release refuses unsigned update packages before contacting any server', ()
     assert.equal(result.status, 1)
     assert.match(result.stderr, /必须启用签名和公证/)
   }
+})
+
+test('local release paths isolate each version and its notarization report', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'minduck-versioned-releases-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  // Flat legacy output must never take precedence over the chosen version.
+  fs.mkdirSync(path.join(root, 'metadata'))
+  fs.writeFileSync(path.join(root, 'metadata', 'latest-mac.yml'), 'invalid legacy manifest')
+  for (const version of ['0.1.10', '0.1.11']) {
+    const files = localReleasePaths(version, root)
+    assert.equal(files.directory, path.join(root, version))
+    assert.equal(files.reportPath, path.join(root, version, 'metadata', `MinduckMatter-${version}-arm64.release.json`))
+    fs.mkdirSync(path.dirname(files.manifestPath), { recursive: true })
+    fs.writeFileSync(files.dmgPath, `installer ${version}`)
+    fs.writeFileSync(files.zipPath, `updater ${version}`)
+    const generatedManifest = path.join(files.directory, 'latest-mac.yml')
+    fs.writeFileSync(generatedManifest, JSON.stringify({ version, files: [] }))
+    refreshUpdateManifest(files.directory, version)
+    fs.renameSync(generatedManifest, files.manifestPath)
+  }
+  for (const version of ['0.1.10', '0.1.11']) {
+    const files = localReleasePaths(version, root)
+    assert.equal(verifyUpdateArtifacts(files.directory, files.manifestPath, version).version, version)
+  }
+  const old = localReleasePaths('0.1.10', root), current = localReleasePaths('0.1.11', root)
+  fs.copyFileSync(current.manifestPath, old.manifestPath)
+  assert.throws(() => verifyUpdateArtifacts(old.directory, old.manifestPath, '0.1.10'), /版本不一致/)
+  assert.throws(() => localReleasePaths('../0.1.11', root))
+})
+
+test('packaging output keeps installers, sidecars and manifests inside their own version', t => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'minduck-packaging-layout-'))
+  t.after(() => fs.rmSync(project, { recursive: true, force: true }))
+  const source = fs.readFileSync(path.join(__dirname, 'package-macos.sh'), 'utf8')
+  const outputStart = source.indexOf('\nnode "$script_dir/macos-update-artifacts.cjs"')
+  assert.ok(outputStart > 0)
+  // Exercise the actual output section without building, signing or uploading.
+  const outputScript = [
+    'set -euo pipefail',
+    source.match(/^release_dir=.*$/m)[0],
+    source.match(/^metadata_dir=.*$/m)[0],
+    'mkdir -p "$metadata_dir"',
+    source.slice(outputStart),
+  ].join('\n')
+  let previous
+  for (const version of ['0.1.10', '0.1.11']) {
+    const stage = path.join(project, `stage-${version}`)
+    fs.mkdirSync(stage)
+    const dmg = artifactName(version), zip = artifactName(version, 'zip')
+    for (const name of [dmg, zip, `${dmg}.blockmap`, `${zip}.blockmap`]) {
+      fs.writeFileSync(path.join(stage, name), `${name} fixture`)
+    }
+    fs.writeFileSync(path.join(stage, 'latest-mac.yml'), JSON.stringify({ version, files: [] }))
+    const result = spawnSync('bash', ['-c', outputScript], { encoding: 'utf8', env: {
+      ...process.env, project_dir: project, version, stage_dir: stage, script_dir: __dirname,
+      artifact: dmg, update_archive: zip, sign_release: '0',
+    } })
+    assert.equal(result.status, 0, result.stderr)
+    const files = localReleasePaths(version, path.join(project, 'release'))
+    assert.equal(verifyUpdateArtifacts(files.directory, files.manifestPath, version).version, version)
+    for (const name of [dmg, zip]) {
+      assert.equal(fs.readFileSync(path.join(files.directory, name), 'utf8'), `${name} fixture`)
+      const metadata = path.join(files.directory, 'metadata')
+      assert.equal(fs.readFileSync(path.join(metadata, `${name}.blockmap`), 'utf8'), `${name}.blockmap fixture`)
+      execFileSync('shasum', ['-a', '256', '-c', path.join(metadata, `${name}.sha256`)], { cwd: files.directory })
+    }
+    if (previous) assert.equal(fs.readFileSync(previous.path, 'utf8'), previous.text)
+    previous = { path: files.manifestPath, text: fs.readFileSync(files.manifestPath, 'utf8') }
+  }
+  assert.deepEqual(fs.readdirSync(path.join(project, 'release')).sort(), ['0.1.10', '0.1.11'])
 })
 
 test('requires a non-decreasing local version and a server-newer release', () => {

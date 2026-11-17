@@ -108,6 +108,19 @@ try {
   Module._load = function (request, ...args) {
     const check = () => { permissionChecks++; return false }
     if (request.endsWith('/fullDiskAccess.cjs')) return { ...permissions, hasFullDiskAccess: check }
+    if (request === './client-runtime.cjs') {
+      const runtime = load.call(this, request, ...args)
+      return { ...runtime, createClientRuntime: options => runtime.createClientRuntime({ ...options, bridgePort: 0 }) }
+    }
+    // This UI fixture has no activation server; exercise the real public-policy path.
+    // Device activation and fail-closed behavior have their own service/gate regressions.
+    if (request.endsWith('/desktop-access/service.cjs')) {
+      const service = load.call(this, request, ...args)
+      return { ...service, createService: options => service.createService({ ...options, fetchImpl: async url => {
+        assert.equal(new URL(url).pathname, '/api/desktop-access/policy')
+        return new Response(JSON.stringify({ protocol: 1, required: false }), { status: 200 })
+      } }) }
+    }
     if (request.endsWith('/desktopUpdater.cjs')) return { ...desktopUpdater,
       macUpdateRuntime: () => ({ updater: fakeUpdater, nativeUpdater: fakeNativeUpdater }),
       createDesktopUpdater: options => desktopUpdater.createDesktopUpdater({ ...options,
@@ -181,6 +194,8 @@ async function probe() {
     pages: document.querySelectorAll('.rail-pages button').length,
     tools: document.querySelectorAll('.rail-tools button').length,
     width: document.querySelector('.rail').getBoundingClientRect().width,
+    border: getComputedStyle(document.querySelector('.rail')).borderRightWidth,
+    gap: getComputedStyle(document.querySelector('.rail-tools')).rowGap,
     geometry: [...document.querySelectorAll('.rail button')].map(button => {
       const bounds = button.getBoundingClientRect();
       return { width: bounds.width, height: bounds.height, radius: getComputedStyle(button).borderRadius,
@@ -202,10 +217,12 @@ async function probe() {
   assert.equal(rail.home, null, 'temporary home entry is removed')
   assert.equal(rail.toolsBottom, rail.railBottom - 4, 'settings and updates stay anchored at the bottom')
   assert.equal(rail.width, FRAME_RAIL_WIDTH)
-  assert.equal(rail.width, 36)
+  assert.equal(rail.width, 49)
+  assert.equal(rail.border, '0px', 'fallback rail has no divider beside the chat list')
+  assert.equal(rail.gap, '2px')
   for (const button of rail.geometry) {
-    assert.equal(button.width, 28); assert.equal(button.height, 28); assert.equal(button.radius, '50%')
-    for (const icon of button.icons) assert.deepEqual(icon, { width: 16, height: 16 })
+    assert.equal(button.width, 40); assert.equal(button.height, 36); assert.equal(button.radius, '10px')
+    for (const icon of button.icons) assert.deepEqual(icon, { width: 20, height: 20 })
   }
   assert.equal(rail.available, 'true')
   assert.equal(rail.green, 'block')
@@ -213,6 +230,22 @@ async function probe() {
   assert.equal(rail.node, 'undefined')
   await waitFor(matterFrame, Boolean, 'committed Matter view')
   const matter = matterFrame().children.find(item => item.webContents).webContents
+  await waitFor(() => matter.executeJavaScript('!!document.querySelector("[data-desktop-update]")'), Boolean, 'shared update control')
+  for (const theme of ['dark', 'light']) {
+    const expectedColor = theme === 'dark' ? 'rgb(34, 198, 88)' : 'rgb(22, 139, 60)'
+    for (const renderer of [desktop, matter]) {
+      await renderer.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
+      await waitFor(() => renderer.executeJavaScript(`(() => {
+        const icon = document.querySelector('.desktop-workspace-update-available, #check-update .available-icon');
+        return icon && getComputedStyle(icon).color;
+      })()`), value => value === expectedColor, `${theme} green upgrade arrow`)
+      assert.equal(await renderer.executeJavaScript(`!!document.querySelector('[data-desktop-update] .changelog-update-dot')`), false,
+        'desktop upgrade uses the original green arrow without an orange dot')
+    }
+    fs.writeFileSync(path.join(temporary, `workspace-available-${theme}.png`),
+      (await matter.capturePage({ x: 0, y: view(matter).getBounds().height - 180, width: 80, height: 180 })).toPNG())
+  }
+  console.log('PASS original green upgrade arrow in native and shared rails, light/dark, no orange update dot')
   const navigation = await desktop.executeJavaScript(`({ title: document.querySelector('.app-title'),
     height: document.querySelector('.titlebar').getBoundingClientRect().height,
     region: getComputedStyle(document.querySelector('.titlebar')).getPropertyValue('-webkit-app-region'),
@@ -239,14 +272,14 @@ async function probe() {
   if (process.platform === 'darwin') assert.equal(window.getWindowButtonPosition().y, 11)
   await waitFor(() => !matter.isLoading(), Boolean, 'Matter initial load settles before history fixture')
   // Model user navigation so Chromium does not treat these as skippable script-only entries.
-  await matter.executeJavaScript(`history.pushState({}, '', '/frame-first'); history.pushState({}, '', '/frame-second')`, true)
+  await matter.executeJavaScript(`history.pushState({}, '', '/c/frame-first'); history.pushState({}, '', '/c/frame-second')`, true)
   await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'), value => value.navigation.canGoBack, 'Matter history enables back')
   await waitFor(() => desktop.executeJavaScript('!document.querySelector("#matter-back").disabled'), Boolean, 'Matter back control rendered')
   await desktop.executeJavaScript('document.querySelector("#matter-back").click()')
-  await waitFor(() => matter.getURL(), value => value.endsWith('/frame-first'), 'top back navigates Matter')
+  await waitFor(() => matter.getURL(), value => value.endsWith('/c/frame-first'), 'top back navigates Matter')
   await waitFor(() => desktop.executeJavaScript('!document.querySelector("#matter-forward").disabled'), Boolean, 'Matter forward enabled')
   await desktop.executeJavaScript('document.querySelector("#matter-forward").click()')
-  await waitFor(() => matter.getURL(), value => value.endsWith('/frame-second'), 'top forward navigates Matter')
+  await waitFor(() => matter.getURL(), value => value.endsWith('/c/frame-second'), 'top forward navigates Matter')
   let mainReloads = 0
   matter.once('did-finish-load', () => mainReloads++)
   await desktop.executeJavaScript('document.querySelector("#matter-reload").click()')
@@ -631,20 +664,67 @@ async function probe() {
     const progress = await desktop.executeJavaScript(`(() => {
       const button = document.querySelector('#check-update'), value = document.querySelector('#update-progress');
       const bounds = button.getBoundingClientRect(), text = value.getBoundingClientRect();
-      return { disabled: button.disabled, label: button.title, percent: value.textContent,
+      return { disabled: button.getAttribute('aria-disabled') === 'true', label: button.title, percent: value.textContent.trim(),
+        offset: value.querySelector('.update-progress-value').getAttribute('stroke-dashoffset'),
         value: value.getAttribute('aria-valuenow'), shown: !value.hidden && getComputedStyle(value).display !== 'none',
+        stroke: getComputedStyle(value.querySelector('.update-progress-value')).stroke,
         width: bounds.width, height: bounds.height, clipped: text.left < bounds.left || text.right > bounds.right,
         icon: getComputedStyle(button.querySelector('.update-icon')).display,
         available: getComputedStyle(button.querySelector('.available-icon')).display };
     })()`)
-    assert.equal(progress.percent, '37%')
+    assert.equal(progress.percent, '')
+    assert.equal(progress.label, '正在下载 37%')
+    assert.equal(progress.offset, '63')
     assert.equal(progress.value, '37')
+    assert.equal(progress.stroke, theme === 'dark' ? 'rgb(34, 198, 88)' : 'rgb(22, 139, 60)')
     assert.ok(progress.disabled && progress.shown && !progress.clipped, JSON.stringify(progress))
-    assert.equal(progress.width, 28); assert.equal(progress.height, 28)
+    assert.equal(progress.width, 40); assert.equal(progress.height, 36)
     assert.equal(progress.icon, 'none'); assert.equal(progress.available, 'none')
     fs.writeFileSync(path.join(temporary, `update-progress-${theme}.png`),
       (await desktop.capturePage({ x: 0, y: window.getContentSize()[1] - 100, width: 80, height: 100 })).toPNG())
+    await matter.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
+    await waitFor(() => matter.executeJavaScript('document.querySelector("[data-desktop-update]")?.getAttribute("aria-label")'),
+      value => value === '正在下载 37%', 'shared workspace download ring')
+    const sharedProgress = await matter.executeJavaScript(`(() => {
+      const button = document.querySelector('[data-desktop-update]'), progress = button.querySelector('[role="progressbar"]');
+      button.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      const bounds = button.getBoundingClientRect(), ring = progress.getBoundingClientRect();
+      return { text: progress.textContent.trim(), value: progress.getAttribute('aria-valuenow'),
+        offset: progress.querySelector('.desktop-workspace-progress-value').getAttribute('stroke-dashoffset'),
+        disabled: button.getAttribute('aria-disabled'), focusable: !button.disabled && button.tabIndex === 0,
+        width: ring.width, clipped: ring.left < bounds.left || ring.right > bounds.right };
+    })()`)
+    assert.deepEqual(sharedProgress, { text: '', value: '37', offset: '63', disabled: 'true', focusable: true, width: 20, clipped: false })
+    await waitFor(() => matter.executeJavaScript(`getComputedStyle(document.querySelector('.desktop-workspace-progress-value')).stroke`),
+      value => value === (theme === 'dark' ? 'rgb(34, 198, 88)' : 'rgb(22, 139, 60)'), `${theme} green download progress`)
+    await waitFor(() => matter.executeJavaScript('document.querySelector("[role=tooltip]")?.textContent'),
+      value => value === '正在下载 37%', 'shared hover tooltip')
+    await waitFor(() => matter.executeJavaScript(`(() => {
+      const button = document.querySelector('[data-desktop-update]'), tooltip = document.querySelector('[role=tooltip]');
+      return getComputedStyle(tooltip).visibility === 'visible'
+        && button.getAnimations({ subtree: true }).every(item => item.playState !== 'running');
+    })()`), Boolean, 'settled ring theme and visible tooltip')
+    const contrast = await matter.executeJavaScript(`(() => {
+      const luminance = value => {
+        const rgb = value.match(/[\\d.]+/g).slice(0, 3).map(x => Number(x) / 255)
+          .map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+        return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+      };
+      const ink = luminance(getComputedStyle(document.querySelector('.desktop-workspace-progress-value')).stroke);
+      const bg = luminance(getComputedStyle(document.querySelector('.desktop-workspace-rail')).backgroundColor);
+      return (Math.max(ink, bg) + .05) / (Math.min(ink, bg) + .05);
+    })()`)
+    assert.ok(contrast >= 3, `${theme} update ring contrast: ${contrast}`)
+    fs.writeFileSync(path.join(temporary, `workspace-update-${theme}.png`),
+      (await matter.capturePage({ x: 0, y: view(matter).getBounds().height - 180, width: 220, height: 180 })).toPNG())
   }
+  const actionsBeforeRepeat = updateLifecycle.slice()
+  await matter.executeJavaScript('document.querySelector("[data-desktop-update]").click()')
+  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
+  assert.deepEqual(updateLifecycle, actionsBeforeRepeat, 'busy ring ignores repeated clicks')
+  fakeUpdater.emit('download-progress', { percent: 62 })
+  await waitFor(() => matter.executeJavaScript('document.querySelector("[role=tooltip]")?.textContent'),
+    value => value === '正在下载 62%', 'hovered tooltip updates without moving the pointer')
   assert.deepEqual(updateDownloads, [], 'in-app downloading never launches the browser')
   finishUpdateDownload()
   await waitFor(() => updateLifecycle.at(-1), value => value === 'install', 'verified install handoff')

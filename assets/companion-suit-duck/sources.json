@@ -1,0 +1,53 @@
+{
+  "base": {
+    "file": "base.svg",
+    "sha256": "f3947437fe59a670b3848b09c772509a2ade7313d69a76408427c6caa2e448ba",
+    "paths": 25,
+    "filters": 4
+  },
+  "idle": {
+    "file": "idle.svg",
+    "sha256": "0db7748dd8ed330c07b8e10c522573eb96aa72cb091702f7745d3b520790e108",
+    "paths": 25,
+    "filters": 4,
+    "repairedFilterRegions": 0,
+    "duration": 6.0,
+    "tracks": 5
+  },
+  "work": {
+    "file": "working.svg",
+    "sha256": "6bb16239e0f31757be9a63ff7bbbf69cfe8f19f93711a0d614bcb591e9c76302",
+    "paths": 1234,
+    "filters": 196,
+    "repairedFilterRegions": 188,
+    "duration": 6.0,
+    "tracks": 730
+  },
+  "ask": {
+    "file": "confirmation.svg",
+    "sha256": "b80d3af8839c2c604750adc4beec9b97538d00009aa3a007ff4a29fcd01f387d",
+    "paths": 180,
+    "filters": 4,
+    "repairedFilterRegions": 0,
+    "duration": 6.0,
+    "tracks": 159
+  },
+  "happy": {
+    "file": "success.svg",
+    "sha256": "5b969e956835d38f3376342afbe8b9b986c1eafed513acccebb9e800fbab8292",
+    "paths": 160,
+    "filters": 8,
+    "repairedFilterRegions": 4,
+    "duration": 3.0,
+    "tracks": 130
+  },
+  "sad": {
+    "file": "failure.svg",
+    "sha256": "3d3b6eaaf3866ff3b00cb53729be143d78982ac0e982663193ea76ab6a616407",
+    "paths": 150,
+    "filters": 8,
+    "repairedFilterRegions": 4,
+    "duration": 2.6,
+    "tracks": 118
+  }
+}

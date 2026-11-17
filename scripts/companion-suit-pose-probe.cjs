@@ -3,7 +3,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { BrowserWindow } = require('electron')
 
-// Render the real pack in its official opaque sandbox and inspect the actual SVG joint matrices.
+// Actual official API 2 sandbox, Matter lifecycle adapter, and source SVG parity.
 module.exports = async function probeSuitPose(url) {
   const page = new BrowserWindow({ show: false, width: 720, height: 640, backgroundColor: '#e8e8e8',
     webPreferences: { contextIsolation: true, sandbox: true, offscreen: true, backgroundThrottling: false } })
@@ -11,11 +11,12 @@ module.exports = async function probeSuitPose(url) {
     const origin = new URL(url).origin
     await page.loadURL(origin + '/api/figures')
     const exec = code => page.webContents.executeJavaScript(code)
-    await exec(`document.body.textContent='';document.body.style='margin:0;background:#e8e8e8';
+    await exec(`document.body.textContent='';document.body.style='margin:0;background:#e8e8e8;overflow:hidden';
       window.poseReady=new Promise((resolve,reject)=>{window.poseResolve=resolve;window.poseReject=reject});
       const frame=document.createElement('iframe');frame.sandbox='allow-scripts';
-      frame.style='width:720px;height:640px;border:0';window.poseFrame=frame;
+      frame.style='width:720px;height:640px;border:0';window.poseFrame=frame;window.poseEvents=[];
       addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
+        poseEvents.push(e.data);
         if(e.data.t==='error')poseReject(new Error(e.data.message));
         if(e.data.t==='loaded')frame.contentWindow.postMessage({t:'init',entry:'${origin}/packs/minduck-suit-duck/figure.js',
           export:'createSuitDuckBody',base:'${origin}/packs/minduck-suit-duck/',theme:'light',language:'zh',
@@ -24,49 +25,129 @@ module.exports = async function probeSuitPose(url) {
       frame.src='${origin}/figure-frame?pack=minduck-suit-duck';document.body.append(frame);`)
     await exec('poseReady')
     const send = message => exec(`poseFrame.contentWindow.postMessage(${JSON.stringify(message)},'*')`)
-    const tick = count => exec(`(async()=>{for(let i=0;i<${count};i++){
+    const tick = count => exec(`(async()=>{let value;for(let i=0;i<${count};i++){
       const next=new Promise((resolve,reject)=>{const listener=e=>{
         if(e.source!==poseFrame.contentWindow)return;
         if(e.data.t==='frame'||e.data.t==='error'){removeEventListener('message',listener);
-          e.data.t==='error'?reject(new Error(e.data.message)):resolve(e.data);}};
+          e.data.t==='error'?reject(new Error(e.data.message)):resolve(e.data.layout);}};
         addEventListener('message',listener);});
-      poseFrame.contentWindow.postMessage({t:'tick',dt:.05},'*');await next;}})()`)
+      poseFrame.contentWindow.postMessage({t:'tick',dt:.05},'*');value=await next;}return value;})()`)
     const frame = page.webContents.mainFrame.frames.find(item => item.url.includes('/figure-frame'))
     assert.ok(frame, 'official Suit Duck frame')
     const measure = () => frame.executeJavaScript(`(()=>{
-      const front=document.querySelector('#suit-wing-front'),torso=document.querySelector('#suit-torso');
-      const p=node=>new DOMPoint(13.5,27).matrixTransform(node.getScreenCTM());
-      const a=p(front),b=p(torso),hand=front.querySelector('path').getBoundingClientRect();
-      const laptop=document.querySelector('#suit-laptop'),matrix=laptop.getScreenCTM();
-      const keys=[[0,11],[12,11],[10,17],[0,13]].map(([x,y])=>new DOMPoint(x,y).matrixTransform(matrix));
-      const xs=keys.map(p=>p.x),ys=keys.map(p=>p.y);
-      const gap=Math.hypot(Math.max(0,Math.min(...xs)-hand.right,hand.left-Math.max(...xs)),
-        Math.max(0,Math.min(...ys)-hand.bottom,hand.top-Math.max(...ys)));
-      return {shoulderGap:Math.hypot(a.x-b.x,a.y-b.y),keyboardGap:gap};})()`)
+      const visible=[...document.querySelectorAll('[data-flow]')].filter(n=>getComputedStyle(n).display!=='none');
+      return {flows:visible.map(n=>n.dataset.flow),times:visible.map(n=>Number(n.dataset.sourceTime)),
+        animations:document.getAnimations().map(a=>({state:a.playState,time:a.currentTime})),
+        base:getComputedStyle(document.querySelector('[data-suit-base]')).display,
+        monocle:!!document.querySelector('#suit-monocle')};})()`)
+    const capture = async name => {
+      // Let Chromium paint the manually sought, paused WAAPI state.
+      await new Promise(resolve => setTimeout(resolve, 50))
+      fs.writeFileSync(path.resolve(__dirname, '../build/companion-suit-' + name + '.png'),
+        (await page.webContents.capturePage()).toPNG())
+    }
     await send({ t: 'set', state: { roam: 'off', thoughtShown: true } })
     await tick(30)
-    const samples = []
-    // Both facings and several automatic repeats exercise the entire enter/hold/stow sequence.
+    assert.deepEqual((await measure()).flows, ['idle'])
+    await capture('idle')
+    let comparisons = 0
+    const sources = { work: 'working', ask: 'confirmation', happy: 'success', sad: 'failure', idle: 'idle' }
+    const compare = async (word, time) => {
+      const raw = fs.readFileSync(path.resolve(__dirname, '../assets/companion-suit-duck/source', sources[word] + '.svg'), 'utf8')
+      // Shadow DOM isolates original IDs and keyframe names from the compiled pack.
+      return frame.executeJavaScript(`(async()=>{
+        const holder=document.createElement('div');holder.style='position:absolute;left:-10000px;opacity:0';
+        const shadow=holder.attachShadow({mode:'open'});shadow.innerHTML=${JSON.stringify(raw)};
+        document.body.append(holder);
+        try {
+          for(const a of shadow.getAnimations()){a.pause();a.currentTime=${time}*1000;}
+          const {FLOWS}=await import('${origin}/packs/minduck-suit-duck/flow-artwork.js');
+          const problems=[];let count=0;
+          for(const track of FLOWS['${word}'].animations){
+            const actual=document.getElementById(track.id);
+            const original=shadow.getElementById(track.id.slice('suit-${word}-'.length));
+            const a=getComputedStyle(actual),b=getComputedStyle(original);
+            const props=Object.keys(track.keyframes[0]).filter(k=>!['offset','easing'].includes(k));
+            for(const p of props){
+              if(p==='transform'){
+                const av=new DOMMatrix(a.transform),bv=new DOMMatrix(b.transform);
+                if(['a','b','c','d','e','f'].some(k=>Math.abs(av[k]-bv[k])>.003))problems.push(track.id+':transform');
+              }else if(Math.abs(parseFloat(a[p])-parseFloat(b[p]))>.0002)problems.push(track.id+':'+p);
+              count++;
+            }
+          }
+          return {count,problems:problems.slice(0,8)};
+        }finally{holder.remove();}
+      })()`)
+    }
+    const idleTime = (await measure()).times[0]
+    const idleParity = await compare('idle', idleTime)
+    assert.deepEqual(idleParity.problems, [], JSON.stringify(idleParity))
+    comparisons += idleParity.count
     for (const facing of [1, -1]) {
       await send({ t: 'place', x: 300, facing })
-      await send({ t: 'set', state: { matterActivity: { kind: 'work' } } })
-      for (let i = 0; i < 36; i++) {
-        await tick(10)
-        const layout = await exec(`new Promise(resolve=>{
-          const listener=e=>{if(e.source===poseFrame.contentWindow&&e.data.t==='frame'){
-            removeEventListener('message',listener);resolve(e.data.layout)}};addEventListener('message',listener);
-          poseFrame.contentWindow.postMessage({t:'tick',dt:.00001},'*');})`)
-        const value = await measure()
-        assert.ok(value.shoulderGap < .01, 'shoulder detached: ' + JSON.stringify({ facing, i, ...value }))
-        if (layout.work === 'typing') assert.ok(value.keyboardGap < 12, 'hand misses keyboard: ' + JSON.stringify(value))
-        samples.push({ facing, phase: layout.work, ...value })
-        if (facing === 1 && i === 3) fs.writeFileSync(path.resolve(__dirname, '../build/companion-suit-work.png'),
-          (await page.webContents.capturePage()).toPNG())
+      for (const [activity, word, seconds] of [['work', 'work', 6], ['ask', 'ask', 6],
+        ['success', 'happy', 3], ['error', 'sad', 2.6]]) {
+        await send({ t: 'set', state: { matterActivity: { kind: activity, id: `suit-${facing}-${word}`, expiresAt: Date.now() + 600000 } } })
+        let layout
+        for (let i = 0; i < 200; i++) {
+          layout = await tick(1)
+          if (layout.gesture === word) break
+        }
+        assert.equal(layout.gesture, word, JSON.stringify(layout))
+        // Activity starts after the current render; the next host tick draws its first source frame.
+        await tick(1)
+        for (const at of [.15, seconds * .3, seconds * .6, seconds - .15]) {
+          let value = await measure()
+          await tick(Math.max(1, Math.round((at - value.times[0]) / .05)))
+          value = await measure()
+          assert.deepEqual(value.flows, [word])
+          assert.ok(value.monocle)
+          assert.equal(value.base, 'none', JSON.stringify({ word, facing, at, time: value.times }))
+          assert.ok(value.animations.every(a => a.state === 'paused'))
+          const parity = await compare(word, value.times[0])
+          assert.deepEqual(parity.problems, [], JSON.stringify({ word, facing, at, ...parity }))
+          comparisons += parity.count
+          if (at === seconds * .6) await capture(word + (facing === -1 ? '-left' : ''))
+        }
+        // A pending idle state waits for the finite source action to finish.
+        await send({ t: 'set', state: { matterActivity: { kind: 'idle' } } })
+        layout = await tick(Math.ceil(seconds / .05) + 5)
+        assert.equal(layout.gesture, null)
+        assert.deepEqual((await measure()).flows, ['idle'])
       }
-      await send({ t: 'set', state: { matterActivity: { kind: 'idle' } } })
-      await tick(125)
     }
-    assert.ok(samples.some(item => item.phase === 'typing') && samples.some(item => item.phase === 'stowing'))
-    console.log('PASS: Suit Duck SVG shoulder attachment and keyboard alignment, both facings, repeated real sandbox work:', samples.length, 'samples')
+    // Automatic work loops, transitions, and real drag cancellation/recovery.
+    await send({ t: 'set', state: { matterActivity: { kind: 'work' } } })
+    await tick(140)
+    let value = await measure()
+    assert.deepEqual(value.flows, ['work'])
+    assert.ok(value.times[0] < 2, 'automatic work should restart after the full six seconds')
+    const before = value.times[0]
+    await new Promise(resolve => setTimeout(resolve, 100))
+    assert.equal((await measure()).times[0], before, 'wall time cannot advance the pack')
+    let layout = await tick(1)
+    const point = layout.hit[0]
+    await send({ t: 'pointer', type: 'down', p: { x: point.x, y: point.y, t: 1000 } })
+    await send({ t: 'pointer', type: 'move', p: { x: point.x + 40, y: point.y - 90, t: 1150 } })
+    layout = await tick(2)
+    assert.ok(!layout.work, 'drag clears active artwork')
+    await capture('drag')
+    await send({ t: 'drop', p: { x: 300, y: 350 } })
+    let recovered = false
+    for (let i = 0; i < 400; i++) {
+      layout = await tick(1)
+      if (layout.work && layout.mode === 'idle') { recovered = true; break }
+    }
+    assert.ok(recovered, 'automatic work resumes only after landing recovery')
+    await send({ t: 'set', state: { matterActivity: { kind: 'idle' } } })
+    await tick(140)
+    await send({ t: 'walk', x: 550, run: false, id: 999 })
+    await tick(5)
+    value = await measure()
+    assert.deepEqual(value.flows, [])
+    assert.notEqual(value.base, 'none')
+    await capture('walk')
+    console.log('PASS: new Suit Duck source parity, five animated states, both facings, host-only clock, finite/automatic completion, drag recovery and base walking:', comparisons, 'property comparisons')
   } finally { page.destroy() }
 }

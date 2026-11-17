@@ -35,7 +35,7 @@ module.exports = async ({ appOutDir, packager }) => {
     const manifest = JSON.parse(fs.readFileSync(figure, 'utf8'))
     if (manifest.api !== 2 || manifest.id !== id) throw new Error(`Invalid packaged API 2 figure: ${id}`)
     for (const file of [manifest.entry, manifest.thumb, 'flow-player.js', 'flow-state.js', 'LICENSE-Coopanion.txt',
-      ...(id === 'minduck-duck' ? ['flow-artwork.js'] : [])]) {
+      'artwork.js', 'flow-artwork.js']) {
       if (!fs.existsSync(path.join(path.dirname(figure), file))) throw new Error(`Missing packaged figure asset: ${id}/${file}`)
     }
   }

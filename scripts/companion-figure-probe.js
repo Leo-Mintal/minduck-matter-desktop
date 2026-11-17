@@ -88,12 +88,13 @@ async function probeSuitDuck(origin, pack) {
     if (walk.layout.mode !== 'walk') throw new Error('Idle activity did not release walking')
     send({ t: 'do', word: 'stand' }); await tick(1)
     for (const [kind, word] of [['success', 'happy'], ['error', 'sad']]) {
+      const playing = frame => frame.layout.expression === word || frame.layout.gesture === word
       set(kind, kind)
       const expression = await tick(70)
-      if (!expression.some(f => f.layout.expression === word) || expression.at(-1).layout.matterActivity
+      if (!expression.some(playing) || expression.at(-1).layout.matterActivity
         || expression.some(f => ['walk', 'run'].includes(f.layout.mode))) throw new Error('Incorrect terminal activity: ' + kind)
       set(kind, kind)
-      if ((await tick(70)).some(f => f.layout.expression === word)) throw new Error('Duplicate terminal cue replayed')
+      if ((await tick(70)).some(playing)) throw new Error('Duplicate terminal cue replayed')
     }
     set('idle')
     return true

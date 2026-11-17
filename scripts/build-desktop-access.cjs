@@ -9,7 +9,7 @@ function build({ root = path.join(__dirname, '..'), output = path.join(root, 'bu
   fs.mkdirSync(output, { recursive: true })
   const target = path.join(output, 'desktop-access.node')
   execFileSync('xcrun', ['clang++', '-std=c++17', '-fobjc-arc', '-bundle', '-undefined', 'dynamic_lookup',
-    '-arch', 'arm64', '-mmacosx-version-min=12.0', '-framework', 'Foundation', '-framework', 'Security', '-I', include,
+    '-arch', 'arm64', '-mmacosx-version-min=12.0', '-framework', 'Foundation', '-framework', 'Security', '-framework', 'AppKit', '-I', include,
     path.join(root, 'native', 'desktop-access.mm'), '-o', target], { stdio: 'inherit' })
   return target
 }

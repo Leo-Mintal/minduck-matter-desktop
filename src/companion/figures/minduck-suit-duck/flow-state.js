@@ -1,11 +1,6 @@
 import { FLOW_TIMING } from './flow-player.js';
 
 const TIME_EPSILON = 1e-9;
-const MOTIONS = new Set([
-  'stand', 'jump', 'hop', 'look', 'turn', 'nod', 'shake', 'spin', 'sit', 'sleep', 'dizzy',
-  'walk', 'run', 'wave', 'bow', 'shiver', 'flap', 'dance',
-]);
-
 export function createFlowBody(kit, host, figure, state) {
   const words = Object.fromEntries(Object.entries(FLOW_TIMING)
     .map(([word, spec]) => [word, { motion: { seconds: spec.seconds, face: 'neutral' } }]));
@@ -14,15 +9,17 @@ export function createFlowBody(kit, host, figure, state) {
   let exiting = false;
   function clear() {
     state.kind = null;
-    state.elapsed = state.sourceTime = state.holdTime = 0;
+    state.elapsed = state.sourceTime = 0;
     exiting = false;
   }
   function afterFlow(action) {
     if (body.layout().busy) return false;
     if (!state.kind) return action();
+    const spec = FLOW_TIMING[state.kind];
+    if (spec.enter == null) { clear(); body.do('stand'); return action(); }
     pending = action;
-    if (!exiting && state.sourceTime >= FLOW_TIMING[state.kind].enter - TIME_EPSILON) {
-      state.sourceTime = Math.max(state.sourceTime, FLOW_TIMING[state.kind].sourceExit);
+    if (!exiting && state.sourceTime >= spec.enter - TIME_EPSILON) {
+      state.sourceTime = Math.max(state.sourceTime, spec.sourceExit);
     }
     exiting = true;
     return true;
@@ -33,9 +30,9 @@ export function createFlowBody(kit, host, figure, state) {
     if (state.kind) return afterFlow(() => start(word));
     body.stopWalk();
     body.do('stand');
-    body.do(word);
+    // The pack owns flow completion. A kit pulse would survive early stow/drag cancellation.
     state.kind = word;
-    state.elapsed = state.sourceTime = state.holdTime = 0;
+    state.elapsed = state.sourceTime = 0;
     return true;
   }
   function advance(dt) {
@@ -43,14 +40,10 @@ export function createFlowBody(kit, host, figure, state) {
     if (exiting) {
       const reverse = state.sourceTime < spec.enter - TIME_EPSILON;
       state.sourceTime += reverse ? -dt : dt;
-      return reverse ? state.sourceTime <= TIME_EPSILON : state.sourceTime >= spec.end - TIME_EPSILON;
+      return reverse ? state.sourceTime <= TIME_EPSILON : state.sourceTime >= spec.seconds - TIME_EPSILON;
     }
     state.elapsed += dt;
-    state.holdTime = Math.max(0, Math.min(spec.hold, state.elapsed - spec.enter));
-    if (state.elapsed < spec.enter - TIME_EPSILON) state.sourceTime = state.elapsed;
-    else if (state.elapsed < spec.enter + spec.hold - TIME_EPSILON) {
-      state.sourceTime = spec.enter + state.holdTime / spec.hold * (spec.sourceExit - spec.enter);
-    } else state.sourceTime = spec.sourceExit + state.elapsed - spec.enter - spec.hold;
+    state.sourceTime = Math.min(spec.seconds, state.elapsed);
     return state.elapsed >= spec.seconds - TIME_EPSILON;
   }
   return {
@@ -58,7 +51,7 @@ export function createFlowBody(kit, host, figure, state) {
     do(word) {
       if (Object.hasOwn(FLOW_TIMING, word)) return start(word);
       if (!body.words.includes(word)) return false;
-      return MOTIONS.has(word) ? afterFlow(() => body.do(word)) : body.do(word);
+      return afterFlow(() => body.do(word));
     },
     step(dt) {
       if (!(dt > 0 && Number.isFinite(dt))) return;
@@ -67,6 +60,7 @@ export function createFlowBody(kit, host, figure, state) {
         if (advance(dt)) {
           const word = state.kind;
           clear();
+          body.do('stand');
           host.emit?.('done', { word });
           const action = pending;
           pending = null;
@@ -79,16 +73,18 @@ export function createFlowBody(kit, host, figure, state) {
       const layout = body.layout();
       const spec = FLOW_TIMING[state.kind];
       let phase = null;
-      if (spec) phase = exiting || state.sourceTime >= spec.sourceExit - TIME_EPSILON ? 'stowing'
+      if (spec?.enter != null) phase = exiting || state.sourceTime >= spec.sourceExit - TIME_EPSILON ? 'stowing'
         : state.sourceTime < spec.enter - TIME_EPSILON ? 'pulling' : state.kind === 'work' ? 'typing' : 'waiting';
       return {
         ...layout, work: state.kind === 'work' ? phase : null, ask: state.kind === 'ask' ? phase : null,
+        gesture: state.kind ?? layout.gesture,
         moving: layout.moving || state.kind !== null,
       };
     },
     walk(x, run, id) {
       return Number.isFinite(x) && afterFlow(() => body.walk(x, run, id));
     },
+    move(args, id) { return afterFlow(() => body.move?.(args, id) ?? false); },
     stopWalk(id) { pending = null; body.stopWalk(id); },
     pointer(type, point) {
       body.pointer(type, point);

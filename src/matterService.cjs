@@ -34,8 +34,15 @@ function isMatterWebURL(value, origin) {
   }
 }
 
+function isMatterConversationURL(value, origin) {
+  if (!isMatterWebURL(value, origin)) return false
+  const { pathname } = new URL(value)
+  return ['/', '/new-chat', '/new-team'].includes(pathname) || /^\/c\/[^/]+\/?$/.test(pathname)
+}
+
 module.exports = {
   DEFAULT_MATTER_ORIGIN,
+  isMatterConversationURL,
   isMatterWebURL,
   normalizeMatterOrigin,
   resolveMatterOrigin,

@@ -136,6 +136,10 @@ app.whenReady().then(async () => {
     assert.ok(result.text.includes('装扮'))
     assert.equal(await settings.webContents.executeJavaScript('typeof require'), 'undefined')
     assert.equal(await settings.webContents.executeJavaScript('typeof process'), 'undefined')
+    // The remaining probes drive isolated sandboxes, not the visible dressing controls.
+    // Prevent desktop clicks from changing the shared fixture's selected figure mid-run.
+    settings.webContents.setBackgroundThrottling(false)
+    settings.hide()
     const probeSource = fs.readFileSync(path.join(__dirname, 'companion-figure-probe.js'), 'utf8')
     const probe = await settings.webContents.executeJavaScript(
       probeSource + '\nprobeSuitDuck(' + JSON.stringify(new URL(state.url).origin) + ')')

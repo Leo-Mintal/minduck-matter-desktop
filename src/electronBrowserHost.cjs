@@ -39,6 +39,7 @@ class ElectronBrowserHost {
     this.tabs = new Map()
     this.activeTabId = undefined
     this.panelHidden = false
+    this.panelSuppressed = false
     this.nextTabId = 1
     this.viewports = new WeakMap()
     this.frameColor = '#202222'
@@ -62,7 +63,15 @@ class ElectronBrowserHost {
   }
 
   isPanelOpen() {
-    return !this.panelHidden && Boolean(this.getActiveTab())
+    return !this.panelSuppressed && !this.panelHidden && Boolean(this.getActiveTab())
+  }
+
+  setPanelSuppressed(suppressed) {
+    if (this.panelSuppressed === suppressed) return
+    // Route visibility is temporary; keep the user's open/closed preference and tabs.
+    this.panelSuppressed = suppressed
+    this.onLayoutChange()
+    this.onStateChange()
   }
 
   closePanel() {

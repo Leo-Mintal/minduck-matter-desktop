@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="referrer" content="same-origin" />
+    <meta name="referrer" content="no-referrer" />
     <title>邀请码 · Minduck Matter</title>
     <link rel="icon" href="./assets/logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./web-primitives.css" />
@@ -64,12 +64,12 @@
         </div>
         <div class="history-toolbar">
           <div class="filters" role="group" aria-label="按邀请码状态筛选">
-            <button type="button" class="filter is-selected" data-filter="all" aria-pressed="true">全部</button>
+            <button type="button" class="filter is-selected" data-filter="current" aria-pressed="true">当前</button>
             <button type="button" class="filter" data-filter="active" aria-pressed="false">未使用</button>
             <button type="button" class="filter" data-filter="used" aria-pressed="false">已使用</button>
             <button type="button" class="filter" data-filter="revoked" aria-pressed="false">已作废</button>
           </div>
-          <label class="field-control-wrap input input--square field-control-wrap--with-start-icon search-field"><svg class="icon field-control-start-icon" aria-hidden="true"><use href="#icon-search"/></svg><span class="sr-only">搜索完整邀请码</span><input class="field-control input-control" id="search-input" type="search" placeholder="搜索完整邀请码" maxlength="6" autocomplete="off" spellcheck="false" /></label>
+          <label class="field-control-wrap input input--square field-control-wrap--with-start-icon search-field"><svg class="icon field-control-start-icon" aria-hidden="true"><use href="#icon-search"/></svg><span class="sr-only">搜索邀请码或备注</span><input class="field-control input-control" id="search-input" type="search" placeholder="搜索邀请码或备注" autocomplete="off" spellcheck="false" /></label>
         </div>
         <div class="history-error" id="history-error" role="alert" hidden></div>
         <div class="data-table-scroll" id="table-wrap">
@@ -87,9 +87,18 @@
     <dialog class="confirm-dialog" id="revoke-dialog" aria-labelledby="revoke-title" aria-describedby="revoke-description">
       <form id="revoke-form">
         <div class="dialog-heading"><h2 id="revoke-title">作废这个邀请码？</h2><button class="b b-icon" type="button" id="close-dialog" aria-label="关闭对话框"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
-        <p id="revoke-description">邀请码 <strong class="mono" id="revoke-code"></strong> 作废后将无法使用，此操作不可撤销。</p>
+        <p id="revoke-description">邀请码 <strong class="mono" id="revoke-code"></strong><span id="revoke-effect"> 作废后将无法使用，此操作不可撤销。</span></p>
         <p class="dialog-error" id="revoke-error" role="alert" hidden></p>
         <div class="dialog-actions"><button class="b b-tertiary b-pill b-lg" id="cancel-revoke" type="button" autofocus>取消</button><button class="b b-danger b-pill b-lg" id="confirm-revoke" type="submit">作废</button></div>
+      </form>
+    </dialog>
+    <dialog class="confirm-dialog" id="note-dialog" aria-labelledby="note-title" aria-describedby="note-code">
+      <form id="note-form">
+        <div class="dialog-heading"><h2 id="note-title">邀请码备注</h2><button class="b b-icon" type="button" id="close-note" aria-label="关闭备注"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+        <p class="note-code"><strong class="mono" id="note-code"></strong></p>
+        <label class="field-control-wrap input input--square"><span class="sr-only">备注，最多 200 个字符</span><textarea class="field-control input-control note-input" id="note-input" rows="3" placeholder="例如：发给张三" aria-describedby="note-error"></textarea></label>
+        <p class="dialog-error" id="note-error" role="alert" hidden></p>
+        <div class="dialog-actions"><button class="b b-tertiary b-pill b-lg" id="cancel-note" type="button">取消</button><button class="b b-contrast b-pill b-lg" id="save-note" type="submit">保存</button></div>
       </form>
     </dialog>
     <noscript><p class="noscript">请启用 JavaScript 后使用邀请码页面。</p></noscript>

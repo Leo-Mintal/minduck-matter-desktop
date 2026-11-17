@@ -1,0 +1,13 @@
+{
+  "id": "minduck-suit-duck",
+  "base": "base.svg",
+  "baseScale": 3.2,
+  "floor": 75.16476,
+  "flows": {
+    "idle": { "file": "idle.svg", "scale": 1.4625, "x": 0, "y": 0 },
+    "work": { "file": "working.svg", "scale": 1.53781875, "x": -2.43755, "y": -16.5386 },
+    "ask": { "file": "confirmation.svg", "scale": 1.4625, "x": 0, "y": 0 },
+    "happy": { "file": "success.svg", "scale": 1.4625, "x": -5.57135, "y": 0 },
+    "sad": { "file": "failure.svg", "scale": 1.4625, "x": -2.66029, "y": 0 }
+  }
+}

@@ -3,6 +3,7 @@ const test = require('node:test')
 const {
   DEFAULT_MATTER_ORIGIN,
   isMatterWebURL,
+  isMatterConversationURL,
   normalizeMatterOrigin,
   resolveMatterOrigin,
 } = require('../src/matterService.cjs')
@@ -30,4 +31,19 @@ test('matches exact Matter origin, including its port', () => {
   assert.equal(isMatterWebURL('https://matter.example.com/team', 'https://matter.example.com'), true)
   assert.equal(isMatterWebURL('https://matter.example.com.evil.test/', 'https://matter.example.com'), false)
   assert.equal(isMatterWebURL('https://matter.example.com:8443/', 'https://matter.example.com'), false)
+})
+
+test('shows the browser only in Matter conversation workspaces', () => {
+  const origin = 'https://matter.example.com'
+  for (const route of ['/', '/?team=team_1', '/new-chat', '/new-team', '/c/conv_1', '/c/conv_1?team=team_1']) {
+    assert.equal(isMatterConversationURL(origin + route, origin), true, route)
+  }
+  for (const route of ['/library', '/settings/acct', '/settings/ext', '/settings/org', '/settings/apis',
+    '/knowledge-results', '/operations/overview', '/components', '/c/', '/c/id/other', '/new-chat/other']) {
+    assert.equal(isMatterConversationURL(origin + route, origin), false, route)
+  }
+  for (const url of ['invalid', 'file:///tmp/index.html', 'https://matter.example.com.evil.test/c/conv_1',
+    'https://matter.example.com:8443/c/conv_1']) {
+    assert.equal(isMatterConversationURL(url, origin), false, url)
+  }
 })
