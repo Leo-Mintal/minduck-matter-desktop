@@ -58,6 +58,12 @@ async function verifyNewTab({ chrome, state, waitFor, temporary }) {
     await waitFor(state, (value) => value.theme === theme, 'new-tab theme follows Matter')
     await waitFor(() => chrome.executeJavaScript('document.documentElement.dataset.theme'), (value) => value === theme, 'chrome theme')
     await waitFor(() => page.executeJavaScript('document.documentElement.dataset.theme'), (value) => value === theme, 'new-tab theme')
+    const conversationColor = await matter.executeJavaScript(`(() => {
+      const probe = document.createElement('div'); probe.style.background = 'var(--app-canvas)';
+      document.body.append(probe); const color = getComputedStyle(probe).backgroundColor; probe.remove(); return color;
+    })()`)
+    assert.equal(await page.executeJavaScript(`getComputedStyle(document.querySelector('.browser-new-tab')).backgroundColor`),
+      conversationColor, 'new-tab background matches the conversation surface')
     for (const width of [375, 768, 1024, 1440]) await assertViewport(page, width)
     await assertViewport(page, 530)
     const icon = await waitFor(() => page.executeJavaScript(`(() => {

@@ -248,6 +248,13 @@ async function run() {
     await matter.executeJavaScript(`document.activeElement?.blur();
       document.querySelector('.desktop-workspace-rail').dispatchEvent(new Event('pointerleave'))`)
     await settle()
+    await waitFor(() => chrome.executeJavaScript('document.documentElement.dataset.theme'), value => value === theme, 'browser theme')
+    const newTab = webContents.getAllWebContents().find(item => item.getURL().includes('surface=newtab'))
+    assert.ok(newTab, 'browser start page is present')
+    await waitFor(() => newTab.executeJavaScript('document.documentElement.dataset.theme'), value => value === theme, 'start page theme')
+    const conversationColor = await matter.executeJavaScript(`getComputedStyle(document.querySelector('.app')).backgroundColor`)
+    assert.equal(await newTab.executeJavaScript(`getComputedStyle(document.querySelector('.browser-new-tab')).backgroundColor`),
+      conversationColor, 'browser start page matches the actual conversation background')
     fs.writeFileSync(path.join(temporary, `browser-open-${theme}.png`), (await matter.capturePage()).toPNG())
   }
   await chrome.executeJavaScript('minduckBrowserShell.command({type:"close-panel"})')
@@ -299,6 +306,7 @@ async function run() {
     await matter.executeJavaScript('document.body.click()')
     await waitFor(() => matter.executeJavaScript('!!document.querySelector(".acct-menu")'), value => !value, 'account menu closed')
   }
+  window.focus()
   matter.focus()
   await matter.executeJavaScript('document.activeElement?.blur(); document.querySelector(".desktop-workspace-navigation [aria-label=资产]").focus()')
   await waitFor(() => matter.executeJavaScript('document.querySelector("[role=tooltip]")?.textContent'), value => value === '资产', 'shared tooltip')

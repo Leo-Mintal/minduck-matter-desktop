@@ -116,7 +116,8 @@ let businessAllowed = false
 let businessStarted = false
 
 function nativeFrameColor() {
-  return matterTheme === 'light' ? '#e7e7e9' : '#202222'
+  if (chromeMetrics?.theme === matterTheme) return chromeMetrics.frame
+  return matterTheme === 'light' ? '#f7f7f7' : '#202222'
 }
 
 function nativeSettingsSurfaceColor(theme = matterTheme) {
@@ -588,7 +589,7 @@ function createMatterTab() {
   matterFrameView.addChildView(view)
   view.webContents.on('dom-ready', () => {
     const corners = `html { background: #202222 !important; }
-      html[data-theme='light'] { background: #e7e7e9 !important; }
+      html[data-theme='light'] { background: #f7f7f7 !important; }
       html:not([data-matter-workspace]) body { clip-path: inset(0 round ${FRAME_RADIUS}px) !important; }
       html:not([data-matter-workspace])[data-minduck-browser-open] body { clip-path: inset(0 round ${FRAME_RADIUS}px 0 0 ${FRAME_RADIUS}px) !important; }`
     void view.webContents.insertCSS(corners).then(() => {
@@ -995,7 +996,7 @@ function configureIPC() {
     // Closed chrome reports tokens but retains the last measured open height.
     next.toolbarHeight ||= chromeMetrics?.toolbarHeight || 0
     if (JSON.stringify(next) === JSON.stringify(chromeMetrics)) return
-    const colorsChanged = ['canvas', 'surface', 'divider'].some((key) => next[key] !== chromeMetrics?.[key])
+    const colorsChanged = ['canvas', 'surface', 'divider', 'frame'].some((key) => next[key] !== chromeMetrics?.[key])
     chromeMetrics = next
     if (colorsChanged) applyNativeTheme()
     layoutViews()

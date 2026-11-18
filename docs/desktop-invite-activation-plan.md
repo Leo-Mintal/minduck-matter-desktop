@@ -224,7 +224,7 @@ Apple TN3137 明确：数据保护钥匙串的访问组 entitlement 需要 provi
 | 4. 客户端 | gate、原生密钥模块、恢复、runtime/桌面登录保护 | 所有官方入口不可跳过；有旧 JWT 也先检查；失败可恢复 |
 | 5. 灰测上线 | 后端先部署兼容接口，新客户端发布后切强制策略 | 旧版本明确提示升级；Web 回归不受影响；吊销生效 |
 
-先部署迁移和兼容 API，`MATTER_DESKTOP_ACCESS=off`，确认 policy 返回 `required:false`，再发布新客户端；旧后端没有 policy 时新客户端会拦截。签名包验收、更新入口和 H5 页面就绪后，才设置 `MATTER_DESKTOP_ACCESS=on`，同时配置 `MATTER_DESKTOP_ACCESS_ORIGIN` 及两个独立 32 字节标准 base64 密钥 `MATTER_DESKTOP_INVITE_LOOKUP_KEY`、`MATTER_DESKTOP_INVITE_ENCRYPTION_KEY`。H5 发码接口无需额外鉴权配置。该开关也控制真实发码，提前联调用隔离环境。生产 origin 使用 HTTPS。回滚可关闭限制，但不得删除已用码或设备密钥。
+先部署迁移和兼容 API，`MATTER_DESKTOP_ACCESS=off`，确认 policy 返回 `required:false`，再发布新客户端；旧后端没有 policy 时新客户端会拦截。签名包验收、更新入口和 H5 页面就绪后，才设置 `MATTER_DESKTOP_ACCESS=on`，同时配置两个独立 32 字节标准 base64 密钥 `MATTER_DESKTOP_INVITE_LOOKUP_KEY`、`MATTER_DESKTOP_INVITE_ENCRYPTION_KEY`。签名 origin 默认复用当前环境的 `PUBLIC_API_BASE_URL`，自动去除末尾 `/`；`MATTER_DESKTOP_ACCESS_ORIGIN` 留空即可，仅需独立覆盖时填写精确 origin。最终地址必须与客户端实际访问的 API origin 一致，不含路径、查询或 fragment，非法配置会阻止启动。H5 发码配置 `MATTER_DESKTOP_INVITE_ADMIN_PASSWORD` 作为独立共享密码。该开关也控制真实发码，提前联调用隔离环境。生产 origin 使用 HTTPS。回滚可关闭限制，但不得删除已用码或设备密钥。
 
 ### 三环境隔离和已核实范围（2026-11-17）
 

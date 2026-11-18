@@ -28,6 +28,16 @@
 
 ## Recent Updates
 
+- 2026-11-17: 应用图标替换为用户提供的 `logo.svg`，原文件保存为 `build/app-icon.svg`，铺满方形画布、不添加留白，系统负责圆角；十种 PNG 尺寸及 Icon Composer 预览核验通过。重新拉取、构建 Web `dev` 并重打 0.1.12，396 份客户端/扩展/Web 文件与前包一致，复用此前测试结果。新包应用/DMG 公证 Accepted，包内图标、4,883 项输入哈希、5,556 项 DMG/ZIP 内容及 9,418 个增量块验证通过。当前包位于 `release/0.1.12/`，旧包归档于同版本 `archive/before-logo-20261117/`；仅本地打包公证，未安装或上传，见[分发记录](../macos-distribution.md)。
+
+- 2026-11-17: 客户端版本更新为 0.1.12，重新拉取并构建 Web `dev`（`8312553`），保留用户已验收的导航、紧凑图标、深浅主题及地址栏背景修改。277 项桌面测试、71 项相关 Web 测试、原生邀请码弹窗与两套真实 Electron 界面回归通过，应用/DMG 公证 Accepted，最终包内文件与更新清单校验通过。DMG/ZIP 位于 `release/0.1.12/`，清单和验证记录在 `metadata/`；按用户要求仅本地打包公证，由用户自行上传。见[分发记录](../macos-distribution.md)。
+
+- 2026-11-17: 地址栏整行和输入框改为与内容区共用 `--app-canvas`，消除深浅主题的独立底色块，保留细边框、聚焦提示和紧凑图标。重新拉取并构建最新 Web `dev`；277 项桌面测试、71 项相关 Web 测试及两套真实 Electron 回归通过。新测试包已签名、公证并校验，位于 `release/0.1.11/tests/address-surface-20261117/`，见[打包说明](../macos-distribution.md)。
+
+- 2026-11-17: 浅色顶栏、左栏与浏览器工具栏共用共享 Web `desktop/controls.css` 的背景、图标色及高亮；顶栏保持 28px 控件/16px 图标，浏览器导航保持 32px 控件。浏览器首页与会话区共用白色背景。合入最新 Web `dev`（`8312553`）并重新构建，277 项桌面测试、71 项相关 Web 测试及真实 Electron 深浅主题/四种窗口宽度/浏览器与更新回归通过。独立测试包已签名、公证并核对包内文件，记录见[打包说明](../macos-distribution.md)。
+
+- 2026-11-17: 后端邀请码签名 origin 默认复用 `PUBLIC_API_BASE_URL`，`MATTER_DESKTOP_ACCESS_ORIGIN` 改为可选覆盖；同步独立 H5 部署说明及客户端上线方案，不改 H5/客户端运行代码或安装包。见[部署说明](../../tools/invite-console/README.md)。
+
 - 2026-11-17: 独立邀请码 H5 改为服务端环境变量共享管理员密码入口，24 小时 HttpOnly 会话、退出撤销、改密码失效、错误限流及过期清屏；所有管理 API 后端强制校验，客户端激活与普通 Web 登录不变。取代此前匿名发码行为；保留 HTTP UUID 回退。见[部署说明](../../tools/invite-console/README.md)。
 
 - 2026-11-17: 修复独立邀请码 H5 在无 HTTPS 局域网页面缺少 `crypto.randomUUID()` 导致无法发码的问题，使用 `crypto.getRandomValues()` UUID 回退并保持请求幂等。真实非安全上下文 HTTP 浏览器验证摇码、兼容复制、测试码作废通过；文档补充同源 API 反代、迁移/密钥配置及无认证 HTTP 的局域网风险。见[摇号页部署说明](../../tools/invite-console/README.md#测试服局域网-http-部署)。

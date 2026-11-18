@@ -4,11 +4,41 @@
 
 当前正式的打包入口是 `pnpm dist:mac`，实现位于 `scripts/package-macos.sh`。原生 Brave/Chromium 迁移仍是实验工作；本手册描述目前可交付的 Electron 安装包。
 
+客户端每次更新打包都要重新拉取并构建 Web 远程 `dev`。预览尚未提交的共享界面修改时，先在保留这些修改的工作树合入最新 `dev`、重新完成 Web 与 desktop-shell 构建，再将该次产物冻结为显式 prebuilt；不能直接复用旧 `web-dist`。记录实际 `dev` 提交和前端 index 哈希。
+
 ## 版本目录规范（2026-11-17 起）
 
 所有打包产物按 `package.json` 的版本号归入 `release/<version>/`：根部放 DMG/ZIP，`metadata/` 放该版本的更新清单、SHA-256、blockmap、公证报告和验证记录；同版本的不同测试构建保留在 `tests/<构建名>/`，已有旧归档放在 `archive/`。手工打包也遵守此规则。`pnpm dist:mac` 自动按此目录输出，`pnpm release:mac` 和 `pnpm upload:mac` 从目标版本目录读取，服务器下载目录与公开 URL 保持原有结构。
 
 现有 119 项文件/目录已按版本归类，5,645 个文件逐一核对 SHA-256、权限、inode 和符号链接，内容未变。迁移记录在 `release/0.1.11/metadata/directory-layout-20261117.json`。以下日期记录中的旧路径保留为当时的事实；查找文件时以迁移记录为准，例如原 `release/metadata/build-0.1.11-20261116/` 现为 `release/0.1.11/metadata/build-0.1.11-20261116/`。旧记录附带的一次性脚本也原样归档，日常上传使用当前 `pnpm upload:mac`。
+
+### 0.1.12 新应用图标交付包（2026-11-17，已签名、公证，用户自行上传）
+
+- 应用图标改用用户提供的 `logo.svg`，原文件逐字节保存在 `build/app-icon.svg`；图形铺满方形画布，没有附加透明边距。重新生成十种 PNG、ICNS 和 Icon Composer 资源，系统圆角预览通过；最终包的 `CFBundleIconFile`/`CFBundleIconName` 为 `AppIcon`，`AppIcon.icns` 与 `Assets.car` 均与本次编译输入一致。
+- 保持版本 `0.1.12`，重新拉取并构建 Web `dev`（`8312553c0d51be93708ce67277ab052681dda7f7`），保留当前共享界面修改。396 份客户端源码、扩展和 Web 文件与首次 0.1.12 一致，因此复用其 277 项桌面测试、71 项相关 Web 测试、原生邀请码弹窗及两套 Electron 界面回归；本轮未将这些测试宣称为重新执行。
+- 新应用公证 `518ae8a1-0f11-434d-bc17-402c0446f5a7`、DMG 公证 `6050be86-50df-45f8-84b8-d2247a845a34` 均为 Accepted。最终签名、应用/DMG 票据、原生模块加载、4,883 项输入哈希、5,556 项 DMG/ZIP 内容/权限/链接、9,418 个增量块及更新清单校验通过。详细记录在 `release/0.1.12/metadata/build-logo-20261117/`，当前报告为 `metadata/MinduckMatter-0.1.12-arm64.release.json`。
+- 当前 DMG 为 197,122,480 字节，SHA-256 `10654f4d771792903a0a892171483c30553007a9f1e483cec7b3e9501da7fd8d`；ZIP 为 193,295,286 字节，SHA-256 `43628ee25cea38d062285df6dc767fa39fa8b99af323f897c3e04931a1e004b5`。DMG/ZIP 位于 `release/0.1.12/`，清单及校验在其 `metadata/`；首次交付包及对应元数据归档于 `archive/before-logo-20261117/`。按用户要求仅本地打包公证，由用户自行上传，未替换安装版或切换线上清单。
+
+### 0.1.12 首次交付包（2026-11-17，已由新应用图标包替代）
+
+- 版本号更新为 `0.1.12`；该次 DMG/ZIP 及对应清单、blockmap、SHA-256 和最终报告现归档于 `release/0.1.12/archive/before-logo-20261117/`，过程记录仍在版本 `metadata/build-20261117/`。按用户明确要求只完成本地打包公证，没有上传、切换线上清单或替换已安装客户端。
+- 已重新拉取并构建 Web `dev`（`8312553c0d51be93708ce67277ab052681dda7f7`），保留已验收的浅色顶栏/浏览器背景、紧凑图标、地址栏底色、导航/侧栏联动、绿色更新图标和邀请码等修改；143 份包内客户端源码/扩展文件与用户测试通过的 0.1.11 地址栏测试包一致。
+- 277 项桌面单测、71 项相关 Web 测试、完整 Web/desktop-shell 构建、原生 AppKit 邀请码弹窗和真实 Electron 工作区/浏览器深浅主题及多宽度回归通过。最终包的 4,883 项输入哈希、DMG/ZIP 内容/权限/链接、全部 DMG 增量块、签名/票据、原生模块加载及更新清单校验通过，详见 `metadata/build-20261117/verification.json` 和 `archive/before-logo-20261117/metadata/MinduckMatter-0.1.12-arm64.release.json`。
+- 首次 Apple 上传连接超时；重试后应用公证 `106ed5f7-1299-4597-b9cc-da5e228ee234`、DMG 公证 `15fec16e-5686-4508-8ce7-dc51996898bb` 均为 Accepted。DMG SHA-256 为 `832bdb61b526015a0466cff606b30b2eed1182b317451f8e2d0c6722e97cea92`，ZIP 为 `aa286421219d914adb015c65ca863739e237a0bbb6efc20525f82f5b62dbabe5`；构建日志、失败日志及清理记录保留在本版本的 `metadata/build-20261117/`，临时应用及挂载已清理。
+
+### 0.1.11 地址栏背景测试包（2026-11-17，已签名、公证及验证）
+
+- 新测试包位于 `release/0.1.11/tests/address-surface-20261117/`，记录和深浅预览在其 `metadata/`。地址栏整行和输入框与浏览器首页/会话内容共用 `--app-canvas`，保留细边框、焦点提示及原有紧凑尺寸。
+- 已重新拉取并构建 Web `dev`（`8312553`），保留已有客户端修改。277 项桌面测试、71 项相关 Web 测试、完整 Web 构建和两套真实 Electron 界面回归通过；最终包 4,883 项输入哈希、DMG/ZIP 的 5,556 项内容/权限/链接、9,407 个 DMG 增量块及原生模块签名加载校验通过。
+- 应用公证 `a3e514c5-9a96-462d-99c9-b0711c06aaeb`、DMG 公证 `e0b04453-9669-4ba2-9480-d83aa219fe7b` 均为 Accepted。DMG 为 197,122,777 字节，SHA-256 `09f68a515738e5454ce52ad983c8d7d7399197ca14bc38cd27a92fde8006cdad`。正式产物未变，未安装或上传；详见该测试目录的 `metadata/verification.json`。
+
+### 0.1.11 浅色界面测试包（2026-11-17，已签名、公证及验证）
+
+- 独立产物位于 `release/0.1.11/tests/light-chrome-20261117/`，验证记录、更新清单和预览截图位于其 `metadata/`；原正式目录中的 DMG/ZIP 校验值保持不变，未安装或上传。
+- 已拉取并合入 Web 远程 `dev`（`8312553c0d51be93708ce67277ab052681dda7f7`），保留已有客户端导航/更新/邀请码等改动，再重新构建 Web 和 desktop-shell。顶栏保持 28px 控件/16px 图标，浏览器导航保持 32px 控件；颜色、高亮和背景与左栏共用规则。浏览器首页与会话区共用白色背景。
+- 277 项桌面单测、71 项相关 Web 测试、Web 完整类型/构建和真实 Electron 深浅主题/四种窗口宽度/浏览器及更新检查通过。最终包的 4,883 项输入哈希、DMG/ZIP 的 5,556 项 bundle 内容/权限/链接和 9,439 个 DMG 增量块一致；签名、应用/DMG 公证票据、签名原生模块加载和更新清单校验通过。
+- 应用公证 `c7ebc7b1-3e23-4329-acc1-cb1ad077cb06`、DMG 公证 `a713ca4b-207d-4fba-b98a-9a755e2f8368` 均为 Accepted。DMG 为 197,123,406 字节，SHA-256 `eacdae0da9e1120d41f4eef4ca3fc1d3b23dc0aac51224c2df44263d46278c2a`。最终记录见该测试目录的 `metadata/verification.json`。
+- 默认后端仍为 `https://matter.minduck.com`，本轮实际探测的邀请码 policy 接口返回 404。首次激活需使用已部署接口的测试环境，或先部署配套正式后端；测试包没有绕过激活逻辑。
 
 ### 邀请码分支的签名先决条件（2026-11-16，尚未发布）
 

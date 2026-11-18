@@ -21,6 +21,8 @@ function parseChromeMetrics(value) {
     result[key] = opaqueColor(value[key])
     if (!result[key]) return null
   }
+  result.frame = value.frame === undefined ? (value.theme === 'light' ? '#f7f7f7' : '#202222') : opaqueColor(value.frame)
+  if (!result.frame) return null
   return result
 }
 

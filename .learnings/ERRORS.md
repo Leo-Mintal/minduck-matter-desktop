@@ -1,5 +1,41 @@
 # Unexpected Errors
 
+## 2026-11-17 - 0.1.12 release scope
+
+- The initial read-only SSH preflight for a presumed upload returned `Permission denied (publickey,password)`. The user clarified that this request covers client packaging and notarization only and that they will upload it themselves. No upload or server mutation was attempted. Continue the 0.1.12 local DMG/ZIP build without requesting server credentials.
+- The first 0.1.12 Apple notarization submission failed during S3 multipart upload with `HTTPClientError.deadlineExceeded`; signing/deep verification had succeeded. Preserved the build log as `release/0.1.12/metadata/build-20261117/first-attempt-standard-packaging.log`, confirmed temporary staging cleanup and retried the unchanged frozen build.
+- Resolution: the retry produced Accepted app and DMG submissions. Final signatures/tickets, archive payloads, native-module loading, all update blocks and manifests passed; all temporary application bundles and mounts were cleaned. Diagnostic reads corrected missing package-source filenames/glob paths without changing production code.
+
+## 2026-11-17 - Address surface inspection
+
+- A read-only `rg` probe placed `--glob` options after the `--` pattern separator, and a follow-up design-token read used the desktop root instead of the Web root. Corrected the option placement and repository paths; no files were changed by those probes. The address surface change passed the first Web build, 277 desktop tests, 71 related Web tests and both Electron smoke suites.
+
+## [ERR-20261117-CH1] Shared chrome style regression checks
+
+**Logged**: 2026-11-17T14:40:00Z
+**Priority**: low
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+The first style smoke found an obsolete circular-titlebar assertion and a transient selected-rail color during theme changes.
+
+### Error
+The titlebar expected `50%` but used the shared 8px radius. Workspace selection briefly resolved to `rgb(186, 186, 186)` instead of `rgb(231, 231, 231)`.
+
+### Context and Resolution
+Updated the titlebar expectation for the requested shared highlight shape, retaining the 28px target/16px icon assertions. Removed the newly introduced background transition from rail navigation, preserving its original immediate theme switch. Both complete Electron smoke suites then passed, including comparisons across actual renderers, both themes and responsive layouts; all 277 desktop unit tests passed.
+
+The initial packaging snapshot omitted the previously verified focused signing hook: the default signer treated PNG resources as signable binary files. Stopped only that snapshot's builder and confirmed its staging cleanup; preserved its log as `standard-packaging-resource-signing.log`, then reused the existing hook inside the snapshot. No source packaging configuration was changed. A read-only inspection also initially used the Web working directory for desktop files; retried with the desktop root explicitly.
+
+The later user instruction required updating Web `dev` for this package. The first merge correctly refused to overwrite local wiki/kit changes. Stashed all current tracked/untracked edits, merged `origin/dev`, then restored the stash without conflicts; all local desktop changes remained. Rebuilt Web and reran its affected tests and desktop integration checks. Stopped and cleaned the superseded package snapshot; no public release or installed app was changed.
+
+The post-merge smoke exposed a fixture race: it changed the native root theme before Matter, allowing the real theme synchronizer to restore the previous color. Set the theme through Matter and wait for host synchronization instead; both green color assertions remain exact. Two concurrent fixture windows also competed for native focus during Tooltip checks; focus the workspace window explicitly and run its native interaction suite separately. The original race logs are retained beside this test build's final logs.
+
+### Metadata
+- Reproducible: yes (before correction)
+- Related Files: src/desktop-frame.css, scripts/browser-chrome-smoke.cjs, scripts/workspace-shell-smoke.cjs, shared Web src/desktop/controls.css
+
 ## [ERR-20261117-R11] Incomplete release test snapshot
 
 **Logged**: 2026-11-17T03:30:00Z

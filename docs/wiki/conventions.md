@@ -1,7 +1,7 @@
 # Conventions
 
 - Keep the shell minimal and do not add business logic that belongs to the web application.
-- The macOS application icon source is `build/app-icon.svg`, preserving the user-provided SVG canvas and composition (the SVG embeds a 1536×1536 PNG). `pnpm run icon` generates the PNG iconset, legacy ICNS, and compiled Icon Composer resources; let the system apply the final mask rather than adding rounded corners to the source.
+- The macOS application icon source is `build/app-icon.svg`, the user's 2026-11-17 `logo.svg` preserved byte-for-byte (74×74 canvas with an embedded 1536×1536 PNG). Its artwork fills the square canvas without transparent padding. `pnpm run icon` generates the PNG iconset, legacy ICNS, and compiled Icon Composer resources; let the system apply the final mask rather than adding rounded corners to the source.
 - Do not expose Node.js APIs to the remote renderer.
 - The local browser shell uses an allow-listed preload IPC bridge. The exact-origin Matter top frame receives a separate UI-only `workspace-preload.cjs` bridge for update state, check-update and companion-settings; it exposes no credentials, filesystem, Node or execution API. Arbitrary browser tabs never receive either UI bridge.
 - Right-side browser pages are created only by `ElectronBrowserHost`; keep their partition, navigation guards, webview attachment rejection, login handling, and native view teardown in that host instead of adding ad hoc tab logic to `main.cjs`.

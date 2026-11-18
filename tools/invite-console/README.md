@@ -36,7 +36,7 @@ INVITE_API_ORIGIN=http://127.0.0.1:8080 node tools/invite-console/serve.cjs
 
 修复后的摇码请求编号优先使用 `crypto.randomUUID()`，不可用时回退到 `crypto.getRandomValues()` 生成 UUID；后者在普通 HTTP 页面仍可用。因此 LAN HTTP 不会因为浏览器缺少 `randomUUID` 而无法发码，刷新/超时重试也继续复用同一个请求编号。H5 通过相对路径请求同源 API，反代在服务器内连接 `127.0.0.1:8080`，无需另配 CORS。手机浏览器不要直接请求 `127.0.0.1:8080`，该地址指向手机自己。`navigator.clipboard` 在 HTTP 下通常不可用，复制会使用兼容回退；不同手机浏览器可能要求用户确认或手动复制。
 
-上线前仍要先部署后端分支、应用 138/139 迁移，设置 `MATTER_DESKTOP_ACCESS=on`、精确的 `MATTER_DESKTOP_ACCESS_ORIGIN=http://192.168.11.70:8080` 、两把独立持久化的 32 字节邀请码存储密钥，以及 `MATTER_DESKTOP_INVITE_ADMIN_PASSWORD`。后端须从服务端环境读取数据库/Redis，不应把数据库地址、邀请码加密密钥放入静态文件。设备签名的 `MATTER_DESKTOP_ACCESS_ORIGIN` 按客户端实际访问 API 的地址配置，若页面使用独立端口，不要误填页面端口。
+上线前仍要先部署后端分支、应用 138/139 迁移，设置 `MATTER_DESKTOP_ACCESS=on`、`PUBLIC_API_BASE_URL=http://192.168.11.70:8080`、两把独立持久化的 32 字节邀请码存储密钥，以及 `MATTER_DESKTOP_INVITE_ADMIN_PASSWORD`。邀请码模块默认复用 `PUBLIC_API_BASE_URL`，自动去除末尾 `/`；`MATTER_DESKTOP_ACCESS_ORIGIN` 可留空，仅需独立覆盖时填写无末尾 `/` 的精确 origin。后端须从服务端环境读取数据库/Redis，不应把数据库地址、邀请码加密密钥放入静态文件。最终签名地址必须是客户端实际访问的 API origin，不含路径、查询或 fragment；若页面使用独立端口，不要误填页面端口。
 
 **安全边界：**发码、查询、备注、作废和吊销均由服务端校验密码会话，不能通过绕过页面直接匿名调用。测试服内网 HTTP 可使用，但不能加密网络传输；手机在外网访问使用正式 HTTPS 站点。当前 `/api/desktop-access/policy` 为 404 时必须先部署兼容后端，H5 自身不能补上缺失的 API。
 
@@ -105,7 +105,7 @@ API 模式网络失败、无权限或返回格式错误会报错，**不会降�
 
 ### 环境隔离与部署
 
-本地、测试、正式的独立性取决于实际后端连接的数据库，而不是代码仓库或页面 URL。各环境应使用独立数据库、Redis、两把邀请码存储密钥及精确的 `MATTER_DESKTOP_ACCESS_ORIGIN`，应用 138、139 迁移并部署当前 API 后，再启用 `MATTER_DESKTOP_ACCESS=on`。H5 操作当前上游数据库；备注与码一同隔离，不向其他环境同步。
+本地、测试、正式的独立性取决于实际后端连接的数据库，而不是代码仓库或页面 URL。各环境应使用独立数据库、Redis、两把邀请码存储密钥及各自的精确 API origin（默认复用 `PUBLIC_API_BASE_URL`，可选 `MATTER_DESKTOP_ACCESS_ORIGIN` 覆盖），应用 138、139 迁移并部署当前 API 后，再启用 `MATTER_DESKTOP_ACCESS=on`。H5 操作当前上游数据库；备注与码一同隔离，不向其他环境同步。
 
 2026-11-17 已确认本地为 `127.0.0.1:5433/weave_db`，来自本机 Docker 独立卷；尚未获得测试/正式运行配置，不能确认其数据库是否彼此或与本地共用。测试 `http://192.168.11.70:8080`、正式 `https://matter.minduck.com` 的 `/health` 为 200，`/api/desktop-access/policy` 均为 404，当前不能仅切客户端地址就使用邀请激活。
 

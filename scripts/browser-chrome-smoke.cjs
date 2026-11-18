@@ -231,10 +231,15 @@ async function probe() {
   await waitFor(matterFrame, Boolean, 'committed Matter view')
   const matter = matterFrame().children.find(item => item.webContents).webContents
   await waitFor(() => matter.executeJavaScript('!!document.querySelector("[data-desktop-update]")'), Boolean, 'shared update control')
+  const setTheme = async (theme) => {
+    await matter.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
+    await waitFor(state, value => value.theme === theme, 'Matter theme sync')
+    await waitFor(() => desktop.executeJavaScript('document.documentElement.dataset.theme'), value => value === theme, 'native theme sync')
+  }
   for (const theme of ['dark', 'light']) {
+    await setTheme(theme)
     const expectedColor = theme === 'dark' ? 'rgb(34, 198, 88)' : 'rgb(22, 139, 60)'
     for (const renderer of [desktop, matter]) {
-      await renderer.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
       await waitFor(() => renderer.executeJavaScript(`(() => {
         const icon = document.querySelector('.desktop-workspace-update-available, #check-update .available-icon');
         return icon && getComputedStyle(icon).color;
@@ -265,7 +270,7 @@ async function probe() {
   for (const button of navigation.buttons) {
     assert.deepEqual(button.icon, { width: 16, height: 16 })
     assert.equal(button.width, 28); assert.equal(button.height, 28)
-    assert.equal(button.radius, '50%'); assert.equal(button.center, 18)
+    assert.equal(button.radius, '8px'); assert.equal(button.center, 18)
     assert.ok(button.x + button.width < drag.getBounds().x)
   }
   assert.equal(await desktop.executeJavaScript('document.querySelector("#local-exec-status")'), null, 'desktop frame has no local capability banner')
@@ -375,11 +380,11 @@ async function probe() {
   chrome.debugger.attach('1.3')
   await chrome.debugger.sendCommand('DOM.enable')
   await chrome.debugger.sendCommand('CSS.enable')
-  const forceTabState = async (selector, forcedPseudoClasses) => {
-    const { root } = await chrome.debugger.sendCommand('DOM.getDocument')
-    const { nodeId } = await chrome.debugger.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector })
+  const forceTabState = async (selector, forcedPseudoClasses, contents = chrome) => {
+    const { root } = await contents.debugger.sendCommand('DOM.getDocument')
+    const { nodeId } = await contents.debugger.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector })
     assert.ok(nodeId, selector)
-    await chrome.debugger.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses })
+    await contents.debugger.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses })
   }
   await resizer.executeJavaScript(`window.resizeProbe = []; for (const type of ['pointerdown','pointermove','pointerup','lostpointercapture']) addEventListener(type, (event) => resizeProbe.push({ type, x: event.clientX, screenX: event.screenX, width: innerWidth }))`)
   const input = (type, x, y = 200) => resizer.debugger.sendCommand('Input.dispatchMouseEvent', {
@@ -613,6 +618,9 @@ async function probe() {
     assert.equal(view(resizer).getBounds().width, 11)
   }
 
+  desktop.debugger.attach('1.3')
+  await desktop.debugger.sendCommand('DOM.enable')
+  await desktop.debugger.sendCommand('CSS.enable')
   for (const theme of ['light', 'dark']) {
     const matter = matterFrame().children.find(item => item.webContents).webContents
     await matter.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
@@ -626,6 +634,26 @@ async function probe() {
     await waitFor(() => chrome.executeJavaScript('document.getAnimations().filter((item) => item.playState === "running").length'), (value) => value === 0, 'theme transition completes')
     assert.equal(await chrome.executeJavaScript('getComputedStyle(document.querySelector(".desktop-chrome .panel")).backgroundColor'),
       'rgba(0, 0, 0, 0)', 'panel backing preserves the navigation corners in both themes')
+    const railColor = await matter.executeJavaScript(`getComputedStyle(document.querySelector('.desktop-workspace-rail')).backgroundColor`)
+    assert.equal(await desktop.executeJavaScript('getComputedStyle(document.body).backgroundColor'), railColor, 'native titlebar matches shared rail')
+    assert.equal(await chrome.executeJavaScript('getComputedStyle(document.querySelector(".pn-top")).backgroundColor'),
+      railColor, 'browser tab strip matches shared rail')
+    const canvasColor = await matter.executeJavaScript(`(() => {
+      const probe = document.createElement('div'); probe.style.background = 'var(--app-canvas)';
+      document.body.append(probe); const color = getComputedStyle(probe).backgroundColor; probe.remove(); return color;
+    })()`)
+    for (const selector of ['.desktop-navigation', '.desktop-address .field-control']) assert.equal(
+      await chrome.executeJavaScript(`getComputedStyle(document.querySelector('${selector}')).backgroundColor`),
+      canvasColor, 'address row and input match the content surface')
+    const railInk = await matter.executeJavaScript(`getComputedStyle(document.querySelector('.desktop-workspace-tools .b')).color`)
+    for (const [contents, selector] of [[desktop, '#matter-reload'], [chrome, '.pn-acts > .b'], [chrome, '.desktop-navigation > .b:not(:disabled)']]) {
+      assert.equal(await contents.executeJavaScript(`getComputedStyle(document.querySelector('${selector}')).color`), railInk, 'toolbar icon color matches shared rail')
+      await forceTabState(selector, ['hover'], contents)
+      await waitFor(() => contents.executeJavaScript('document.getAnimations().filter(item => item.playState === "running").length'), value => value === 0, 'shared hover settles')
+      assert.equal(await contents.executeJavaScript(`getComputedStyle(document.querySelector('${selector}')).backgroundColor`),
+        theme === 'light' ? 'rgb(237, 237, 237)' : 'rgba(255, 255, 255, 0.07)', 'toolbar hover uses rail highlight')
+      await forceTabState(selector, [], contents)
+    }
     const capture = await chrome.capturePage()
     assert.ok(!capture.isEmpty(), 'toolbar image has pixels')
     fs.writeFileSync(path.join(temporary, `chrome-${theme}.png`), capture.toPNG())
@@ -654,13 +682,14 @@ async function probe() {
     await chrome.executeJavaScript('document.querySelector("#address").blur()')
   }
   console.log('PASS: no inline address icon, transparent tab label states, 2px close padding, equal tab insets, navigation, round buttons, live resize cleanup, light/dark; previews:', temporary)
+  desktop.debugger.detach()
   updateVersion = nextVersion
   updateResponse = 0
   await desktop.executeJavaScript('document.querySelector("#check-update").click()')
   await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'),
     value => value.update.phase === 'downloading' && value.update.percent === 37, 'in-app download progress')
   for (const theme of ['dark', 'light']) {
-    await desktop.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
+    await setTheme(theme)
     const progress = await desktop.executeJavaScript(`(() => {
       const button = document.querySelector('#check-update'), value = document.querySelector('#update-progress');
       const bounds = button.getBoundingClientRect(), text = value.getBoundingClientRect();
