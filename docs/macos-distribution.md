@@ -12,6 +12,11 @@
 
 现有 119 项文件/目录已按版本归类，5,645 个文件逐一核对 SHA-256、权限、inode 和符号链接，内容未变。迁移记录在 `release/0.1.11/metadata/directory-layout-20261117.json`。以下日期记录中的旧路径保留为当时的事实；查找文件时以迁移记录为准，例如原 `release/metadata/build-0.1.11-20261116/` 现为 `release/0.1.11/metadata/build-0.1.11-20261116/`。旧记录附带的一次性脚本也原样归档，日常上传使用当前 `pnpm upload:mac`。
 
+### 0.1.14 激活断网本地测试包（2026-11-20）
+
+- arm64 DMG 和 ZIP 位于 `release/0.1.14/tests/offline-activation-20261120/`，用于手动覆盖安装。应用与 DMG 公证通过，核对了包内激活代码、签名、票据和校验和。
+- 从远程 Web `dev` 的 `e2bf04a` 重新构建并保留既有桌面界面改动。296 项桌面测试、71 项相关 Web 测试、原生弹窗和隔离 Electron 断网、恢复、撤销回归通过。验证记录位于测试包的 `metadata/`。
+
 ### 0.1.12 新应用图标交付包（2026-11-17，已签名、公证，用户自行上传）
 
 - 应用图标改用用户提供的 `logo.svg`，原文件逐字节保存在 `build/app-icon.svg`；图形铺满方形画布，没有附加透明边距。重新生成十种 PNG、ICNS 和 Icon Composer 资源，系统圆角预览通过；最终包的 `CFBundleIconFile`/`CFBundleIconName` 为 `AppIcon`，`AppIcon.icns` 与 `Assets.car` 均与本次编译输入一致。

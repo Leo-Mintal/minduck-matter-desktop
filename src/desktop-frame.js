@@ -2,6 +2,7 @@ const api = window.minduckDesktopFrame
 const toggle = document.querySelector('#browser-toggle')
 const update = document.querySelector('#check-update')
 const status = document.querySelector('#update-status')
+const activationStatus = document.querySelector('#activation-connection-status')
 const updateProgress = document.querySelector('#update-progress')
 const updateProgressValue = document.querySelector('#update-progress-value')
 const back = document.querySelector('#matter-back')
@@ -11,6 +12,7 @@ const rail = document.querySelector('.rail')
 
 function render(state) {
   if (!state) return
+  activationStatus.hidden = !state.activationCheckUnavailable
   // The shared Web rail owns interaction once the workspace renderer takes over.
   rail.inert = Boolean(state.workspace)
   rail.setAttribute('aria-hidden', String(Boolean(state.workspace)))

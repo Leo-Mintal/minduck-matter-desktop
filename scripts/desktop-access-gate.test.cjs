@@ -4,19 +4,21 @@ const { createGate, presentNativePrompt } = require('../src/desktop-access/gate.
 const { createAccessController } = require('../src/desktop-access/controller.cjs')
 
 function fixture() {
-  let failure = '', listener, state = { status: 'checking', message: '' }, quits = 0, disposals = 0
+  let failure = '', listener, state = { status: 'checking', message: '' }, quits = 0, disposals = 0, retries = 0
   const prompts = [], codes = []
   const controller = { snapshot: () => state, dispose() { disposals++; listener = undefined },
     subscribe(fn) { listener = fn; fn(state); return () => { listener = undefined } },
-    async activate(code) { codes.push(code); state = failure ? { status: 'retryable_error', message: failure } : { status: 'active' }; listener?.(state) } }
+    async check() { retries++; state = { status: 'unactivated', message: '' }; listener?.(state) },
+    async activate(code) { codes.push(code); state = failure ? { status: 'invite_error', message: failure } : { status: 'active' }; listener?.(state) } }
   const gate = createGate({ app: { quit() { quits++ } }, controller, presentPrompt(options) {
     let resolve
-    const prompt = { options, result: new Promise(done => { resolve = done }), close() { this.closed = true; resolve({ action: 'dismissed' }) },
+    const prompt = { options, result: new Promise(done => { resolve = done }), close() { this.closed = true; resolve({ action: 'dismissed' }); return this.draft },
       focus() { this.focused = true }, update(options) { Object.assign(this.options, options) }, respond(value) { resolve(value) } }
     prompts.push(prompt); return prompt
   } })
   return { gate, prompts, codes, failNext(message) { failure = message }, get quits() { return quits },
-    get disposals() { return disposals }, change(status, message = '') { state = { status, message }; listener?.(state) } }
+    get disposals() { return disposals }, get retries() { return retries },
+    change(status, message = '') { state = { status, message }; listener?.(state) } }
 }
 const settle = () => new Promise(resolve => setImmediate(resolve))
 
@@ -78,10 +80,10 @@ test('quit during an in-flight policy check cannot start business when the respo
 
 test('native gate preserves input and permits a new invite after device access expires', async () => {
   const f = fixture(); f.change('unactivated')
-  f.failNext('网络不可用')
+  f.failNext('邀请码不可用')
   f.prompts[0].respond({ action: 'confirm', code: 'ABC234' }); await settle()
   assert.equal(f.prompts.length, 2)
-  assert.equal(f.prompts[1].options.error, '网络不可用')
+  assert.equal(f.prompts[1].options.error, '邀请码不可用')
   assert.equal(f.prompts[1].options.code, 'ABC234')
   f.change('checking')
   assert.equal(f.prompts[1].options.editable, false)
@@ -97,7 +99,26 @@ test('native gate preserves input and permits a new invite after device access e
   f.prompts.at(-1).respond({ action: 'confirm', code: 'DEF567' }); await settle()
   assert.deepEqual(f.codes, ['ABC234', 'DEF567'])
   f.change('unsupported')
-  assert.equal(f.prompts.at(-1).options.editable, false)
+  assert.equal(f.prompts.at(-1).options.title, '无法验证客户端激活资格')
+  f.gate.dispose()
+})
+
+test('network failures show a retry prompt and preserve the invite draft', async () => {
+  const f = fixture(); f.change('unactivated')
+  f.prompts[0].draft = 'ABC'
+  f.change('retryable_error', '网络不可用')
+  assert.equal(f.prompts[0].closed, true)
+  assert.equal(f.prompts[1].options.title, '暂时无法连接激活服务')
+  f.prompts[1].respond({ action: 'confirm', code: 'ignored' })
+  await settle()
+  assert.equal(f.retries, 1)
+  assert.deepEqual(f.codes, [])
+  assert.equal(f.prompts[2].options.title, '')
+  assert.equal(f.prompts[2].options.code, 'ABC')
+  f.change('active', '网络不可用')
+  f.gate.show()
+  assert.equal(f.prompts.length, 3)
+  assert.equal(f.prompts[2].closed, true)
   f.gate.dispose()
 })
 

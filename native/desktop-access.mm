@@ -22,8 +22,8 @@ static NSTextField *activationInput;
 }
 - (void)refresh {
   NSString *code = [activationInput.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-  activationAlert.buttons.firstObject.enabled = self.editable &&
-    [code rangeOfString:@"^[A-HJ-NP-Z2-9]{6}$" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location != NSNotFound;
+  activationAlert.buttons.firstObject.enabled = self.editable && (!activationInput ||
+    [code rangeOfString:@"^[A-HJ-NP-Z2-9]{6}$" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location != NSNotFound);
 }
 @end
 static MatterActivationActions *activationActions;
@@ -116,49 +116,56 @@ static NSString *promptText(napi_env env, napi_value value) {
   if (napi_get_value_string_utf8(env,value,text,sizeof(text),&size) != napi_ok) return nil;
   return [[NSString alloc] initWithBytes:text length:size encoding:NSUTF8StringEncoding];
 }
+static NSString *activationPromptDetail(NSString *error, BOOL showInvite) {
+  if (!showInvite) return error;
+  NSString *notice = @"激活码为一次性产物，核销后作废！";
+  return error.length ? [NSString stringWithFormat:@"%@\n\n%@", notice, error] : notice;
+}
 static napi_value openPrompt(napi_env env, napi_callback_info info) {
   @autoreleasepool {
-    size_t count = 3; napi_value args[3]; bool editable;
+    size_t count = 4; napi_value args[4]; bool editable;
     napi_get_cb_info(env,info,&count,args,nullptr,nullptr);
-    if (count != 3 || napi_get_value_bool(env,args[2],&editable) != napi_ok)
+    if (count < 3 || napi_get_value_bool(env,args[2],&editable) != napi_ok)
       return fail(env,"invalid_argument","Expected error, previous input and editable flag");
     NSString *error = promptText(env,args[0]), *code = promptText(env,args[1]);
-    if (!error || !code) return fail(env,"invalid_argument","Invalid prompt text");
+    NSString *title = count == 4 ? promptText(env,args[3]) : @"";
+    if (!error || !code || !title) return fail(env,"invalid_argument","Invalid prompt text");
     if (![NSThread isMainThread] || !NSApp) return fail(env,"prompt_unavailable","Activation prompt requires the application main thread");
     if (activationAlert) return fail(env,"prompt_already_open","Activation prompt is already open");
     activationAlert = [[NSAlert alloc] init];
-    activationAlert.messageText = @"输入邀请码以激活应用";
-    activationAlert.informativeText = error.length
-      ? [@"激活码为一次性产物，核销后作废！\n\n" stringByAppendingString:error]
-      : @"激活码为一次性产物，核销后作废！";
+    BOOL showInvite = title.length == 0;
+    activationAlert.messageText = showInvite ? @"输入邀请码以激活应用" : title;
+    activationAlert.informativeText = activationPromptDetail(error, showInvite);
     activationAlert.alertStyle = NSAlertStyleInformational;
-    NSButton *confirm = [activationAlert addButtonWithTitle:@"确定"];
+    NSButton *confirm = [activationAlert addButtonWithTitle:showInvite ? @"确定" : @"重试"];
     NSButton *quit = [activationAlert addButtonWithTitle:@"退出"];
     activationActions = [[MatterActivationActions alloc] init];
     activationActions.editable = editable;
     activationActions.response = NSModalResponseContinue;
-    NSView *accessory = [[NSView alloc] initWithFrame:NSMakeRect(0,0,300,62)];
-    activationInput = [[NSTextField alloc] initWithFrame:NSMakeRect(0,34,300,24)];
-    activationInput.stringValue = code;
-    activationInput.enabled = editable;
-    activationInput.delegate = activationActions;
-    activationInput.accessibilityLabel = @"邀请码";
-    [accessory addSubview:activationInput];
-    NSTextField *note = [NSTextField labelWithString:@"没有邀请码？联系管理员提供。"];
-    note.frame = NSMakeRect(0,0,300,20);
-    note.font = [NSFont systemFontOfSize:NSFont.smallSystemFontSize];
-    note.textColor = NSColor.secondaryLabelColor;
-    [accessory addSubview:note];
-    activationAlert.accessoryView = accessory;
+    if (showInvite) {
+      NSView *accessory = [[NSView alloc] initWithFrame:NSMakeRect(0,0,300,62)];
+      activationInput = [[NSTextField alloc] initWithFrame:NSMakeRect(0,34,300,24)];
+      activationInput.stringValue = code;
+      activationInput.enabled = editable;
+      activationInput.delegate = activationActions;
+      activationInput.accessibilityLabel = @"邀请码";
+      [accessory addSubview:activationInput];
+      NSTextField *note = [NSTextField labelWithString:@"没有邀请码？联系管理员提供。"];
+      note.frame = NSMakeRect(0,0,300,20);
+      note.font = [NSFont systemFontOfSize:NSFont.smallSystemFontSize];
+      note.textColor = NSColor.secondaryLabelColor;
+      [accessory addSubview:note];
+      activationAlert.accessoryView = accessory;
+    }
     [activationActions refresh];
     [activationAlert layout];
     confirm.target = activationActions; confirm.action = @selector(confirm:); confirm.keyEquivalent = @"\r";
     quit.target = activationActions; quit.action = @selector(quit:); quit.keyEquivalent = @"\e";
     [activationAlert.window center];
-    if (editable) [activationAlert.window setInitialFirstResponder:activationInput];
+    if (activationInput && editable) [activationAlert.window setInitialFirstResponder:activationInput];
     [activationAlert.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
-    if (editable) [activationAlert.window makeFirstResponder:activationInput];
+    if (activationInput && editable) [activationAlert.window makeFirstResponder:activationInput];
     napi_value value; napi_get_undefined(env,&value); return value;
   }
 }
@@ -168,7 +175,7 @@ static napi_value pollPrompt(napi_env env, napi_callback_info info) {
     if (!activationAlert) { napi_get_null(env,&value); return value; }
     NSModalResponse response = activationActions.response;
     if (response == NSModalResponseContinue) { napi_get_null(env,&value); return value; }
-    NSString *code = activationInput.stringValue;
+    NSString *code = activationInput.stringValue ?: @"";
     napi_create_object(env,&value);
     napi_value action, input;
     napi_create_string_utf8(env,response == NSAlertFirstButtonReturn ? "confirm" : "quit",NAPI_AUTO_LENGTH,&action);
@@ -178,7 +185,13 @@ static napi_value pollPrompt(napi_env env, napi_callback_info info) {
   }
 }
 static napi_value closePrompt(napi_env env, napi_callback_info info) {
-  dismissActivationPrompt(); napi_value value; napi_get_undefined(env,&value); return value;
+  @autoreleasepool {
+    NSString *draft = activationInput.currentEditor.string ?: activationInput.stringValue;
+    napi_value value;
+    if (draft) napi_create_string_utf8(env,draft.UTF8String,NAPI_AUTO_LENGTH,&value);
+    else napi_get_undefined(env,&value);
+    dismissActivationPrompt(); return value;
+  }
 }
 static napi_value updatePrompt(napi_env env, napi_callback_info info) {
   size_t count = 3; napi_value args[3]; bool editable, inputEnabled;
@@ -189,10 +202,8 @@ static napi_value updatePrompt(napi_env env, napi_callback_info info) {
   NSString *error = promptText(env,args[0]);
   if (!error) return fail(env,"invalid_argument","Invalid prompt text");
   if (activationAlert) {
-    BOOL restoreFocus = !activationInput.enabled && inputEnabled;
-    activationAlert.informativeText = error.length
-      ? [@"激活码为一次性产物，核销后作废！\n\n" stringByAppendingString:error]
-      : @"激活码为一次性产物，核销后作废！";
+    BOOL restoreFocus = activationInput && !activationInput.enabled && inputEnabled;
+    activationAlert.informativeText = activationPromptDetail(error, activationInput != nil);
     activationActions.editable = editable; activationInput.enabled = inputEnabled;
     [activationActions refresh]; [activationAlert layout];
     if (restoreFocus) [activationAlert.window makeFirstResponder:activationInput];

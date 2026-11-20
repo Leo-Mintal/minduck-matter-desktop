@@ -13,6 +13,7 @@ body { background: var(--frame); color: var(--desktop-rail-ink); font: 12px -app
 /* The bounded native drag view owns empty titlebar space; never cover sibling browser controls. */
 .titlebar { height: 36px; display: flex; align-items: center; padding: 0 12px 0 92px; }
 .page-navigation { display: flex; align-items: center; gap: 4px; }
+#activation-connection-status { position: absolute; left: 208px; top: 0; line-height: 36px; white-space: nowrap; }
 .back-icon { --icon: url('assets/navigation-back.svg'); }
 .forward-icon { --icon: url('assets/navigation-back.svg'); transform: rotate(180deg); }
 .reload-icon { --icon: url('assets/icons/browser-reload.svg'); }

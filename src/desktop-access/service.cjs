@@ -1,6 +1,23 @@
 const crypto = require('node:crypto')
 const { normalizeMatterOrigin } = require('../matterService.cjs')
 const AUTH_PATHS = new Set(['login', 'register', 'send-verification-code', 'verify-code', 'forgot-password', 'reset-password'])
+const TEMPORARY_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504])
+const NETWORK_ERRORS = new Set(['EAI_AGAIN', 'ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
+  'ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN', 'EHOSTDOWN', 'EPIPE',
+  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'UND_ERR_SOCKET'])
+
+function temporaryNetworkError(error) {
+  const cause = error.cause ?? error
+  if (error.name === 'TimeoutError' || NETWORK_ERRORS.has(cause.code)) return true
+  return cause instanceof AggregateError && cause.errors.length > 0 &&
+    cause.errors.every(item => NETWORK_ERRORS.has(item.code))
+}
+
+function unavailable(cause) {
+  const error = new Error('暂时无法连接激活服务，请稍后重试', { cause })
+  error.code = 'desktop_access_unavailable'
+  return error
+}
 
 function signingText(origin, purpose, method, pathname, challenge, body) {
   return ['matter-desktop-access-v1', origin, purpose, method, pathname, challenge.id, challenge.nonce,
@@ -10,13 +27,24 @@ function createService({ origin, keys, fetchImpl = globalThis.fetch }) {
   origin = normalizeMatterOrigin(origin)
   let required = true
   async function request(pathname, options = {}) {
-    const response = await fetchImpl(new URL(pathname, origin), { ...options, redirect: 'error', signal: AbortSignal.timeout(10000),
-      headers: { 'Content-Type': 'application/json', ...options.headers } })
+    let response
+    try {
+      response = await fetchImpl(new URL(pathname, origin), { ...options, redirect: 'error', signal: AbortSignal.timeout(10000),
+        headers: { 'Content-Type': 'application/json', ...options.headers } })
+    } catch (error) {
+      if (temporaryNetworkError(error)) throw unavailable(error)
+      throw new Error('无法验证激活服务，请检查服务地址和证书', { cause: error })
+    }
+    if (TEMPORARY_HTTP_STATUS.has(response.status)) throw unavailable()
     let value
-    try { value = await response.json() } catch { throw new Error('激活服务返回格式错误，请检查服务地址') }
+    try { value = await response.json() } catch (error) {
+      if (temporaryNetworkError(error)) throw unavailable(error)
+      throw new Error('激活服务返回格式错误，请检查服务地址', { cause: error })
+    }
     if (!response.ok) {
-      const error = new Error(typeof value.error === 'string' ? value.error : '激活服务暂不可用，请重试')
-      error.code = value.code
+      const error = new Error(typeof value?.error === 'string' ? value.error : '激活校验失败，请重试')
+      if (response.status === 403 && ['device_unactivated', 'device_revoked'].includes(value?.code)) error.code = value.code
+      if (response.status === 400 && value?.code === 'invite_unavailable') error.code = value.code
       throw error
     }
     return value
@@ -53,7 +81,9 @@ function createService({ origin, keys, fetchImpl = globalThis.fetch }) {
     },
     async activate(raw) {
       const code = String(raw || '').trim().toUpperCase()
-      if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) throw new Error('请输入六位字母和数字邀请码')
+      if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) {
+        throw Object.assign(new Error('请输入六位字母和数字邀请码'), { code: 'invite_unavailable' })
+      }
       // Confirm persistence before consuming the one-time invite.
       const key = await keys.publicKey(true)
       if (!key || await keys.publicKey(false) !== key) throw new Error('本机密钥未能安全保存，请重试')

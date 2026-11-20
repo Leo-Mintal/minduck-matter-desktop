@@ -256,7 +256,7 @@ function desktopFrameState() {
     isLoading: ready ? contents.isLoading() : false,
   }
   return { theme: matterTheme, workspace: matterWorkspace, rightPanelOpen: browserHost?.isPanelOpen() ?? false, navigation,
-    update: desktopUpdate }
+    update: desktopUpdate, activationCheckUnavailable: Boolean(desktopAccess?.snapshot().message && businessAllowed) }
 }
 
 function navigateMatter(type) {
@@ -1293,6 +1293,7 @@ app.whenReady().then(async () => {
   configureIPC()
   createMenu()
   desktopAccess = createAccessController({ service: desktopAccessService,
+    onChange: publishDesktopFrameState,
     onActive: async () => { businessAllowed = true; await startDesktopBusiness() },
     onBlocked: stopDesktopBusiness })
   activationGate = createGate({ app, dialog, controller: desktopAccess })

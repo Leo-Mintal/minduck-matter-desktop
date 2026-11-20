@@ -89,20 +89,40 @@ test('policy failure is closed; an explicit disabled server policy preserves Web
   assert.equal(await service.prepareAuth(req), req)
 })
 
-test('startup gates old logins, single-flights activation, blocks on outage and recovers', async () => {
-  let activated = false, outage = false, starts = 0, stops = 0, consumes = 0
-  const service = { policy: async () => { if (outage) throw new Error('network unavailable'); return true },
+test('startup requires online activation, and an activated session survives a temporary outage', async () => {
+  const unavailable = Object.assign(new Error('network unavailable'), { code: 'desktop_access_unavailable' })
+  let activated = false, outage = true, starts = 0, stops = 0, consumes = 0, renewalError
+  const service = { policy: async () => { if (outage) throw unavailable; return true },
     restore: async () => { if (!activated) throw Object.assign(new Error('邀请码'), { code: 'device_unactivated' }) },
-    activate: async () => { consumes++; activated = true }, renew: async () => {} }
+    activate: async () => { consumes++; activated = true }, renew: async () => { if (renewalError) throw renewalError } }
   const controller = createAccessController({ service, onActive: async () => { starts++ }, onBlocked: async () => { stops++ } })
   assert.equal(controller.snapshot().status, 'checking')
+  await controller.check(); assert.equal(controller.snapshot().status, 'retryable_error'); assert.equal(starts, 0)
+  outage = false
   await controller.check(); assert.equal(controller.snapshot().status, 'unactivated'); assert.equal(starts, 0)
   await Promise.all([controller.activate('ABC234'), controller.activate('ABC234')])
   assert.equal(consumes, 1); assert.equal(starts, 1)
   await controller.check(); assert.equal(starts, 1)
-  outage = true; await controller.check(); assert.equal(controller.snapshot().status, 'retryable_error'); assert.equal(stops, 1)
-  outage = false; await controller.check(); assert.equal(controller.snapshot().status, 'active'); assert.equal(starts, 2)
+  outage = true; await controller.check(); assert.equal(controller.snapshot().status, 'active')
+  assert.ok(controller.snapshot().message)
+  outage = false; renewalError = unavailable
+  await controller.check(); assert.equal(controller.snapshot().status, 'active'); assert.equal(stops, 0)
+  renewalError = undefined
+  await controller.check(); assert.deepEqual(controller.snapshot(), { status: 'active', message: '' }); assert.equal(starts, 1)
+  renewalError = Object.assign(new Error('revoked'), { code: 'device_revoked' })
+  await controller.check(); assert.equal(controller.snapshot().status, 'revoked'); assert.equal(stops, 1)
   controller.dispose()
+})
+
+test('temporary HTTP and socket errors are distinct from validation failures', async () => {
+  const service = fetchImpl => createService({ origin, keys: {}, fetchImpl })
+  const socketError = new TypeError('transport failure', { cause: Object.assign(new Error(), { code: 'ENOTFOUND' }) })
+  const tlsError = new TypeError('transport failure', { cause: Object.assign(new Error(), { code: 'CERT_HAS_EXPIRED' }) })
+  await assert.rejects(service(async () => { throw socketError }).policy(), { code: 'desktop_access_unavailable' })
+  await assert.rejects(service(async () => new Response('bad gateway', { status: 502 })).policy(), { code: 'desktop_access_unavailable' })
+  await assert.rejects(service(async () => new Response('not deployed', { status: 404 })).policy(),
+    error => error.code !== 'desktop_access_unavailable')
+  await assert.rejects(service(async () => { throw tlsError }).policy(), error => error.code !== 'desktop_access_unavailable')
 })
 
 test('revocation and unsupported signing stay blocked; disposal prevents late startup', async () => {
