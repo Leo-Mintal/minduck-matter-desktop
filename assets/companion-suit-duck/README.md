@@ -1,8 +1,10 @@
 # 西装鸭十动作源素材
 
-用户于 2026-11-19 提供的完整合集逐字节保存为 `source/collection.svg`。
+用户于 2026-11-20 提供的完整合集逐字节保存为 `source/collection.svg`。
 `collection.json` 记录原始 SHA-256、十个语义组 ID 和拆分文件哈希；`sources.json` 记录轨道、路径与滤镜数量。
 `scripts/build-suit-duck.py` 每次先按 `project.json` 的语义组重建独立 SVG，再生成运行资源。
+
+询问和抱资料的袖子各有 29 个单白色轮廓遮罩。生成时将这些遮罩转为同坐标、同路径的 `clipPath`，避免缩小时袖子边缘混出底下的黄色；原始 SVG 不修改，`sources.json` 的 `repairedSleeveClips` 记录处理数量，其他遮罩保持原样。
 
 | 原组序号 | 独立文件 | 用途 |
 | --- | --- | --- |
@@ -29,7 +31,7 @@ MINDUCK_COMPANION_SUIT_POSE_ONLY=1 pnpm run test:companion
 ```
 
 生成目标：`src/companion/figures/minduck-suit-duck/` 的 `artwork.svg`、`artwork.js`、`flow-artwork.js`。
-工作、书写、成功、失败与红旗源文件分别有 188、4、4、4、4 个非法 `inf/-inf` 滤镜区域，共 204 个。
+本批素材只有电脑工作动作含有非法 `inf/-inf` 滤镜区域，共 192 个。
 `filter-bounds.json` 按滤镜所属图形的局部 `getBBox()` 加四倍高斯模糊标准差测得有限边界；构建时仅替换这四个区域属性，保留滤镜原语及原文件。
 校准数据绑定源 SHA-256，源变更或出现未校准的非法区域会明确报错；使用项目现有 Electron 重新测量：
 

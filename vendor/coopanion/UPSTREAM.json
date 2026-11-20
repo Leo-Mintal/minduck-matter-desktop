@@ -32,7 +32,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/figure-frame.js",
       "upstreamSha256": "b90276c5ac811dc4bc54832b1c21c6a458b667293304e8bc35a1883e60204cd5",
-      "integratedSha256": "d0a06fc3a386258b3910e5e791d7118524d39fadb34439e05ae0bb5b45a107f0",
+      "integratedSha256": "a94f4bc01423c16a8e2db9b06a39bb0df787d7e045266ccb16ac14090e3294ea",
       "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures. Shared action recovery retains interrupted work/ask until landing or dizzy recovery completes, without editing figure packs. Compose the automatic Matter activity controller inside the existing opaque figure sandbox; preserve manual flow recovery and idle thinking."
     },
     {
@@ -200,7 +200,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/dress.js",
       "upstreamSha256": "2016762775edf46da5738806b6ae600184e12090d89c663d906a7cf8c6de54b2",
-      "integratedSha256": "950d0880db97f1ecbf20e4c69f9a76edd05368072021b9538caa7cbb393a136d",
+      "integratedSha256": "235e972fd5cfc86418818d17cf1e49c9ab7ccc17b64c8c0ffe934b320217f893",
       "reason": "Hide Coo and DeepSeek whale choices in the Minduck dress picker while retaining packs, custom figure imports and the selected default duck."
     },
     {
@@ -326,7 +326,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/body-host.js",
       "upstreamSha256": "ea32926615acd854625c0b901260cf2f2dd399ea1c14f8e804745c615fc71217",
-      "integratedSha256": "40dc14449eeb2361f0facf8a52b585c02b26e000377a6efd312c52021d57349c",
+      "integratedSha256": "bd7af386a3df2e172a6135f2b4fcc792215159d93fed40a457cda3f2e5da2944",
       "reason": "Preserve a bounded boolean authored-animation signal separately from physical movement, so animated idle artwork can use the configured frame rate without suppressing idle thinking."
     },
     {
@@ -334,6 +334,54 @@
       "upstreamSha256": "de04e908b7d0dcead2ffa02cda9556207489d6b51128272b7b6431ef604bfbe2",
       "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Use the configured animation frame rate for authored idle clips while preserving resting throttling for static figures and explicit frame-rate preferences."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.js",
+      "upstreamSha256": "950d0880db97f1ecbf20e4c69f9a76edd05368072021b9538caa7cbb393a136d",
+      "integratedSha256": "235e972fd5cfc86418818d17cf1e49c9ab7ccc17b64c8c0ffe934b320217f893",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.html",
+      "upstreamSha256": "0a12a4b62e86fd77baa56d88b3bb2ef87c1ec25143e9dcb65a62384b6a5f5b21",
+      "integratedSha256": "8eab1454b5d7092f45981c0850d10171029cefaef9a2a1dbbc812f1ddf3ab231",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.css",
+      "upstreamSha256": "5ab77e1a777a6a18c3591c42aea88dd581573fb55a7b34211c62084b9cbedaa0",
+      "integratedSha256": "0c677ebfa09f783ea93b789c84a7699e9cd4f6d7f2ea15edc788b3a8780e1635",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/body-host.js",
+      "upstreamSha256": "40dc14449eeb2361f0facf8a52b585c02b26e000377a6efd312c52021d57349c",
+      "integratedSha256": "bd7af386a3df2e172a6135f2b4fcc792215159d93fed40a457cda3f2e5da2944",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/figure-frame.js",
+      "upstreamSha256": "d0a06fc3a386258b3910e5e791d7118524d39fadb34439e05ae0bb5b45a107f0",
+      "integratedSha256": "a94f4bc01423c16a8e2db9b06a39bb0df787d7e045266ccb16ac14090e3294ea",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/i18n/zh.js",
+      "upstreamSha256": "ef12ed7633dfe6b0834895ba19eccd57202ac6e96d13c8683e66339f3f5a2304",
+      "integratedSha256": "65b53548dd222a6b1129ca69fb53b671ebf6ad5f3a79766206a09fd0ad55b5da",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/i18n/en.js",
+      "upstreamSha256": "157ce400f0857228d6318bd5935c33f2797576c2d00cbd9369bb3f73a6bf9170",
+      "integratedSha256": "013b921abcd6d691064bedfd7f52b584b7957cec04312d860e7d74df6bd551aa",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-preview.js",
+      "upstreamSha256": null,
+      "integratedSha256": "f84e3750ae1fc3a319e590d3a88bfe92768b8c7ac843b1bdf2b2fa40ddfefec1",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
     }
   ]
 }

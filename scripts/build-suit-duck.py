@@ -102,6 +102,34 @@ def repair_filter_bounds(root, provenance):
     return len(repaired)
 
 
+def repair_sleeve_clips(root):
+    """Avoid layered alpha-mask seams on the exported solid-white sleeve silhouettes."""
+    repaired = 0
+    for mask in list(root.iter(TAG("mask"))):
+        children = list(mask)
+        if (len(children) != 1 or children[0].tag != TAG("path")
+                or not children[0].get("id", "").startswith("Arm_Silhouette_Clip")):
+            continue
+        silhouette = children[0]
+        reference = "url(#" + mask.get("id", "") + ")"
+        consumers = [node for node in root.iter() if node.get("mask") == reference]
+        if (mask.get("maskUnits") != "userSpaceOnUse" or silhouette.get("fill") != "white"
+                or set(silhouette.attrib) - {"id", "d", "fill"}
+                or set(mask.attrib) - {"id", "style", "maskUnits", "x", "y", "width", "height"}
+                or mask.get("style", "") not in {"mask-type:luminance", "mask-type:alpha"}
+                or not consumers or any(node.get("clip-path") or not any(
+                    part.get("id", "").startswith("Jacket_Sleeve_Near") for part in node.iter())
+                    for node in consumers)):
+            raise ValueError("Unreviewed sleeve silhouette mask: " + mask.get("id", ""))
+        identifier = mask.get("id")
+        mask.tag = TAG("clipPath")
+        mask.attrib = {"id": identifier, "clipPathUnits": "userSpaceOnUse"}
+        for node in consumers:
+            node.set("clip-path", node.attrib.pop("mask"))
+        repaired += 1
+    return repaired
+
+
 def prefix(root, name):
     ids = {e.get("id"): name + e.get("id") for e in root.iter() if e.get("id")}
     for node in root.iter():
@@ -178,6 +206,7 @@ def compile_rules(name, by_id, keyframes, rules):
 def compile_flow(name, spec):
     root, provenance = read_source(spec["file"])
     provenance["repairedFilterRegions"] = repair_filter_bounds(root, provenance)
+    provenance["repairedSleeveClips"] = repair_sleeve_clips(root)
     by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
     css = "\n".join(e.text or "" for e in root.iter(TAG("style")))
     animations, duration = compile_rules(name, by_id, *parse_css(css))

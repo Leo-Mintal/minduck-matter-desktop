@@ -92,7 +92,6 @@ export function createSuitFigure(state) {
         && !thinking && !frame.gesture && !(frame.talk > .01) && !frame.status;
       idleStart = idle ? idleStart ?? frame.t : null;
       const kind = state.kind ?? (thinking ? 'think' : walking ? 'gait' : idle ? 'idle' : null);
-      state.authoredMotion = Boolean(kind);
       const time = state.kind ? state.sourceTime : thinking ? state.thinkingTime
         : walking ? gaitTime(frame.modeT, frame.mode === 'run') : frame.t - (idleStart ?? frame.t);
       const blend = drawFlows(nodes.flows, kind, time, idle || walking);

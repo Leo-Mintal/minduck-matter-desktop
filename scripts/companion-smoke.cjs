@@ -81,6 +81,10 @@ app.whenReady().then(async () => {
       await require('./companion-suit-pose-probe.cjs')(state.url)
       return
     }
+    if (process.env.MINDUCK_COMPANION_PREVIEW_ONLY === '1') {
+      await require('./companion-preview-probe.cjs')({ companion, waitFor })
+      return
+    }
     if (tasksOnly) {
       await require('./companion-tasks-probe.cjs')({ companion, data, state, waitFor })
       return

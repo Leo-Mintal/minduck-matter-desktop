@@ -54,6 +54,13 @@ module.exports = async function probeSuitPose(url) {
     assert.equal(idleLayout.moving, false, 'idle animation does not block random thinking or pretend to walk')
     assert.deepEqual((await measure()).flows, ['idle'])
     await capture('idle')
+    await send({ t: 'do', word: 'love' })
+    const loveLayout = await tick(10)
+    assert.equal(loveLayout.animating, true, 'procedural love/heart pose retains the configured animation rate')
+    assert.equal(loveLayout.moving, false, 'face effects must not masquerade as walking')
+    assert.deepEqual((await measure()).flows, [], 'love exercises the procedural pose, not a full source clip')
+    await send({ t: 'do', word: 'neutral' })
+    await tick(1)
     let comparisons = 0
     const sources = { gait: 'walking', idle: 'idle', work: 'working', write: 'writing',
       ask: 'confirmation', happy: 'success', sad: 'failure', think: 'thinking', flag: 'flag', carry: 'carry' }

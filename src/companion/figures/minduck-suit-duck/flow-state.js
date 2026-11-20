@@ -97,8 +97,8 @@ export function createFlowBody(kit, host, figure, state) {
         ...layout, work: state.kind === 'work' ? phase : null, ask: state.kind === 'ask' ? phase : null,
         recoverableFlow: ['work', 'ask', 'write', 'flag', 'carry'].includes(state.kind) ? state.kind : null,
         gesture: state.kind ?? layout.gesture,
-        // Authored idle animation needs display-rate drawing without pretending to walk.
-        animating: Boolean(state.authoredMotion),
+        // Source clips and procedural faces both keep breathing/blinking and effects in motion.
+        animating: true,
         moving: layout.moving || state.kind !== null,
       };
     },

@@ -1,5 +1,27 @@
 # Unexpected Errors
 
+## 2026-11-20 - Companion action test package
+
+- A read-only lookup guessed an absent workspace probe filename; located and used `scripts/workspace-shell-smoke.cjs` instead.
+- The established shared desktop Web overlay met one three-way conflict after fresh remote dev added `/knowledge-results/plans`. Resolved it only in the temporary build checkout, keeping that new route and retaining the existing desktop-specific gate on `/knowledge-results`. The Web type/build checks, all 81 related tests and actual workspace/navigation regression passed. The user's Web checkout and production packaging script remain unchanged.
+
+## 2026-11-20 - Dressing action preview checks
+
+- A read-only probe guessed a nonexistent test filename; continued with the actual script inventory. A later combined patch used an incorrect log-heading context and failed before writing; re-read all targets before applying it again.
+- The first preview unit check guessed the love label as 爱心; the existing kit labels it 喜欢, which the UI intentionally reuses. Corrected the test to the existing vocabulary.
+- Repeated native test evaluations redeclared a top-level `const select` in the same JavaScript world. Scoped each selection in an IIFE; this is a harness fix, not a change to production scope or action behavior.
+- A frame was disposed during one visible action sweep. Keep long sweeps hidden to isolate them from outside UI input; the exact disposal source was not verified. Waiting for resized frames while hidden then stalled native rendering. The final harness shows its own window without focus and ignores mouse input only for visual captures; the full action/layout check passed.
+- The 1024px embedding produced a 692.5px CSS viewport while `innerWidth` reports 692. The new control ended exactly at 692.5px with no horizontal scroll; allow the normal one-pixel rounding tolerance in geometry checks. Production CSS did not need a layout change. Additional optional source reads used absent glob/path guesses; continued with exact known paths and local Electron type declarations.
+- The disposable launcher's Chinese `app.setName` leaked into Electron's User-Agent and made the protocol's Headers construction reject a non-ByteString character. Keep the process name ASCII and use the Chinese native window title. This affected only the standalone preview launcher, not the client or tested production settings.
+
+## 2026-11-20 - Desktop versus settings rendering diagnosis
+
+- Early read-only probes guessed absent runtime helper paths and used a broad generated-asset search that produced excessive output. Continued with the actual host/web inventory and bounded source reads; no writes were made from those guesses.
+- The first diagnostic launcher installed its probe override only in the Node parent, so the Electron child started the existing window probe. Stopped only that observed task-owned child and moved the override into the Electron entrypoint. Successful diagnostic runs use disposable profiles and clean them after stopping Core/host.
+- An initial sampling pass did not confirm the requested action and allowed the settings preview to become occluded. The revised native probe commands the same explicit expression/action in both contexts, records their actual layouts, warms the source, and disables background throttling only in the disposable settings fixture. It reproduced desktop love at 30 FPS versus settings at about 120 FPS; the fixed code measured both at about 119 FPS.
+- Removing a sleeve's inner stroke mask or padding its outer mask did not eliminate the visible yellow seam. Converting only the solid-white outer sleeve silhouette to the same user-space clip path did; original path coordinates, source files and animation tracks remain unchanged. Both focused regressions failed before the fixes, then all 298 unit tests and the full native companion regression passed.
+- The comparison-image helper guessed a Chinese font path that was unavailable. Used Pillow's bundled label font instead. The official sandbox render comparison remains unaltered; the measured warm seam pixels in the selected shoulder region fell from 38 to 2.
+
 ## 2026-11-20 - Desktop activation outage package
 
 - A shallow fetch transferred the full Web snapshot slowly. The incremental fetch succeeded from local objects after selecting the existing launchd SSH agent for the Minduck identity. Resolved the latest Web knowledge routes against the retained desktop interface overlay in the temporary checkout.
@@ -1598,3 +1620,11 @@ The new VM regressions first reproduced missing `crypto.randomUUID` in both real
 
 - A read-only probe for desktop release files used the sibling Web working directory and found no files. Repeated the reads in the desktop repository; no writes occurred in the wrong project.
 - The isolated build snapshot omitted the experimental Chromium directory, but the full desktop suite imports its launcher fixture. Copied only that directory's existing scripts into the snapshot and reran the unchanged serial suite: all 288 tests passed. No Chromium binary, dependency, product code or test expectation was changed.
+
+## 2026-11-20 - Suit Duck filter measurement
+
+- The command runner rejected a shell cleanup before the measurement started. The measurement then ran in a Python-managed temporary directory and exited successfully.
+
+## 2026-11-20 - Parallel desktop test run
+
+- The first parallel pnpm test run had one failure in the process-group cleanup test: process.kill returned EPERM. Running node --test scripts/local-exec.test.cjs alone passed all 25 tests; the serial full suite passed all 302 tests.

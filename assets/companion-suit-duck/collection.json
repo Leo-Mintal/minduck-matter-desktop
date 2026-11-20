@@ -1,58 +1,58 @@
 {
   "file": "collection.svg",
-  "sha256": "958f8edd9d8f06501db0da433839d1195b568937e2641820148b7fcf209b763c",
+  "sha256": "f01ffb45aafb69157b80db97142970d283c2b905095ba3d572a2deb351eacedd",
   "paths": 4007,
   "filters": 256,
   "actions": {
     "gait": {
       "file": "walking.svg",
       "group": "____________________________________________________________",
-      "sha256": "498621ceafd155e52691e1f56b2e2a035a8bfec214f37fbb1d16650da34d258a"
+      "sha256": "10e4d4c192ffc652699c7d025dbe1b30e45680ee9c792b3addaf0386b2fefca2"
     },
     "idle": {
       "file": "idle.svg",
       "group": "Minduck___Business_________",
-      "sha256": "8697f2777d4832c8f999248c730794593d855a976b30a18c3341388c27f5660f"
+      "sha256": "be8eec2b5b6e58a33b970275f33da4cc5001f9241a86b70b5f706e1d3c2044a9"
     },
     "work": {
       "file": "working.svg",
       "group": "Temporary___Wrist_Alignment_QA",
-      "sha256": "5e6e3b1838d462568660efc5ac4e6471262f4b813306ca7148a53c7413776c51"
+      "sha256": "49e8389ec9fd18815dd0ad57da2cc072ccfde0b3c6b4c8e49dba43de7d0398cb"
     },
     "write": {
       "file": "writing.svg",
       "group": "Minduck___Business__________2",
-      "sha256": "59b85bb224a6cd206b043220ecd6c189764aeab05b81c29543b8dc76eb925662"
+      "sha256": "9acf83608f5c0727312d76718b8ef796c61a14c9066e823bbb6c0f45a5981393"
     },
     "ask": {
       "file": "confirmation.svg",
       "group": "Minduck___Business____________",
-      "sha256": "6fe74157feade5400ac05e48a0931ae964f704abc6c63bba99af5dd20bb4bd66"
+      "sha256": "1a7089cbe0d6bec7bd207bcf54d0926cea4dcea38d626f141f2c21146884330f"
     },
     "happy": {
       "file": "success.svg",
       "group": "Minduck___Business__________3",
-      "sha256": "d33f17f3fd46f9fc8d11d50288567353278c19f18e747e9d400cddb3eba4b6a8"
+      "sha256": "ccc755673a241e1e0ef17054606d3748b2d7ec746411998bd11e718a4681cef3"
     },
     "sad": {
       "file": "failure.svg",
       "group": "Minduck___Business__________4",
-      "sha256": "bd61a586977b29c764c3723cb7a8d43aba6355edff134177067d83627165d608"
+      "sha256": "b8a0f05d25b2622ec778e6a7474ec0a44895de5a7de76b112b29abb78bf7fb37"
     },
     "think": {
       "file": "thinking.svg",
       "group": "Minduck___Business__________5",
-      "sha256": "6cf21d91305eccad5f5f51713b8d538a67a6e882e0e1071dd4dfe5c463f5b3bb"
+      "sha256": "79a20b0b3b1874eaaf505ce58d0358df0c742e0ba3e1ad63f7cb5d4a17598bb8"
     },
     "flag": {
       "file": "flag.svg",
       "group": "Minduck___Business_______________",
-      "sha256": "e8c1205a12c81bdb147a7e1b69f852b9044f687788b8850c0349e9d10dd6a801"
+      "sha256": "6024ff01395f2d4d73ff378cf954a79afa9c897d05931bcbab3adbfacb41c149"
     },
     "carry": {
       "file": "carry.svg",
       "group": "Boss_Duck___Book_Carry________________________",
-      "sha256": "0d2a9b465fede2cc5448b70ddb48b4a82271b1d9b5800675f7786b7c094a0775"
+      "sha256": "ffe8e24c46ee91d2c1e9312bce4253908dfe4e47dc827e613d0087e0ccac0aaa"
     }
   }
 }

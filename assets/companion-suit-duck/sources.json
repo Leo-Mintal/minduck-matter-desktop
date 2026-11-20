@@ -1,97 +1,107 @@
 {
   "base": {
     "file": "idle.svg",
-    "sha256": "8697f2777d4832c8f999248c730794593d855a976b30a18c3341388c27f5660f",
+    "sha256": "be8eec2b5b6e58a33b970275f33da4cc5001f9241a86b70b5f706e1d3c2044a9",
     "paths": 29,
     "filters": 4
   },
   "gait": {
     "file": "walking.svg",
-    "sha256": "498621ceafd155e52691e1f56b2e2a035a8bfec214f37fbb1d16650da34d258a",
+    "sha256": "10e4d4c192ffc652699c7d025dbe1b30e45680ee9c792b3addaf0386b2fefca2",
     "paths": 29,
     "filters": 4,
     "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 17
   },
   "idle": {
     "file": "idle.svg",
-    "sha256": "8697f2777d4832c8f999248c730794593d855a976b30a18c3341388c27f5660f",
+    "sha256": "be8eec2b5b6e58a33b970275f33da4cc5001f9241a86b70b5f706e1d3c2044a9",
     "paths": 29,
     "filters": 4,
     "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 5
   },
   "work": {
     "file": "working.svg",
-    "sha256": "5e6e3b1838d462568660efc5ac4e6471262f4b813306ca7148a53c7413776c51",
+    "sha256": "49e8389ec9fd18815dd0ad57da2cc072ccfde0b3c6b4c8e49dba43de7d0398cb",
     "paths": 1479,
     "filters": 196,
-    "repairedFilterRegions": 188,
+    "repairedFilterRegions": 192,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 780
   },
   "write": {
     "file": "writing.svg",
-    "sha256": "59b85bb224a6cd206b043220ecd6c189764aeab05b81c29543b8dc76eb925662",
+    "sha256": "9acf83608f5c0727312d76718b8ef796c61a14c9066e823bbb6c0f45a5981393",
     "paths": 406,
     "filters": 8,
-    "repairedFilterRegions": 4,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 168
   },
   "ask": {
     "file": "confirmation.svg",
-    "sha256": "6fe74157feade5400ac05e48a0931ae964f704abc6c63bba99af5dd20bb4bd66",
+    "sha256": "1a7089cbe0d6bec7bd207bcf54d0926cea4dcea38d626f141f2c21146884330f",
     "paths": 334,
     "filters": 4,
     "repairedFilterRegions": 0,
+    "repairedSleeveClips": 29,
     "duration": 8.0,
     "tracks": 171
   },
   "happy": {
     "file": "success.svg",
-    "sha256": "d33f17f3fd46f9fc8d11d50288567353278c19f18e747e9d400cddb3eba4b6a8",
+    "sha256": "ccc755673a241e1e0ef17054606d3748b2d7ec746411998bd11e718a4681cef3",
     "paths": 405,
     "filters": 8,
-    "repairedFilterRegions": 4,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 179
   },
   "sad": {
     "file": "failure.svg",
-    "sha256": "bd61a586977b29c764c3723cb7a8d43aba6355edff134177067d83627165d608",
+    "sha256": "b8a0f05d25b2622ec778e6a7474ec0a44895de5a7de76b112b29abb78bf7fb37",
     "paths": 395,
     "filters": 8,
-    "repairedFilterRegions": 4,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 168
   },
   "think": {
     "file": "thinking.svg",
-    "sha256": "6cf21d91305eccad5f5f51713b8d538a67a6e882e0e1071dd4dfe5c463f5b3bb",
+    "sha256": "79a20b0b3b1874eaaf505ce58d0358df0c742e0ba3e1ad63f7cb5d4a17598bb8",
     "paths": 31,
     "filters": 4,
     "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 10
   },
   "flag": {
     "file": "flag.svg",
-    "sha256": "e8c1205a12c81bdb147a7e1b69f852b9044f687788b8850c0349e9d10dd6a801",
+    "sha256": "6024ff01395f2d4d73ff378cf954a79afa9c897d05931bcbab3adbfacb41c149",
     "paths": 400,
     "filters": 8,
-    "repairedFilterRegions": 4,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
     "duration": 8.0,
     "tracks": 170
   },
   "carry": {
     "file": "carry.svg",
-    "sha256": "0d2a9b465fede2cc5448b70ddb48b4a82271b1d9b5800675f7786b7c094a0775",
+    "sha256": "ffe8e24c46ee91d2c1e9312bce4253908dfe4e47dc827e613d0087e0ccac0aaa",
     "paths": 499,
     "filters": 12,
     "repairedFilterRegions": 0,
+    "repairedSleeveClips": 29,
     "duration": 8.0,
     "tracks": 152
   }

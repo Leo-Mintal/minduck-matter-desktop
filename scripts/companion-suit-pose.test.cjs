@@ -32,6 +32,39 @@ async function fixture() {
   return { state, body, calls, events, setBusy(value) { busy = value } }
 }
 
+test('Suit Duck keeps animation-rate drawing for procedural expressions without claiming physical movement', async () => {
+  const { body } = await fixture()
+  body.do('wink')
+  assert.equal(body.layout().animating, true, 'breathing, blinking and face effects remain animated without a source flow')
+  assert.equal(Boolean(body.layout().moving), false, 'visual animation must not block idle behavior as walking would')
+})
+
+test('Suit Duck binary sleeve masks become equivalent clips without altering paths or source files', () => {
+  const result = spawnSync('python3', ['-c', `
+import importlib.util
+from copy import deepcopy
+s = importlib.util.spec_from_file_location('build', 'scripts/build-suit-duck.py')
+b = importlib.util.module_from_spec(s); s.loader.exec_module(b)
+for name, count in [('confirmation.svg', 29), ('carry.svg', 29), ('idle.svg', 0), ('working.svg', 0)]:
+    root, _ = b.read_source(name); original = deepcopy(root)
+    assert b.repair_sleeve_clips(root) == count
+    for before, after in zip(original.iter(), root.iter()):
+        if before.tag != after.tag:
+            assert before.tag == b.TAG('mask') and after.tag == b.TAG('clipPath')
+            assert after.get('clipPathUnits') == 'userSpaceOnUse'
+            before.tag = after.tag; before.attrib = dict(after.attrib)
+        elif before.attrib != after.attrib:
+            assert before.get('mask') == after.get('clip-path')
+            before.set('clip-path', before.attrib.pop('mask'))
+    assert b.ET.tostring(original) == b.ET.tostring(root), 'Path, timing or other artwork changed'
+    assert b.repair_sleeve_clips(root) == 0, 'Repair must be idempotent'
+root = b.ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg"><defs><mask id="ordinary"><path fill="white" d="M0 0h1v1z"/></mask></defs><g mask="url(#ordinary)"/></svg>')
+before = b.ET.tostring(root)
+assert b.repair_sleeve_clips(root) == 0 and b.ET.tostring(root) == before
+`], { cwd: root, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+})
+
 test('Suit Duck retains the original collection and all ten complete source actions', async () => {
   const { FLOWS } = await import(pack + 'flow-artwork.js')
   const provenance = require('../assets/companion-suit-duck/sources.json')
@@ -104,7 +137,7 @@ from copy import deepcopy
 spec = importlib.util.spec_from_file_location('builder', 'scripts/build-suit-duck.py')
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
-for name, expected in [('idle.svg', 0), ('working.svg', 188), ('writing.svg', 4), ('confirmation.svg', 0), ('success.svg', 4), ('failure.svg', 4), ('flag.svg', 4), ('carry.svg', 0)]:
+for name, expected in [('walking.svg', 0), ('idle.svg', 0), ('working.svg', 192), ('writing.svg', 0), ('confirmation.svg', 0), ('success.svg', 0), ('failure.svg', 0), ('thinking.svg', 0), ('flag.svg', 0), ('carry.svg', 0)]:
     root, provenance = b.read_source(name)
     original = deepcopy(root)
     assert b.repair_filter_bounds(root, provenance) == expected
