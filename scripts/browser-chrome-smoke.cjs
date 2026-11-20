@@ -274,7 +274,7 @@ async function probe() {
     assert.ok(button.x + button.width < drag.getBounds().x)
   }
   assert.equal(await desktop.executeJavaScript('document.querySelector("#local-exec-status")'), null, 'desktop frame has no local capability banner')
-  if (process.platform === 'darwin') assert.equal(window.getWindowButtonPosition().y, 11)
+  if (process.platform === 'darwin') assert.equal(window.getWindowButtonPosition().y, 10)
   await waitFor(() => !matter.isLoading(), Boolean, 'Matter initial load settles before history fixture')
   // Model user navigation so Chromium does not treat these as skippable script-only entries.
   await matter.executeJavaScript(`history.pushState({}, '', '/c/frame-first'); history.pushState({}, '', '/c/frame-second')`, true)

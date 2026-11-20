@@ -1,12 +1,17 @@
 import { FLOWS } from './flow-artwork.js';
 
 export const FLOW_TIMING = {
-  work: { enter: 1.35, sourceExit: 4.5, seconds: 6 },
-  ask: { enter: 1.35, sourceExit: 4.5, seconds: 6 },
-  happy: { seconds: 3 },
-  sad: { seconds: 2.6 },
+  work: { enter: 1.3504, sourceExit: 4.5, exitEnd: 6, seconds: 8 },
+  write: { enter: 1.3504, sourceExit: 4.5, exitEnd: 6, seconds: 8 },
+  ask: { enter: 1.3504, sourceExit: 4.5, exitEnd: 6, seconds: 8 },
+  happy: { enter: 1.3504, sourceExit: 4.5, exitEnd: 6, seconds: 8 },
+  sad: { enter: 1.3504, sourceExit: 4.5, exitEnd: 6, seconds: 8 },
+  think: { seconds: 8 },
+  flag: { enter: 1.3504, sourceExit: 4.5, exitEnd: 6, seconds: 8 },
+  carry: { enter: 1.9, sourceExit: 6.1, exitEnd: 7, seconds: 8 },
 };
-const smooth = value => { const k = Math.max(0, Math.min(1, value)); return k * k * (3 - 2 * k); };
+// Three complete measured strides, excluding the source's lead-in and final stop.
+export const gaitTime = (seconds, run = false) => 1.35 + (seconds * (run ? 1.65 : 1)) % 3.3;
 
 export function opacityAt(frames, progress) {
   let left = frames[0];
@@ -26,6 +31,7 @@ export function mountFlows(art) {
     const root = art.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
     root.setAttribute('data-flow', kind);
     root.setAttribute('transform', source.transform);
+    root.setAttribute('opacity', '0');
     root.style.display = 'none';
     art.appendChild(root);
     return [kind, { root, source, animations: null, opacityTracks: [], visible: false }];
@@ -66,22 +72,21 @@ export function seekFlow(flow, seconds) {
 }
 
 export function drawFlows(flows, kind, time, loop = false) {
-  let blend = 0;
+  let visible = false;
   for (const [name, flow] of Object.entries(flows)) {
     const active = name === kind;
     if (active) {
       const t = loop ? time % flow.source.duration : time;
       seekFlow(flow, t);
-      blend = loop ? smooth(time / .12)
-        : Math.min(smooth(t / .12), smooth((flow.source.duration - t) / .12));
-      flow.root.setAttribute('opacity', String(blend));
-      flow.root.style.display = '';
-    } else if (flow.visible) {
-      flow.root.style.display = 'none';
+      visible = true;
+    }
+    if (flow.visible !== active) {
+      flow.root.setAttribute('opacity', active ? '1' : '0');
+      flow.root.style.display = active ? '' : 'none';
     }
     flow.visible = active;
   }
-  return blend;
+  return visible ? 1 : 0;
 }
 
 export function disposeFlows(flows) {

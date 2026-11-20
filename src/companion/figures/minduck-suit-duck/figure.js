@@ -1,11 +1,11 @@
 import { ARTWORK } from './artwork.js';
-import { mountFlows, drawFlows, disposeFlows } from './flow-player.js';
+import { mountFlows, drawFlows, disposeFlows, gaitTime } from './flow-player.js';
 import { createFlowBody } from './flow-state.js';
 
-// Supplied static source is 68×76; source feet meet y=75.16476.
-const SCALE = 3.2;
-const FLOOR = 75.16476;
-const HIPS = [[24.4, 63.7], [45.3, 63.5]];
+// Semantic base from the new idle drawing; source feet meet y=51.38756.
+const SCALE = 4.67;
+const FLOOR = 51.38756;
+const HIPS = [[11.918, 39.4493], [27.241, 43.4293]];
 const HIP_X = [104, 150];
 const HITS = [[144, 90, 62], [132, 177, 68], [57, 163, 33], [205, 160, 30]];
 const clamp = (value, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, value));
@@ -15,7 +15,7 @@ const turn = (angle, x, y) => `rotate(${round(angle)} ${x} ${y})`;
 const transform = (node, value) => node.setAttribute('transform', value);
 
 function mount(petGroup) {
-  petGroup.innerHTML = `<g data-suit-art transform="translate(${128 - 34 * SCALE} ${256 - FLOOR * SCALE}) scale(${SCALE})">`
+  petGroup.innerHTML = `<g data-suit-art transform="translate(${128 - 23.00825 * SCALE} ${256 - FLOOR * SCALE}) scale(${SCALE})">`
     + `<g data-suit-base>${ARTWORK}</g></g>`;
   const part = name => petGroup.querySelector(`#suit-${name}`);
   return {
@@ -41,7 +41,7 @@ function drawFeet(nodes, frame) {
 }
 
 function drawFace(nodes, face, frame) {
-  const centers = [[30.5, 21.92], [49.45, 21.87]];
+  const centers = [[5.43, 5.49], [18.4, 5.42]];
   nodes.eyes.forEach((eyes, index) => {
     const [x, y] = centers[index];
     const shapes = { up: .36, down: .12, lid: .35, gt: .24, lt: .24 };
@@ -50,8 +50,8 @@ function drawFace(nodes, face, frame) {
     for (const eye of eyes) transform(eye, `${move(x + frame.look[0] * .18, y + frame.look[1] * .13 + frame.low / SCALE)}`
       + ` scale(1 ${round(height)}) ${move(-x, -y)}`);
   });
-  transform(nodes.beak, `${move(42.57, 33.88 + frame.low / SCALE)}`
-    + ` scale(1 ${round(1 + clamp(frame.talk ?? 0) * .15)}) ${move(-42.57, -33.88)}`);
+  transform(nodes.beak, `${move(29.1, 23.16 + frame.low / SCALE)}`
+    + ` scale(1 ${round(1 + clamp(frame.talk ?? 0) * .15)}) ${move(-29.1, -23.16)}`);
 }
 
 function wingAngles(frame) {
@@ -86,28 +86,38 @@ export function createSuitFigure(state) {
     colors: { z: '#E88A00' },
     draw(petGroup, face, frame) {
       nodes ??= mount(petGroup);
+      const walking = !state.kind && (frame.mode === 'walk' || frame.mode === 'run');
+      const thinking = !state.kind && state.thinkingTime != null;
       const idle = !state.kind && frame.mode === 'idle' && (!frame.face || frame.face === 'neutral')
-        && !frame.gesture && !(frame.talk > .01) && !frame.status;
+        && !thinking && !frame.gesture && !(frame.talk > .01) && !frame.status;
       idleStart = idle ? idleStart ?? frame.t : null;
-      const blend = drawFlows(nodes.flows, state.kind ?? (idle ? 'idle' : null),
-        state.kind ? state.sourceTime : frame.t - (idleStart ?? frame.t), idle);
-      nodes.base.setAttribute('opacity', String(1 - blend));
-      nodes.base.style.display = blend === 1 ? 'none' : '';
-      this.extent = state.kind ? [-20, -40, 330, 259] : [16, 12, 232, 259];
+      const kind = state.kind ?? (thinking ? 'think' : walking ? 'gait' : idle ? 'idle' : null);
+      state.authoredMotion = Boolean(kind);
+      const time = state.kind ? state.sourceTime : thinking ? state.thinkingTime
+        : walking ? gaitTime(frame.modeT, frame.mode === 'run') : frame.t - (idleStart ?? frame.t);
+      const blend = drawFlows(nodes.flows, kind, time, idle || walking);
+      if (nodes.covered !== Boolean(blend)) {
+        nodes.base.style.display = blend ? 'none' : '';
+        nodes.covered = Boolean(blend);
+      }
+      this.extent = kind === 'think' ? [-20, -150, 490, 259]
+        : state.kind ? [-50, -80, 360, 259] : [16, 12, 232, 259];
       this.hits = state.kind ? [...HITS, [250, 150, 42]] : HITS;
+      // Complete source artwork owns this frame, including its original entrance/exit.
+      if (blend) return;
       for (const upper of nodes.uppers) transform(upper, move(0, frame.low / SCALE));
       const [front, back] = wingAngles(frame);
-      transform(nodes.front, `${move(0, frame.low / SCALE)} ${turn(front, 20, 39.5)}`);
-      transform(nodes.back, `${move(0, frame.low / SCALE)} ${turn(back, 52, 38)}`);
+      transform(nodes.front, `${move(0, frame.low / SCALE)} ${turn(front, 7, 22.84)}`);
+      transform(nodes.back, `${move(0, frame.low / SCALE)} ${turn(back, 28.72, 22.84)}`);
       drawFeet(nodes, frame);
       drawFace(nodes, face, frame);
-      transform(nodes.crest, `${move(0, frame.low / SCALE)} ${turn(Math.sin(frame.t * 3.1) * 2, 36, 14)}`);
+      transform(nodes.crest, `${move(0, frame.low / SCALE)} ${turn(Math.sin(frame.t * 3.1) * 2, 24, 6)}`);
     },
     dispose() { disposeFlows(nodes?.flows); nodes = null; },
   };
 }
 
 export function createSuitDuckBody(_base, { kit, host }) {
-  const state = { kind: null, elapsed: 0, sourceTime: 0 };
+  const state = { kind: null, elapsed: 0, sourceTime: 0, thinkingTime: null };
   return createFlowBody(kit, host, createSuitFigure(state), state);
 }

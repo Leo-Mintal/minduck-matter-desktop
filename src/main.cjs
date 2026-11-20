@@ -63,10 +63,15 @@ const { createKeyProvider } = require('./desktop-access/keys.cjs')
 const { createService: createDesktopAccessService } = require('./desktop-access/service.cjs')
 const { createAccessController } = require('./desktop-access/controller.cjs')
 const { createGate } = require('./desktop-access/gate.cjs')
+const { createMatterServiceSettings } = require('./matterServiceSettings.cjs')
 
 const MATTER_UNAVAILABLE_PAGE = path.join(__dirname, 'matter-unavailable.html')
 const MATTER_UNAVAILABLE_URL = pathToFileURL(MATTER_UNAVAILABLE_PAGE).toString()
-const MATTER_SERVICE_SETTINGS_PAGE = path.join(__dirname, 'matter-service-settings.html')
+const stylePreviewOnly = require('../package.json').main === 'src/style-preview.cjs'
+// The 0.2.0 Web rail uses --navigation-bg; the native window also needs its resolved colors.
+const previewRailColors = { dark: '#141414', light: '#f7f7f7' }
+const previewRailCSS = Object.entries(previewRailColors).map(([theme, color]) =>
+  `:root[data-theme='${theme}'] { --desktop-rail-surface: var(--navigation-bg, ${color}); }`).join('\n')
 
 // A development run must not share extension workers or browser storage with an installed build.
 const shellTestOrigin = require('../package.json').shellTestOrigin
@@ -92,7 +97,7 @@ let extensionApiBridge
 let matterPresenceTimer
 let matterTheme = 'dark'
 let matterOrigin = DEFAULT_MATTER_ORIGIN
-let matterServiceSettingsWindow
+let matterServiceSettings
 let companion
 let matterTasks
 let matterTaskOutput = { active: false }
@@ -116,6 +121,7 @@ let businessAllowed = false
 let businessStarted = false
 
 function nativeFrameColor() {
+  if (stylePreviewOnly) return previewRailColors[matterTheme]
   if (chromeMetrics?.theme === matterTheme) return chromeMetrics.frame
   return matterTheme === 'light' ? '#f7f7f7' : '#202222'
 }
@@ -588,7 +594,7 @@ function createMatterTab() {
   }
   matterFrameView.addChildView(view)
   view.webContents.on('dom-ready', () => {
-    const corners = `html { background: #202222 !important; }
+    const corners = `html { background: ${stylePreviewOnly ? previewRailColors.dark : '#202222'} !important; }
       html[data-theme='light'] { background: #f7f7f7 !important; }
       html:not([data-matter-workspace]) body { clip-path: inset(0 round ${FRAME_RADIUS}px) !important; }
       html:not([data-matter-workspace])[data-minduck-browser-open] body { clip-path: inset(0 round ${FRAME_RADIUS}px 0 0 ${FRAME_RADIUS}px) !important; }`
@@ -819,53 +825,10 @@ function restartApplication() {
   app.exit(0)
 }
 
-function isMatterServiceSettingsSender(webContents) {
-  return Boolean(
-    matterServiceSettingsWindow
-    && !matterServiceSettingsWindow.isDestroyed()
-    && matterServiceSettingsWindow.webContents === webContents,
-  )
-}
-
 function openMatterServiceSettings() {
-  if (matterServiceSettingsWindow && !matterServiceSettingsWindow.isDestroyed()) {
-    matterServiceSettingsWindow.focus()
-    return
-  }
-
-  matterServiceSettingsWindow = new BrowserWindow({
-    width: 520,
-    height: 420,
-    minWidth: 460,
-    minHeight: 380,
-    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
-    modal: Boolean(mainWindow && !mainWindow.isDestroyed()),
-    show: false,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    title: 'Matter 服务地址',
-    backgroundColor: nativeSettingsSurfaceColor(),
-    webPreferences: {
-      preload: path.join(__dirname, 'matter-service-settings-preload.cjs'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      webviewTag: false,
-    },
-  })
-  matterServiceSettingsWindow.setMenuBarVisibility(false)
-  matterServiceSettingsWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  matterServiceSettingsWindow.once('ready-to-show', () => matterServiceSettingsWindow?.show())
-  matterServiceSettingsWindow.on('closed', () => {
-    matterServiceSettingsWindow = undefined
-  })
-  void matterServiceSettingsWindow.loadFile(MATTER_SERVICE_SETTINGS_PAGE).catch((error) => {
-    console.error('Failed to open Matter service settings:', error)
-  })
+  matterServiceSettings ||= createMatterServiceSettings({ app, dialog, getWindow: () => mainWindow,
+    getState: matterServiceSettingsState, saveOrigin: saveMatterOrigin, restart: restartApplication })
+  matterServiceSettings.show()
 }
 
 async function useDefaultMatterService() {
@@ -919,7 +882,8 @@ function lookupDesktopUpdate() {
 }
 
 function getDesktopUpdater() {
-  desktopUpdater ??= createDesktopUpdater({ ...macUpdateRuntime(app), currentVersion: app.getVersion(),
+  desktopUpdater ??= createDesktopUpdater({ ...(stylePreviewOnly
+    ? { unavailableReason: '本地样式预览不安装更新。' } : macUpdateRuntime(app)), currentVersion: app.getVersion(),
     showDialog: showUpdateDialog,
     onState: (state) => {
       desktopUpdate = state
@@ -1032,31 +996,13 @@ function configureIPC() {
   ipcMain.on('panel-resizer:finish', (event) => {
     if (isPanelResizeSender(event.sender)) finishPanelResize()
   })
-  ipcMain.handle('matter-service-settings:get', (event) => {
-    if (!isMatterServiceSettingsSender(event.sender)) return null
-    return matterServiceSettingsState()
-  })
-  ipcMain.handle('matter-service-settings:save', (event, request) => {
-    if (!isMatterServiceSettingsSender(event.sender)) return null
-    return saveMatterOrigin(request?.origin)
-  })
-  ipcMain.handle('matter-service-settings:reset', (event) => {
-    if (!isMatterServiceSettingsSender(event.sender)) return null
-    return saveMatterOrigin(null)
-  })
-  ipcMain.on('matter-service-settings:restart', (event) => {
-    if (isMatterServiceSettingsSender(event.sender)) restartApplication()
-  })
-  ipcMain.on('matter-service-settings:close', (event) => {
-    if (isMatterServiceSettingsSender(event.sender)) matterServiceSettingsWindow.close()
-  })
 }
 
 function createMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
-        label: 'Minduck Matter',
+        label: app.getName(),
         submenu: [
           { role: 'about' },
           { label: '检查更新…', click: () => void checkForDesktopUpdate() },
@@ -1085,17 +1031,17 @@ function createMenu() {
 function createWindow() {
   if (!businessAllowed) { activationGate?.show(); return }
   shellReady = false
-  matterWorkspace = false
+  matterWorkspace = require('../package.json').webOwnsNavigation === true
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 600,
     show: false,
-    title: 'Minduck Matter',
+    title: app.getName(),
     // Keep the native window controls without reserving a separate title-bar band.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 11 } : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 10 } : undefined,
     backgroundColor: nativeFrameColor(),
     webPreferences: {
       preload: path.join(__dirname, 'desktop-frame-preload.cjs'),
@@ -1168,10 +1114,14 @@ function createWindow() {
   mainWindow.contentView.addChildView(shellView)
   mainWindow.contentView.addChildView(panelResizeView)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  if (stylePreviewOnly) mainWindow.on('page-title-updated', event => event.preventDefault())
   mainWindow.webContents.on('will-navigate', event => event.preventDefault())
   mainWindow.webContents.on('will-redirect', event => event.preventDefault())
-  mainWindow.webContents.once('did-finish-load', publishDesktopFrameState)
-  void mainWindow.loadFile(path.join(__dirname, 'desktop-frame.html')).catch(error => console.error('Failed to load desktop frame:', error))
+  const hostWindow = mainWindow
+  const frameReady = hostWindow.loadFile(path.join(__dirname, 'desktop-frame.html')).then(async () => {
+    if (stylePreviewOnly) await hostWindow.webContents.insertCSS(previewRailCSS)
+    publishDesktopFrameState()
+  }).catch(error => console.error('Failed to load desktop frame:', error))
   windowDragView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   shellView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   panelResizeView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -1179,12 +1129,13 @@ function createWindow() {
   const sharedShellPage = path.join(app.getAppPath(), 'web-dist', 'desktop-shell', 'index.html')
   void panelResizeView.webContents.loadFile(sharedShellPage, { query: { surface: 'resizer' } }).catch((error) => console.error('Failed to load panel resizer:', error))
   const chromeContents = shellView.webContents
-  const hostWindow = mainWindow
   chromeContents.once('did-finish-load', async () => {
     const sidebarIcon = pathToFileURL(path.join(__dirname, 'assets/sidebar-toggle.svg')).href
     try {
       await chromeContents.insertCSS(`:root { --desktop-sidebar-icon: url("${sidebarIcon}"); }\n`
-        + fs.readFileSync(path.join(__dirname, 'browser-frame.css'), 'utf8'))
+        + fs.readFileSync(path.join(__dirname, 'browser-frame.css'), 'utf8')
+        + (stylePreviewOnly ? '\n' + previewRailCSS : ''))
+      if (stylePreviewOnly) await frameReady
     } catch (error) {
       if (!chromeContents.isDestroyed()) console.error('Failed to prepare browser shell:', error)
       return
@@ -1207,6 +1158,7 @@ function createWindow() {
   mainWindow.once('show', () => { void localExec?.refresh(); void browserDevice?.refresh(); refreshDesktopUpdate() })
   mainWindow.on('focus', refreshDesktopUpdate)
   mainWindow.on('closed', () => {
+    matterServiceSettings?.close()
     localExec?.suspend()
     browserDevice?.suspend()
     matterTasks?.dispose()
@@ -1238,14 +1190,16 @@ async function startDesktopBusiness() {
     return
   }
   businessStarted = true
-  localExec = createController({ app, origin: matterOrigin, getContents: () => matterTab?.view.webContents,
-    openPath: filename => shell.openPath(filename), confirmAccess: createAccessDialog({ dialog, getWindow: () => mainWindow }) })
-  const extensionRoot = app.isPackaged
-    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'extensions', 'matter-browser')
-    : path.join(__dirname, '..', 'extensions', 'matter-browser')
-  browserDevice = createClientRuntime({ app, localExec, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
-    getAccessProof: (runtimeId, token) => desktopAccessService.runtimeProof(runtimeId, token),
-    getContents: () => matterTab?.view.webContents, compatibility: extensionCompatibility, extensionRoot, nativeImage })
+  if (!stylePreviewOnly) {
+    localExec = createController({ app, origin: matterOrigin, getContents: () => matterTab?.view.webContents,
+      openPath: filename => shell.openPath(filename), confirmAccess: createAccessDialog({ dialog, getWindow: () => mainWindow }) })
+    const extensionRoot = app.isPackaged
+      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'extensions', 'matter-browser')
+      : path.join(__dirname, '..', 'extensions', 'matter-browser')
+    browserDevice = createClientRuntime({ app, localExec, fetchImpl: net.fetch.bind(net), origin: matterOrigin,
+      getAccessProof: (runtimeId, token) => desktopAccessService.runtimeProof(runtimeId, token),
+      getContents: () => matterTab?.view.webContents, compatibility: extensionCompatibility, extensionRoot, nativeImage })
+  }
   try {
     await loadBuiltInExtensions(app, { matterBrowser: false })
   } catch (error) {
@@ -1253,6 +1207,7 @@ async function startDesktopBusiness() {
   }
   matterPresenceTimer = setInterval(() => { void updateMatterPresence(); publishDesktopFrameState() }, 1_000)
   createWindow()
+  if (stylePreviewOnly) return
   try {
     companion = createCompanion({ onMatterAction: (action, target) => {
       if (action.startsWith('chat-') || action === 'qa-answer' || action === 'qa-upload') return handleMatterQa({ bridge:matterTasks, dialog }, action, target)
@@ -1269,6 +1224,7 @@ async function startDesktopBusiness() {
 }
 
 async function stopDesktopBusiness() {
+  matterServiceSettings?.close()
   businessAllowed = false
   businessStarted = false
   clearInterval(matterPresenceTimer)
@@ -1312,6 +1268,7 @@ app.on('window-all-closed', () => {
 
 let companionQuitting = false
 app.on('before-quit', (event) => {
+  matterServiceSettings?.close()
   desktopAccess?.dispose()
   activationGate?.dispose()
   localExec?.dispose()

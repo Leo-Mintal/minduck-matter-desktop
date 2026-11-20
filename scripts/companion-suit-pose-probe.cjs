@@ -25,18 +25,20 @@ module.exports = async function probeSuitPose(url) {
       frame.src='${origin}/figure-frame?pack=minduck-suit-duck';document.body.append(frame);`)
     await exec('poseReady')
     const send = message => exec(`poseFrame.contentWindow.postMessage(${JSON.stringify(message)},'*')`)
-    const tick = count => exec(`(async()=>{let value;for(let i=0;i<${count};i++){
+    const tick = (count, quiet = true) => exec(`(async()=>{let value;for(let i=0;i<${count};i++){
       const next=new Promise((resolve,reject)=>{const listener=e=>{
         if(e.source!==poseFrame.contentWindow)return;
         if(e.data.t==='frame'||e.data.t==='error'){removeEventListener('message',listener);
           e.data.t==='error'?reject(new Error(e.data.message)):resolve(e.data.layout);}};
         addEventListener('message',listener);});
+      ${quiet ? "poseFrame.contentWindow.postMessage({t:'set',state:{hold:.1}},'*');" : ''}
       poseFrame.contentWindow.postMessage({t:'tick',dt:.05},'*');value=await next;}return value;})()`)
     const frame = page.webContents.mainFrame.frames.find(item => item.url.includes('/figure-frame'))
     assert.ok(frame, 'official Suit Duck frame')
     const measure = () => frame.executeJavaScript(`(()=>{
       const visible=[...document.querySelectorAll('[data-flow]')].filter(n=>getComputedStyle(n).display!=='none');
       return {flows:visible.map(n=>n.dataset.flow),times:visible.map(n=>Number(n.dataset.sourceTime)),
+        opacities:visible.map(n=>Number(getComputedStyle(n).opacity)),
         animations:document.getAnimations().map(a=>({state:a.playState,time:a.currentTime})),
         base:getComputedStyle(document.querySelector('[data-suit-base]')).display,
         monocle:!!document.querySelector('#suit-monocle')};})()`)
@@ -47,11 +49,14 @@ module.exports = async function probeSuitPose(url) {
         (await page.webContents.capturePage()).toPNG())
     }
     await send({ t: 'set', state: { roam: 'off', thoughtShown: true } })
-    await tick(30)
+    const idleLayout = await tick(30)
+    assert.equal(idleLayout.animating, true, 'authored idle requests the configured animation rate')
+    assert.equal(idleLayout.moving, false, 'idle animation does not block random thinking or pretend to walk')
     assert.deepEqual((await measure()).flows, ['idle'])
     await capture('idle')
     let comparisons = 0
-    const sources = { work: 'working', ask: 'confirmation', happy: 'success', sad: 'failure', idle: 'idle' }
+    const sources = { gait: 'walking', idle: 'idle', work: 'working', write: 'writing',
+      ask: 'confirmation', happy: 'success', sad: 'failure', think: 'thinking', flag: 'flag', carry: 'carry' }
     const compare = async (word, time) => {
       const raw = fs.readFileSync(path.resolve(__dirname, '../assets/companion-suit-duck/source', sources[word] + '.svg'), 'utf8')
       // Shadow DOM isolates original IDs and keyframe names from the compiled pack.
@@ -86,9 +91,10 @@ module.exports = async function probeSuitPose(url) {
     comparisons += idleParity.count
     for (const facing of [1, -1]) {
       await send({ t: 'place', x: 300, facing })
-      for (const [activity, word, seconds] of [['work', 'work', 6], ['ask', 'ask', 6],
-        ['success', 'happy', 3], ['error', 'sad', 2.6]]) {
-        await send({ t: 'set', state: { matterActivity: { kind: activity, id: `suit-${facing}-${word}`, expiresAt: Date.now() + 600000 } } })
+      for (const [activity, word, seconds] of [['work', 'work', 8], ['ask', 'ask', 8],
+        ['success', 'happy', 8], ['error', 'sad', 8]]) {
+        // Manual source actions retain all eight seconds; Matter work/ask have a separate hold-loop probe below.
+        await send({ t: 'do', word })
         let layout
         for (let i = 0; i < 200; i++) {
           layout = await tick(1)
@@ -97,32 +103,90 @@ module.exports = async function probeSuitPose(url) {
         assert.equal(layout.gesture, word, JSON.stringify(layout))
         // Activity starts after the current render; the next host tick draws its first source frame.
         await tick(1)
-        for (const at of [.15, seconds * .3, seconds * .6, seconds - .15]) {
+        const entrance = await measure()
+        assert.deepEqual(entrance.opacities, [1], 'the first source frame is opaque, without a crossfade')
+        assert.equal(entrance.base, 'none')
+        if (facing === 1 && word === 'work') {
+          await frame.executeJavaScript(`window.hiddenWrites=0;window.hiddenObserver=new MutationObserver(records=>hiddenWrites+=records.length);
+            hiddenObserver.observe(document.querySelector('[data-suit-base]'),{attributes:true,subtree:true});`)
+          await tick(2)
+          assert.equal(await frame.executeJavaScript('hiddenObserver.disconnect();hiddenWrites'), 0,
+            'hidden procedural body is not transformed every frame')
+        }
+        for (const at of [.15, seconds * .3, seconds * .4, seconds - .15]) {
           let value = await measure()
           await tick(Math.max(1, Math.round((at - value.times[0]) / .05)))
           value = await measure()
           assert.deepEqual(value.flows, [word])
+          assert.deepEqual(value.opacities, [1])
           assert.ok(value.monocle)
           assert.equal(value.base, 'none', JSON.stringify({ word, facing, at, time: value.times }))
           assert.ok(value.animations.every(a => a.state === 'paused'))
           const parity = await compare(word, value.times[0])
           assert.deepEqual(parity.problems, [], JSON.stringify({ word, facing, at, ...parity }))
           comparisons += parity.count
-          if (at === seconds * .6) await capture(word + (facing === -1 ? '-left' : ''))
+          if (at === seconds * .4) await capture(word + (facing === -1 ? '-left' : ''))
         }
-        // A pending idle state waits for the finite source action to finish.
+        // A pending idle state leaves manual finite actions intact.
         await send({ t: 'set', state: { matterActivity: { kind: 'idle' } } })
         layout = await tick(Math.ceil(seconds / .05) + 5)
         assert.equal(layout.gesture, null)
         assert.deepEqual((await measure()).flows, ['idle'])
       }
+      for (const word of ['write', 'think', 'flag', 'carry']) {
+        await send({ t: 'do', word })
+        let layout
+        for (let i = 0; i < 20; i++) {
+          layout = await tick(1)
+          if (layout.gesture === word) break
+        }
+        assert.equal(layout.gesture, word, JSON.stringify(layout))
+        for (const at of [.15, 3.5, 7.5]) {
+          let value = await measure()
+          await tick(Math.max(1, Math.round((at - value.times[0]) / .05)))
+          value = await measure()
+          assert.deepEqual(value.flows, [word])
+          const parity = await compare(word, value.times[0])
+          assert.deepEqual(parity.problems, [], JSON.stringify({ word, facing, at, ...parity }))
+          comparisons += parity.count
+        }
+        await send({ t: 'do', word: 'stand' })
+        await tick(1)
+      }
+    }
+    // The extra callable prop actions retain the same drag/landing contract as work and ask.
+    for (const word of ['write', 'flag', 'carry']) {
+      await send({ t: 'do', word }); let layout = await tick(40)
+      const point = layout.hit[0]
+      await send({ t: 'pointer', type: 'down', p: { x: point.x, y: point.y, t: 1000 } })
+      await send({ t: 'pointer', type: 'move', p: { x: point.x + 30, y: point.y - 90, t: 1150 } })
+      layout = await tick(2)
+      assert.equal(layout.mode, 'drag', word)
+      assert.equal(layout.gesture, null, word)
+      await send({ t: 'drop', p: { x: 300, y: 350 } })
+      let restored = false
+      for (let i = 0; i < 400; i++) {
+        layout = await tick(1)
+        assert.ok(!['air', 'land', 'dizzy', 'wake'].includes(layout.mode) || layout.gesture !== word, word)
+        if (layout.mode === 'idle' && layout.gesture === word) { restored = true; break }
+      }
+      assert.ok(restored, word + ' resumes once after landing')
+      await tick(165)
+      assert.equal((await measure()).flows[0], 'idle')
     }
     // Automatic work loops, transitions, and real drag cancellation/recovery.
     await send({ t: 'set', state: { matterActivity: { kind: 'work' } } })
-    await tick(140)
+    await tick(180)
     let value = await measure()
     assert.deepEqual(value.flows, ['work'])
-    assert.ok(value.times[0] < 2, 'automatic work should restart after the full six seconds')
+    for (let i = 0; i < 160; i++) {
+      await tick(1)
+      value = await measure()
+      assert.deepEqual(value.flows, ['work'])
+      assert.deepEqual(value.opacities, [1])
+      assert.ok(value.times[0] >= 1.3504 && value.times[0] < 4.5,
+        'automatic work loops its active section without stowing or re-entering')
+    }
     const before = value.times[0]
     await new Promise(resolve => setTimeout(resolve, 100))
     assert.equal((await measure()).times[0], before, 'wall time cannot advance the pack')
@@ -131,6 +195,7 @@ module.exports = async function probeSuitPose(url) {
     await send({ t: 'pointer', type: 'down', p: { x: point.x, y: point.y, t: 1000 } })
     await send({ t: 'pointer', type: 'move', p: { x: point.x + 40, y: point.y - 90, t: 1150 } })
     layout = await tick(2)
+    assert.equal(layout.mode, 'drag')
     assert.ok(!layout.work, 'drag clears active artwork')
     await capture('drag')
     await send({ t: 'drop', p: { x: 300, y: 350 } })
@@ -141,13 +206,36 @@ module.exports = async function probeSuitPose(url) {
     }
     assert.ok(recovered, 'automatic work resumes only after landing recovery')
     await send({ t: 'set', state: { matterActivity: { kind: 'idle' } } })
-    await tick(140)
-    await send({ t: 'walk', x: 550, run: false, id: 999 })
-    await tick(5)
+    await tick(180)
+    for (const facing of [1, -1]) {
+      await send({ t: 'place', x: facing === 1 ? 160 : 560, facing })
+      await send({ t: 'walk', x: facing === 1 ? 600 : 100, run: false, id: 999 })
+      layout = await tick(5)
+      value = await measure()
+      assert.equal(layout.mode, 'walk')
+      assert.deepEqual(value.flows, ['gait'])
+      const parity = await compare('gait', value.times[0])
+      assert.deepEqual(parity.problems, [], JSON.stringify(parity))
+      comparisons += parity.count
+      await capture('walk' + (facing === -1 ? '-left' : ''))
+      await send({ t: 'do', word: 'stand' }); await tick(1)
+    }
+    // Short clicks use the complete pack-owned thinking clip, never the generic overlay.
+    await tick(5, false)
+    layout = await tick(1, false)
+    const tap = layout.hit[0]
+    await send({ t: 'pointer', type: 'down', p: { x: tap.x, y: tap.y, t: 1000 } })
+    await send({ t: 'pointer', type: 'up', p: { x: tap.x, y: tap.y, t: 1100 } })
+    await tick(65, false)
     value = await measure()
-    assert.deepEqual(value.flows, [])
-    assert.notEqual(value.base, 'none')
-    await capture('walk')
-    console.log('PASS: new Suit Duck source parity, five animated states, both facings, host-only clock, finite/automatic completion, drag recovery and base walking:', comparisons, 'property comparisons')
+    assert.deepEqual(value.flows, ['think'])
+    assert.equal(await frame.executeJavaScript("document.querySelectorAll('[data-minduck-thinking]').length"), 0)
+    await capture('thinking')
+    const thinkingTime = value.times[0]
+    await new Promise(resolve => setTimeout(resolve, 100))
+    assert.equal((await measure()).times[0], thinkingTime)
+    await tick(100, false)
+    assert.deepEqual((await measure()).flows, ['idle'])
+    console.log('PASS: Suit Duck ten source actions, opaque boundaries, no hidden-body writes, idle frame-rate signal, continuous activity holds, both facings, host-only clock and drag recovery:', comparisons, 'property comparisons')
   } finally { page.destroy() }
 }

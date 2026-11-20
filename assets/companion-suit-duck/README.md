@@ -1,18 +1,25 @@
-# 新西装鸭源素材
+# 西装鸭十动作源素材
 
-用户于 2026-11-16 提供六份 SVG；原文件字节保留于 `source/`。
+用户于 2026-11-19 提供的完整合集逐字节保存为 `source/collection.svg`。
+`collection.json` 记录原始 SHA-256、十个语义组 ID 和拆分文件哈希；`sources.json` 记录轨道、路径与滤镜数量。
+`scripts/build-suit-duck.py` 每次先按 `project.json` 的语义组重建独立 SVG，再生成运行资源。
 
-- `base.svg` ← `Boss Duck/Original IP Suit/Duck_Walk_InPlace_Idle_Transition.svg`（静态基础图）
-- `idle.svg` ← `Duck_Idle_Animated.svg`
-- `working.svg` ← `Duck_Working_Animated.svg`
-- `confirmation.svg` ← `Duck_Confirmation_Animated.svg`
-- `success.svg` ← `Duck_Success_Animated.svg`
-- `failure.svg` ← `Duck_Failure_Animated.svg`
+| 原组序号 | 独立文件 | 用途 |
+| --- | --- | --- |
+| 01 | walking.svg | 连续步态片段用于走路和跑步 |
+| 02 | idle.svg | 8 秒待机；语义部件生成通用动作基础图 |
+| 03 | working.svg | 电脑工作 |
+| 04 | writing.svg | 纸笔书写 |
+| 05 | confirmation.svg | 询问与确认 |
+| 06 | success.svg | 成功庆祝 |
+| 07 | failure.svg | 失败 |
+| 08 | thinking.svg | 思考 |
+| 09 | flag.svg | 文件与红旗 |
+| 10 | carry.svg | 抱资料等待 |
 
-`project.json` 保持原形象 ID `minduck-suit-duck`，通过源脚掌尺寸统一各画稿的比例与基线。
-工作原画脚掌宽度为其他动作的约 1/1.0515，画布另有平移，需独立归一化。
-成功与失败的角色自带水平画布偏移，已在放置参数中抵消；彩纸及道具保持相对位置。
-基础原画没有语义分组；构建脚本的节点分组只针对这份已核对的具体文件，节点结构变更会要求重新核对。
+十个源动作均为 8 秒，共 1,820 条轨道。`project.json` 保持形象 ID `minduck-suit-duck`，通过原始脚掌的局部边界统一比例与地线。
+工作稿约需放大 1.0515 倍；其他动作按实测脚掌宽度对齐。保留原 SVG 188×1140 内层视口，避免 motion-path 和 transform-box 坐标发生变化。
+基础图按 Eyes、Wings、Legs、Suit 等语义组生成，保留新西装袖口；`base.svg` 是旧版静态素材留存，不再参与生成。
 
 ```sh
 python3 scripts/build-suit-duck.py
@@ -22,8 +29,7 @@ MINDUCK_COMPANION_SUIT_POSE_ONLY=1 pnpm run test:companion
 ```
 
 生成目标：`src/companion/figures/minduck-suit-duck/` 的 `artwork.svg`、`artwork.js`、`flow-artwork.js`。
-`sources.json` 记录源 SHA-256、路径/滤镜数和原始轨道数，不自动修改原 SVG。
-工作、成功、失败源文件分别有 188、4、4 个滤镜区域被导出为 `inf/-inf`。
+工作、书写、成功、失败与红旗源文件分别有 188、4、4、4、4 个非法 `inf/-inf` 滤镜区域，共 204 个。
 `filter-bounds.json` 按滤镜所属图形的局部 `getBBox()` 加四倍高斯模糊标准差测得有限边界；构建时仅替换这四个区域属性，保留滤镜原语及原文件。
 校准数据绑定源 SHA-256，源变更或出现未校准的非法区域会明确报错；使用项目现有 Electron 重新测量：
 

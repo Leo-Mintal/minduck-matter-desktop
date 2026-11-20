@@ -15,27 +15,30 @@ export function createFlowBody(kit, host, figure, state) {
   function clear() {
     state.kind = null;
     state.elapsed = state.sourceTime = state.holdTime = 0;
+    state.repeat = false;
     exiting = false;
   }
   function afterFlow(action) {
     if (body.layout().busy) return false;
     if (!state.kind) return action();
     pending = action;
+    state.repeat = false;
     if (!exiting && state.sourceTime >= FLOW_TIMING[state.kind].enter - TIME_EPSILON) {
       state.sourceTime = Math.max(state.sourceTime, FLOW_TIMING[state.kind].sourceExit);
     }
     exiting = true;
     return true;
   }
-  function start(word) {
+  function start(word, repeat = false) {
     if (body.layout().busy) return false;
-    if (state.kind === word && !exiting) { pending = null; return true; }
-    if (state.kind) return afterFlow(() => start(word));
+    if (state.kind === word && !exiting) { state.repeat ||= repeat; pending = null; return true; }
+    if (state.kind) return afterFlow(() => start(word, repeat));
     body.stopWalk();
     body.do('stand');
     body.do(word);
     state.kind = word;
     state.elapsed = state.sourceTime = state.holdTime = 0;
+    state.repeat = repeat;
     return true;
   }
   function advance(dt) {
@@ -46,6 +49,11 @@ export function createFlowBody(kit, host, figure, state) {
       return reverse ? state.sourceTime <= TIME_EPSILON : state.sourceTime >= spec.end - TIME_EPSILON;
     }
     state.elapsed += dt;
+    if (state.repeat) {
+      state.sourceTime = state.elapsed < spec.enter ? state.elapsed
+        : spec.enter + (state.elapsed - spec.enter) % (spec.sourceExit - spec.enter);
+      return false;
+    }
     state.holdTime = Math.max(0, Math.min(spec.hold, state.elapsed - spec.enter));
     if (state.elapsed < spec.enter - TIME_EPSILON) state.sourceTime = state.elapsed;
     else if (state.elapsed < spec.enter + spec.hold - TIME_EPSILON) {
@@ -55,11 +63,12 @@ export function createFlowBody(kit, host, figure, state) {
   }
   return {
     ...body,
-    do(word) {
-      if (Object.hasOwn(FLOW_TIMING, word)) return start(word);
+    do(word, { repeat = false } = {}) {
+      if (Object.hasOwn(FLOW_TIMING, word)) return start(word, repeat && ['work', 'ask'].includes(word));
       if (!body.words.includes(word)) return false;
       return MOTIONS.has(word) ? afterFlow(() => body.do(word)) : body.do(word);
     },
+    finishFlow() { return state.repeat ? afterFlow(() => {}) : false; },
     step(dt) {
       if (!(dt > 0 && Number.isFinite(dt))) return;
       if (state.kind) {
@@ -79,7 +88,7 @@ export function createFlowBody(kit, host, figure, state) {
       const layout = body.layout();
       const spec = FLOW_TIMING[state.kind];
       let phase = null;
-      if (spec) phase = exiting || state.sourceTime >= spec.sourceExit - TIME_EPSILON ? 'stowing'
+      if (spec) phase = exiting || !state.repeat && state.sourceTime >= spec.sourceExit - TIME_EPSILON ? 'stowing'
         : state.sourceTime < spec.enter - TIME_EPSILON ? 'pulling' : state.kind === 'work' ? 'typing' : 'waiting';
       return {
         ...layout, work: state.kind === 'work' ? phase : null, ask: state.kind === 'ask' ? phase : null,

@@ -1,53 +1,98 @@
 {
   "base": {
-    "file": "base.svg",
-    "sha256": "f3947437fe59a670b3848b09c772509a2ade7313d69a76408427c6caa2e448ba",
-    "paths": 25,
+    "file": "idle.svg",
+    "sha256": "8697f2777d4832c8f999248c730794593d855a976b30a18c3341388c27f5660f",
+    "paths": 29,
     "filters": 4
+  },
+  "gait": {
+    "file": "walking.svg",
+    "sha256": "498621ceafd155e52691e1f56b2e2a035a8bfec214f37fbb1d16650da34d258a",
+    "paths": 29,
+    "filters": 4,
+    "repairedFilterRegions": 0,
+    "duration": 8.0,
+    "tracks": 17
   },
   "idle": {
     "file": "idle.svg",
-    "sha256": "0db7748dd8ed330c07b8e10c522573eb96aa72cb091702f7745d3b520790e108",
-    "paths": 25,
+    "sha256": "8697f2777d4832c8f999248c730794593d855a976b30a18c3341388c27f5660f",
+    "paths": 29,
     "filters": 4,
     "repairedFilterRegions": 0,
-    "duration": 6.0,
+    "duration": 8.0,
     "tracks": 5
   },
   "work": {
     "file": "working.svg",
-    "sha256": "6bb16239e0f31757be9a63ff7bbbf69cfe8f19f93711a0d614bcb591e9c76302",
-    "paths": 1234,
+    "sha256": "5e6e3b1838d462568660efc5ac4e6471262f4b813306ca7148a53c7413776c51",
+    "paths": 1479,
     "filters": 196,
     "repairedFilterRegions": 188,
-    "duration": 6.0,
-    "tracks": 730
+    "duration": 8.0,
+    "tracks": 780
+  },
+  "write": {
+    "file": "writing.svg",
+    "sha256": "59b85bb224a6cd206b043220ecd6c189764aeab05b81c29543b8dc76eb925662",
+    "paths": 406,
+    "filters": 8,
+    "repairedFilterRegions": 4,
+    "duration": 8.0,
+    "tracks": 168
   },
   "ask": {
     "file": "confirmation.svg",
-    "sha256": "b80d3af8839c2c604750adc4beec9b97538d00009aa3a007ff4a29fcd01f387d",
-    "paths": 180,
+    "sha256": "6fe74157feade5400ac05e48a0931ae964f704abc6c63bba99af5dd20bb4bd66",
+    "paths": 334,
     "filters": 4,
     "repairedFilterRegions": 0,
-    "duration": 6.0,
-    "tracks": 159
+    "duration": 8.0,
+    "tracks": 171
   },
   "happy": {
     "file": "success.svg",
-    "sha256": "5b969e956835d38f3376342afbe8b9b986c1eafed513acccebb9e800fbab8292",
-    "paths": 160,
+    "sha256": "d33f17f3fd46f9fc8d11d50288567353278c19f18e747e9d400cddb3eba4b6a8",
+    "paths": 405,
     "filters": 8,
     "repairedFilterRegions": 4,
-    "duration": 3.0,
-    "tracks": 130
+    "duration": 8.0,
+    "tracks": 179
   },
   "sad": {
     "file": "failure.svg",
-    "sha256": "3d3b6eaaf3866ff3b00cb53729be143d78982ac0e982663193ea76ab6a616407",
-    "paths": 150,
+    "sha256": "bd61a586977b29c764c3723cb7a8d43aba6355edff134177067d83627165d608",
+    "paths": 395,
     "filters": 8,
     "repairedFilterRegions": 4,
-    "duration": 2.6,
-    "tracks": 118
+    "duration": 8.0,
+    "tracks": 168
+  },
+  "think": {
+    "file": "thinking.svg",
+    "sha256": "6cf21d91305eccad5f5f51713b8d538a67a6e882e0e1071dd4dfe5c463f5b3bb",
+    "paths": 31,
+    "filters": 4,
+    "repairedFilterRegions": 0,
+    "duration": 8.0,
+    "tracks": 10
+  },
+  "flag": {
+    "file": "flag.svg",
+    "sha256": "e8c1205a12c81bdb147a7e1b69f852b9044f687788b8850c0349e9d10dd6a801",
+    "paths": 400,
+    "filters": 8,
+    "repairedFilterRegions": 4,
+    "duration": 8.0,
+    "tracks": 170
+  },
+  "carry": {
+    "file": "carry.svg",
+    "sha256": "0d2a9b465fede2cc5448b70ddb48b4a82271b1d9b5800675f7786b7c094a0775",
+    "paths": 499,
+    "filters": 12,
+    "repairedFilterRegions": 0,
+    "duration": 8.0,
+    "tracks": 152
   }
 }

@@ -111,9 +111,13 @@ export function createDuckFigure(state = { kind: null, elapsed: 0, sourceTime: 0
     draw(petGroup, face, frame) {
       if (!nodes) nodes = mountFigure(petGroup);
       const blend = drawFlows(nodes.flows, state);
-      nodes.idle.setAttribute('opacity', String(1 - blend));
+      if (nodes.covered !== Boolean(blend)) {
+        nodes.idle.style.display = blend ? 'none' : '';
+        nodes.covered = Boolean(blend);
+      }
       this.extent = state.kind ? [12, 0, 300, 259] : [16, 14, 244, 259];
       this.hits = state.kind ? FLOW_HITS : IDLE_HITS;
+      if (blend) return;
       const low = frame.low / ART_SCALE;
       const [front, back] = wingPose(frame);
       nodes.body.setAttribute('transform', slide(0, low));

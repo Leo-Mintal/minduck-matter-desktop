@@ -1,13 +1,79 @@
 {
   "id": "minduck-suit-duck",
-  "base": "base.svg",
-  "baseScale": 3.2,
-  "floor": 75.16476,
+  "base": "idle.svg",
+  "baseScale": 4.67,
+  "floor": 51.38755876,
+  "center": 23.00825,
   "flows": {
-    "idle": { "file": "idle.svg", "scale": 1.4625, "x": 0, "y": 0 },
-    "work": { "file": "working.svg", "scale": 1.53781875, "x": -2.43755, "y": -16.5386 },
-    "ask": { "file": "confirmation.svg", "scale": 1.4625, "x": 0, "y": 0 },
-    "happy": { "file": "success.svg", "scale": 1.4625, "x": -5.57135, "y": 0 },
-    "sad": { "file": "failure.svg", "scale": 1.4625, "x": -2.66029, "y": 0 }
+    "gait": {
+      "file": "walking.svg",
+      "group": "____________________________________________________________",
+      "scale": 1.0,
+      "x": -64.39050184,
+      "y": -43.42939449
+    },
+    "idle": {
+      "file": "idle.svg",
+      "group": "Minduck___Business_________",
+      "scale": 1.0,
+      "x": -66.9369,
+      "y": -156.977
+    },
+    "work": {
+      "file": "working.svg",
+      "group": "Temporary___Wrist_Alignment_QA",
+      "scale": 1.0515021263,
+      "x": -68.65037794,
+      "y": -278.57906517
+    },
+    "write": {
+      "file": "writing.svg",
+      "group": "Minduck___Business__________2",
+      "scale": 1.0,
+      "x": -66.93464313,
+      "y": -372.97636652
+    },
+    "ask": {
+      "file": "confirmation.svg",
+      "group": "Minduck___Business____________",
+      "scale": 1.0,
+      "x": -66.93712697,
+      "y": -480.97633672
+    },
+    "happy": {
+      "file": "success.svg",
+      "group": "Minduck___Business__________3",
+      "scale": 1.0,
+      "x": -66.93182383,
+      "y": -588.98584747
+    },
+    "sad": {
+      "file": "failure.svg",
+      "group": "Minduck___Business__________4",
+      "scale": 1.0,
+      "x": -66.93322621,
+      "y": -696.97956086
+    },
+    "think": {
+      "file": "thinking.svg",
+      "group": "Minduck___Business__________5",
+      "scale": 1.0,
+      "x": -66.93710504,
+      "y": -804.97697711
+    },
+    "flag": {
+      "file": "flag.svg",
+      "group": "Minduck___Business_______________",
+      "scale": 1.0,
+      "x": -66.93614183,
+      "y": -912.98665452
+    },
+    "carry": {
+      "file": "carry.svg",
+      "group": "Boss_Duck___Book_Carry________________________",
+      "scale": 0.9999873954,
+      "x": -68.70321908,
+      "y": -1017.98664687
+    }
   }
 }

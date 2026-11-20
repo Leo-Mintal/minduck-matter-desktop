@@ -20,6 +20,8 @@ async function probeSuitDuck(origin, pack) {
     return new Promise((resolve) => { receive = resolve })
   }
   const send = (message) => frame.contentWindow.postMessage(message, '*')
+  const actionTicks = (word, fallback = 6.25) => Math.ceil(
+    Math.max(fallback, pack?.vocab?.find(item => item.id === word)?.seconds ?? 0) / .05) + 5
   const tick = async (count, dt = .05) => {
     const frames = []
     for (let i = 0; i < count; i++) {
@@ -52,7 +54,7 @@ async function probeSuitDuck(origin, pack) {
         throw new Error('Incorrect flow recovery: ' + JSON.stringify({ word, thrown, restored, modes: [...new Set(modes)] }))
       }
       recoveries.push({ word, thrown, restored })
-      await tick(125)
+      await tick(actionTicks(word))
     }
     return recoveries
   }
@@ -60,11 +62,15 @@ async function probeSuitDuck(origin, pack) {
     const set = (kind, id = 'sandbox-cue') => send({ t: 'set', state: {
       matterActivity: { kind, id, expiresAt: Date.now() + 10000 } } })
     set('work')
-    const loops = await tick(250)
-    if (loops.filter(f => f.events.some(e => e.kind === 'done' && e.detail.word === 'work')).length < 2
-      || loops.some(f => ['walk', 'run'].includes(f.layout.mode))) throw new Error('Automatic work did not loop stationary')
+    const loops = await tick(actionTicks('work') * 2 + 40)
+    const continuous = !pack || ['minduck-duck', 'minduck-suit-duck'].includes(pack.id)
+    const completions = loops.filter(f => f.events.some(e => e.kind === 'done' && e.detail.word === 'work')).length
+    if ((continuous ? completions !== 0 || loops.some(f => f.layout.work === 'stowing') : completions < 2)
+      || loops.some(f => ['walk', 'run'].includes(f.layout.mode))) throw new Error('Automatic work did not retain its stationary hold: '
+        + JSON.stringify({ id: pack?.id ?? 'minduck-duck', completions,
+          phases: [...new Set(loops.map(f => f.layout.work))], events: loops.flatMap(f => f.events).slice(0, 12) }))
     set('ask')
-    const change = await tick(125)
+    const change = await tick(actionTicks('work'))
     const firstAsk = change.findIndex(f => f.layout.ask)
     if (firstAsk < 0 || !change.slice(0, firstAsk + 1).some(f =>
       f.events.some(e => e.kind === 'done' && e.detail.word === 'work'))
@@ -82,7 +88,7 @@ async function probeSuitDuck(origin, pack) {
       || recovery.some(f => f.layout.ask || ['air', 'land', 'dizzy', 'wake'].includes(f.layout.mode) && f.layout.work)) {
       throw new Error('Automatic drag recovery did not wait for dizzy or restored a stale ask')
     }
-    set('idle'); await tick(125)
+    set('idle'); await tick(actionTicks('work'))
     send({ t: 'walk', x: 750, run: false, id: 'activity-idle-walk' })
     const [walk] = await tick(1)
     if (walk.layout.mode !== 'walk') throw new Error('Idle activity did not release walking')
@@ -90,11 +96,11 @@ async function probeSuitDuck(origin, pack) {
     for (const [kind, word] of [['success', 'happy'], ['error', 'sad']]) {
       const playing = frame => frame.layout.expression === word || frame.layout.gesture === word
       set(kind, kind)
-      const expression = await tick(70)
+      const expression = await tick(actionTicks(word, 3.5))
       if (!expression.some(playing) || expression.at(-1).layout.matterActivity
         || expression.some(f => ['walk', 'run'].includes(f.layout.mode))) throw new Error('Incorrect terminal activity: ' + kind)
       set(kind, kind)
-      if ((await tick(70)).some(playing)) throw new Error('Duplicate terminal cue replayed')
+      if ((await tick(actionTicks(word, 3.5))).some(playing)) throw new Error('Duplicate terminal cue replayed')
     }
     set('idle')
     return true

@@ -196,41 +196,114 @@ def compile_flow(name, spec):
             "animations": animations}, {**provenance, "duration": duration, "tracks": len(animations)}
 
 
+def scoped_collection_css(css_blocks, ids):
+    selected = [(s, body) for s, body in css_blocks if s.startswith("#") and s[1:] in ids]
+    names = {a.strip().split()[0] for _, body in selected
+             for a in declarations(body).get("animation", "").split(",") if a.strip()}
+    css = ["svg {overflow:visible;}"]
+    for selector, body in css_blocks:
+        if selector.startswith("@keyframes "):
+            keep = selector.split()[1] in names
+        else:
+            keep = selector.startswith("#") and selector[1:] in ids
+        if keep:
+            css.append(selector + "{" + body + "}")
+    return "\n".join(css)
+
+
+def svg_references(element):
+    refs = set()
+    for node in element.iter():
+        for value in node.attrib.values():
+            refs.update(re.findall(r"url\(['\"]?#([^'\")]+)", value))
+        if (node.get("href") or "").startswith("#"):
+            refs.add(node.get("href")[1:])
+    return refs
+
+
+def collection_definitions(group, by_id, definitions):
+    refs = svg_references(group)
+    previous = None
+    while previous != refs:
+        previous = refs.copy()
+        for identifier in list(refs):
+            refs.update(svg_references(by_id[identifier]))
+    return [deepcopy(d) for d in definitions if any(e.get("id") in refs for e in d.iter())]
+
+
+def split_collection(project, check):
+    root, provenance = read_source("collection.svg")
+    by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
+    css_blocks = list(blocks(root.find(TAG("style")).text))
+    definitions = list(root.find(TAG("defs")))
+    sources = {}
+    for word, spec in project["flows"].items():
+        group = by_id[spec["group"]]
+        ids = {e.get("id") for e in group.iter() if e.get("id")}
+        output = ET.Element(TAG("svg"), root.attrib)
+        ET.SubElement(output, TAG("style")).text = scoped_collection_css(css_blocks, ids)
+        output.append(deepcopy(group))
+        defs = ET.SubElement(output, TAG("defs"))
+        defs.extend(collection_definitions(group, by_id, definitions))
+        content = ET.tostring(output, encoding="utf-8", xml_declaration=True)
+        path = ASSETS / "source" / spec["file"]
+        if check:
+            if path.read_bytes() != content:
+                raise ValueError("Split source is out of date: " + str(path))
+        else:
+            path.write_bytes(content)
+        sources[word] = {"file": spec["file"], "group": spec["group"],
+                         "sha256": hashlib.sha256(content).hexdigest()}
+    return {**provenance, "actions": sources}
+
+
 def compile_base():
-    root, provenance = read_source("base.svg")
-    children = list(root)
-    if len(children) != 29 or children[20].tag != TAG("circle") or children[28].tag != TAG("defs"):
-        raise ValueError("Base artwork changed: review semantic grouping before rebuilding")
-    roles = {0: "wing-back", 1: "foot-back", 11: "wing-front", 12: "eye-left-glow",
-             13: "eye-right-glow", 14: "eye-left", 15: "eye-right", 16: "beak",
-             17: "foot-front", 19: "crest", 20: "monocle"}
-    root.clear()
-    root.attrib.update({"viewBox": "0 0 68 76", "width": "68", "height": "76", "fill": "none", "overflow": "visible"})
-    for index, node in enumerate(children):
-        if index == 18:
-            continue
-        if index == 28:
-            root.append(node)
-            continue
-        attrs = {"id": roles.get(index, "layer-" + str(index))}
-        if index not in {1, 17}:
-            attrs["data-upper"] = ""
-        wrapper = ET.SubElement(root, TAG("g"), attrs)
-        wrapper.append(node)
-        if index == 17:
-            wrapper.append(children[18])
+    root, provenance = read_source("idle.svg")
+    root.remove(root.find(TAG("style")))
+    character = root.find(TAG("g"))
+    character.attrib.pop("transform")
+    root.attrib.update({"viewBox": "0 0 46.0165 51.38756", "width": "46.0165", "height": "51.38756",
+                        "overflow": "visible"})
+    roles = {"Wings_Far_3": "wing-back", "Legs_Right_2": "foot-back", "Wings_Near_3": "wing-front",
+             "LeftEye_Glow_2": "eye-left-glow", "RightEye_Glow_2": "eye-right-glow",
+             "LeftEye_2": "eye-left", "RightEye_2": "eye-right", "Beak_3": "beak",
+             "LeftLegAndFoot_2": "foot-front", "HeadTuft_3": "crest",
+             "Gold_Glasses___Original_IP_2": "monocle"}
+    found = set()
+    for parent in list(root.iter()):
+        for index, node in enumerate(list(parent)):
+            role = roles.get(node.get("id"))
+            if not role:
+                continue
+            wrapper = ET.Element(TAG("g"), {"id": role})
+            if role == "monocle":
+                wrapper.set("data-upper", "")
+            parent.remove(node)
+            parent.insert(index, wrapper)
+            wrapper.append(node)
+            found.add(role)
+    if found != set(roles.values()):
+        raise ValueError("Missing semantic base parts: " + str(set(roles.values()) - found))
+    for index, node in enumerate(list(character)):
+        if node.get("id") in {"Body_3", "Suit_Torso___Exact_IP_2"}:
+            wrapper = ET.Element(TAG("g"), {"data-upper": ""})
+            character.remove(node)
+            character.insert(index, wrapper)
+            wrapper.append(node)
     prefix(root, "suit-")
     return ET.tostring(root, encoding="unicode"), provenance
 
 
 def generate(check=False):
     project = json.loads((ASSETS / "project.json").read_text())
+    collection = split_collection(project, check)
     base, provenance = compile_base()
     flows, sources = {}, {"base": provenance}
     for name, spec in project["flows"].items():
         flows[name], sources[name] = compile_flow(name, spec)
     compact = lambda obj: json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
-    files = {OUTPUT / "artwork.svg": base + "\n",
+    files = {ASSETS / "collection.json": json.dumps(collection, ensure_ascii=False, indent=2) + "\n",
+             OUTPUT / "artwork.svg": base + "\n",
              OUTPUT / "artwork.js": "// Generated by scripts/build-suit-duck.py; edit source SVGs instead.\n"
                                      + "export const ARTWORK = " + compact(base) + ";\n",
              OUTPUT / "flow-artwork.js": "// Generated by scripts/build-suit-duck.py; all animation times are source seconds.\n"

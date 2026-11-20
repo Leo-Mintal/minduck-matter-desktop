@@ -1,6 +1,6 @@
 {
   "name": "minduck-matter-desktop",
-  "version": "0.1.12",
+  "version": "0.1.15",
   "private": true,
   "description": "Electron desktop app bundling the shared Matter web frontend.",
   "main": "src/main.cjs",
@@ -127,6 +127,7 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "extendInfo": {
+        "UIDesignRequiresCompatibility": true,
         "CFBundleIconFile": "AppIcon",
         "CFBundleIconName": "AppIcon",
         "NSMicrophoneUsageDescription": "启用桌宠语音输入时使用麦克风，在本机识别语音。",

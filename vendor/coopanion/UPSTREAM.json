@@ -38,8 +38,8 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/idle.js",
       "upstreamSha256": null,
-      "integratedSha256": "27a1345863baa47982560e3fcc27b1279b0cf23213415304d192094251336e60",
-      "reason": "Shared idle thought-bubble effect and direct short-click trigger. The persistent thoughtShown preference does not block the effect; the click replaces poke bounce/jump while preserving drag and original figure artwork. Stationary business states and pending action recovery suppress idle/click thinking. Automatic Matter activity, including terminal expressions, suppresses idle and click thinking."
+      "integratedSha256": "5c49250a74df96ae3eaba6de84800d968778f9671876eb269c5ed05c453c6daa",
+      "reason": "Shared idle thought-bubble effect and direct short-click trigger. The persistent thoughtShown preference does not block the effect; the click replaces poke bounce/jump while preserving drag and original figure artwork. Stationary business states and pending action recovery suppress idle/click thinking. Automatic Matter activity, including terminal expressions, suppresses idle and click thinking. A pack may provide an idle thinking view and host-driven duration, replacing the generic artwork for the new Suit Duck without changing other packs."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/view.js",
@@ -80,7 +80,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "f5f64c29c1e1e94b8c7bcb265923f96bfda6d6cb3cf804ecd7bdd1793a3aecae",
-      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
     },
     {
@@ -110,14 +110,14 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-recovery.js",
       "upstreamSha256": null,
-      "integratedSha256": "c9379b0df19be2833a6237bef7c70b45a0bd7f2f300a6071ea8ac2b159196f56",
-      "reason": "Shared sandbox wrapper preserves interrupted finite work/ask flows through dragging and complete landing recovery; newer commands replace or cancel pending recovery. Automatic Matter activity owns drag recovery using the latest lifecycle; manual recovery remains finite and cannot resurrect an obsolete automatic flow."
+      "integratedSha256": "57e81bcd668584826cbd7ba22153094b360a1a37b8fefab5ff858e058f515f2f",
+      "reason": "Shared sandbox wrapper preserves interrupted finite work/ask flows through dragging and complete landing recovery; newer commands replace or cancel pending recovery. Automatic Matter activity owns drag recovery using the latest lifecycle; manual recovery remains finite and cannot resurrect an obsolete automatic flow. Honor explicitly declared additional recoverable flow vocabulary, used by Suit Duck writing, flag and carry actions."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-activity.js",
       "upstreamSha256": null,
       "reason": "Loop real work/ask flows, finish current animations before switching, recover the latest activity after complete landing, play happy/sad terminal cues once, and allow roaming only when idle without changing figure packs.",
-      "integratedSha256": "b946b1f0471bb7cf9cc6301688c8480119c6bbe0086f955898afb6e48f92a12b"
+      "integratedSha256": "fee0151ea9def9f5fd595483d76a77f9be7344616c1893c69d3b76337754b42c"
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
@@ -134,7 +134,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "ed09d4678bfd087d97ad6626398c25603780c62f96901885285f381e0659ace1",
-      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
     },
     {
@@ -158,7 +158,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "4a12d31bfffe306e2acc5b9af15d70acbe7979f518c6d0988edf6c46a35b1132",
-      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
     },
     {
@@ -236,7 +236,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "d80cb5e21dd1734bdb1a75f66e1dd3996393e74f99cba0e8ed862ed9ef6fa8f9",
-      "integratedSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Default the pet renderer halo to off before preferences arrive, preserving explicit glow preferences and the existing independent panel-scaling changes."
     },
     {
@@ -260,7 +260,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
-      "integratedSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Apply saved bubble size live to top and bottom panels and reserve scaled floor space; preserve the independent default-off glow."
     },
     {
@@ -296,7 +296,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
-      "integratedSha256": "de04e908b7d0dcead2ffa02cda9556207489d6b51128272b7b6431ef604bfbe2",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
@@ -316,6 +316,24 @@
       "upstreamSha256": "e28db26be5abb0c0aa1ad1a813a4dde5a46905685870e4912d41ce6ba417ed36",
       "integratedSha256": "e789d618b40ac077510794835066dce9e8cb16c5ae71ebf02cf8c3c81fdf5389",
       "reason": "Use a dedicated Matter Web palette for the bundled ducks: dark accent #ff9500, light accent #ff9a2e and pure-black dark settings canvas/sidebar/titlebar. Migrate the former automatic Claude palette on startup, retain explicit independent palettes and saved appearance, and keep figure artwork unchanged."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-activity.js",
+      "upstreamSha256": "b946b1f0471bb7cf9cc6301688c8480119c6bbe0086f955898afb6e48f92a12b",
+      "integratedSha256": "fee0151ea9def9f5fd595483d76a77f9be7344616c1893c69d3b76337754b42c",
+      "reason": "Bundled packs loop only the original work/ask hold section for Matter activities and stow on lifecycle changes; manual finite commands and unsupported third-party packs retain their previous semantics."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/body-host.js",
+      "upstreamSha256": "ea32926615acd854625c0b901260cf2f2dd399ea1c14f8e804745c615fc71217",
+      "integratedSha256": "40dc14449eeb2361f0facf8a52b585c02b26e000377a6efd312c52021d57349c",
+      "reason": "Preserve a bounded boolean authored-animation signal separately from physical movement, so animated idle artwork can use the configured frame rate without suppressing idle thinking."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "de04e908b7d0dcead2ffa02cda9556207489d6b51128272b7b6431ef604bfbe2",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
+      "reason": "Use the configured animation frame rate for authored idle clips while preserving resting throttling for static figures and explicit frame-rate preferences."
     }
   ]
 }

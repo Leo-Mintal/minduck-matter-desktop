@@ -47,6 +47,23 @@ test('latest flow requested while carried replaces the suspended flow', async ()
   assert.deepEqual(commands, ['ask'])
 })
 
+test('pack-declared extra flows recover after landing without changing generic packs', async () => {
+  const { withActionRecovery } = await import(modulePath)
+  for (const word of ['write', 'flag', 'carry']) {
+    const state = { mode: 'idle', busy: false, pressing: false, recoverableFlow: word }
+    const commands = []
+    const body = withActionRecovery({ recoverableFlows: ['write', 'flag', 'carry'],
+      step() {}, set() {}, layout: () => state, do: value => { commands.push(value); return true },
+      pointer() { state.pressing = true; state.recoverableFlow = null },
+      drop() { state.pressing = false; state.mode = 'air' } })
+    body.pointer('down', {}); body.drop({})
+    body.step(.05); assert.deepEqual(commands, [])
+    state.mode = 'land'; body.step(.05); assert.deepEqual(commands, [])
+    state.mode = 'idle'; body.step(.05); assert.deepEqual(commands, [word])
+    body.step(.05); assert.deepEqual(commands, [word])
+  }
+})
+
 test('idle or a new non-flow command cancels stale drag recovery', async () => {
   for (const word of ['neutral', 'stand', 'happy', 'sad']) {
     const { body, state, commands, press } = await setup()

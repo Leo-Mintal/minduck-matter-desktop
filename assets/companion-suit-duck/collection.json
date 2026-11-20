@@ -1,0 +1,58 @@
+{
+  "file": "collection.svg",
+  "sha256": "958f8edd9d8f06501db0da433839d1195b568937e2641820148b7fcf209b763c",
+  "paths": 4007,
+  "filters": 256,
+  "actions": {
+    "gait": {
+      "file": "walking.svg",
+      "group": "____________________________________________________________",
+      "sha256": "498621ceafd155e52691e1f56b2e2a035a8bfec214f37fbb1d16650da34d258a"
+    },
+    "idle": {
+      "file": "idle.svg",
+      "group": "Minduck___Business_________",
+      "sha256": "8697f2777d4832c8f999248c730794593d855a976b30a18c3341388c27f5660f"
+    },
+    "work": {
+      "file": "working.svg",
+      "group": "Temporary___Wrist_Alignment_QA",
+      "sha256": "5e6e3b1838d462568660efc5ac4e6471262f4b813306ca7148a53c7413776c51"
+    },
+    "write": {
+      "file": "writing.svg",
+      "group": "Minduck___Business__________2",
+      "sha256": "59b85bb224a6cd206b043220ecd6c189764aeab05b81c29543b8dc76eb925662"
+    },
+    "ask": {
+      "file": "confirmation.svg",
+      "group": "Minduck___Business____________",
+      "sha256": "6fe74157feade5400ac05e48a0931ae964f704abc6c63bba99af5dd20bb4bd66"
+    },
+    "happy": {
+      "file": "success.svg",
+      "group": "Minduck___Business__________3",
+      "sha256": "d33f17f3fd46f9fc8d11d50288567353278c19f18e747e9d400cddb3eba4b6a8"
+    },
+    "sad": {
+      "file": "failure.svg",
+      "group": "Minduck___Business__________4",
+      "sha256": "bd61a586977b29c764c3723cb7a8d43aba6355edff134177067d83627165d608"
+    },
+    "think": {
+      "file": "thinking.svg",
+      "group": "Minduck___Business__________5",
+      "sha256": "6cf21d91305eccad5f5f51713b8d538a67a6e882e0e1071dd4dfe5c463f5b3bb"
+    },
+    "flag": {
+      "file": "flag.svg",
+      "group": "Minduck___Business_______________",
+      "sha256": "e8c1205a12c81bdb147a7e1b69f852b9044f687788b8850c0349e9d10dd6a801"
+    },
+    "carry": {
+      "file": "carry.svg",
+      "group": "Boss_Duck___Book_Carry________________________",
+      "sha256": "0d2a9b465fede2cc5448b70ddb48b4a82271b1d9b5800675f7786b7c094a0775"
+    }
+  }
+}

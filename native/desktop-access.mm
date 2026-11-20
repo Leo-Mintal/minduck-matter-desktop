@@ -216,6 +216,128 @@ static napi_value focusPrompt(napi_env env, napi_callback_info info) {
   napi_value value; napi_get_undefined(env,&value); return value;
 }
 
+static NSAlert *serviceAlert;
+static NSTextField *serviceInput;
+
+@interface MatterServiceActions : NSObject <NSTextFieldDelegate>
+@property(nonatomic) BOOL editable;
+@property(nonatomic) NSModalResponse response;
+- (void)refresh;
+@end
+@implementation MatterServiceActions
+- (void)save:(id)sender { self.response = NSAlertFirstButtonReturn; }
+- (void)cancel:(id)sender { self.response = NSAlertSecondButtonReturn; }
+- (void)reset:(id)sender { self.response = NSAlertThirdButtonReturn; }
+- (void)controlTextDidChange:(NSNotification *)notification { [self refresh]; }
+- (void)refresh {
+  NSString *origin = [serviceInput.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  serviceAlert.buttons.firstObject.enabled = self.editable && origin.length > 0;
+  serviceAlert.buttons[2].enabled = self.editable;
+}
+@end
+static MatterServiceActions *serviceActions;
+
+static void dismissServiceSettings() {
+  NSWindow *window = serviceAlert.window;
+  if (window.sheetParent) [window.sheetParent endSheet:window];
+  [window orderOut:nil];
+  serviceInput.delegate = nil;
+  serviceAlert = nil; serviceInput = nil; serviceActions = nil;
+}
+static napi_value openServiceSettings(napi_env env, napi_callback_info info) {
+  @autoreleasepool {
+    size_t count = 4; napi_value args[4]; bool editable;
+    napi_get_cb_info(env,info,&count,args,nullptr,nullptr);
+    if (count != 4 || napi_get_value_bool(env,args[2],&editable) != napi_ok)
+      return fail(env,"invalid_argument","Expected origin, detail, editable flag and parent handle");
+    NSString *origin = promptText(env,args[0]), *detail = promptText(env,args[1]);
+    if (!origin || !detail) return fail(env,"invalid_argument","Invalid service settings text");
+    if (![NSThread isMainThread] || !NSApp) return fail(env,"prompt_unavailable","Service settings require the application main thread");
+    if (serviceAlert) return fail(env,"prompt_already_open","Service settings are already open");
+    NSWindow *parent = nil;
+    napi_valuetype parentType;
+    napi_typeof(env,args[3],&parentType);
+    if (parentType != napi_null) {
+      void *bytes = nullptr; size_t size = 0; NSView *view;
+      if (napi_get_buffer_info(env,args[3],&bytes,&size) != napi_ok || size != sizeof(void *))
+        return fail(env,"invalid_argument","Invalid native parent handle");
+      void *pointer = nullptr; memcpy(&pointer,bytes,sizeof(pointer));
+      view = (__bridge NSView *)pointer; parent = view.window;
+    }
+    serviceAlert = [[NSAlert alloc] init];
+    serviceAlert.messageText = @"Matter 服务地址";
+    serviceAlert.informativeText = detail;
+    serviceAlert.alertStyle = NSAlertStyleInformational;
+    NSButton *save = [serviceAlert addButtonWithTitle:@"保存并重启"];
+    NSButton *cancel = [serviceAlert addButtonWithTitle:@"取消"];
+    NSButton *reset = [serviceAlert addButtonWithTitle:@"恢复默认"];
+    serviceActions = [[MatterServiceActions alloc] init];
+    serviceActions.editable = editable;
+    serviceActions.response = NSModalResponseContinue;
+    NSView *accessory = [[NSView alloc] initWithFrame:NSMakeRect(0,0,360,52)];
+    NSTextField *label = [NSTextField labelWithString:@"HTTPS 服务根地址"];
+    label.frame = NSMakeRect(0,32,360,20);
+    [accessory addSubview:label];
+    serviceInput = [[NSTextField alloc] initWithFrame:NSMakeRect(0,0,360,24)];
+    serviceInput.stringValue = origin;
+    serviceInput.enabled = editable;
+    serviceInput.delegate = serviceActions;
+    serviceInput.accessibilityLabel = label.stringValue;
+    [accessory addSubview:serviceInput];
+    serviceAlert.accessoryView = accessory;
+    [serviceActions refresh]; [serviceAlert layout];
+    save.target = serviceActions; save.action = @selector(save:); save.keyEquivalent = @"\r";
+    cancel.target = serviceActions; cancel.action = @selector(cancel:); cancel.keyEquivalent = @"\e";
+    reset.target = serviceActions; reset.action = @selector(reset:);
+    if (editable) [serviceAlert.window setInitialFirstResponder:serviceInput];
+    if (parent) [serviceAlert beginSheetModalForWindow:parent completionHandler:nil];
+    else { [serviceAlert.window center]; [serviceAlert.window makeKeyAndOrderFront:nil]; }
+    [NSApp activateIgnoringOtherApps:YES];
+    if (editable) [serviceAlert.window makeFirstResponder:serviceInput];
+    napi_value value; napi_get_undefined(env,&value); return value;
+  }
+}
+static napi_value pollServiceSettings(napi_env env, napi_callback_info info) {
+  @autoreleasepool {
+    napi_value value;
+    if (!serviceAlert || serviceActions.response == NSModalResponseContinue) { napi_get_null(env,&value); return value; }
+    NSModalResponse response = serviceActions.response;
+    serviceActions.response = NSModalResponseContinue;
+    napi_create_object(env,&value);
+    napi_value action, origin;
+    const char *name = response == NSAlertFirstButtonReturn ? "save" : response == NSAlertThirdButtonReturn ? "reset" : "cancel";
+    napi_create_string_utf8(env,name,NAPI_AUTO_LENGTH,&action);
+    napi_create_string_utf8(env,serviceInput.stringValue.UTF8String,NAPI_AUTO_LENGTH,&origin);
+    napi_set_named_property(env,value,"action",action); napi_set_named_property(env,value,"origin",origin);
+    return value;
+  }
+}
+static napi_value updateServiceSettings(napi_env env, napi_callback_info info) {
+  @autoreleasepool {
+    size_t count = 2; napi_value args[2]; bool editable;
+    napi_get_cb_info(env,info,&count,args,nullptr,nullptr);
+    if (count != 2 || napi_get_value_bool(env,args[1],&editable) != napi_ok)
+      return fail(env,"invalid_argument","Expected detail and editable flag");
+    NSString *detail = promptText(env,args[0]);
+    if (!detail) return fail(env,"invalid_argument","Invalid service settings text");
+    if (serviceAlert) {
+      serviceAlert.informativeText = detail;
+      serviceActions.editable = editable; serviceInput.enabled = editable;
+      [serviceActions refresh]; [serviceAlert layout];
+      if (editable) [serviceAlert.window makeFirstResponder:serviceInput];
+    }
+    napi_value value; napi_get_undefined(env,&value); return value;
+  }
+}
+static napi_value closeServiceSettings(napi_env env, napi_callback_info info) {
+  dismissServiceSettings(); napi_value value; napi_get_undefined(env,&value); return value;
+}
+static napi_value focusServiceSettings(napi_env env, napi_callback_info info) {
+  [serviceAlert.window makeKeyAndOrderFront:nil]; [NSApp activateIgnoringOtherApps:YES];
+  if (serviceInput.enabled) [serviceAlert.window makeFirstResponder:serviceInput];
+  napi_value value; napi_get_undefined(env,&value); return value;
+}
+
 NAPI_MODULE_INIT() {
   napi_property_descriptor properties[]={{"publicKey",nullptr,publicKey,nullptr,nullptr,nullptr,napi_default,nullptr},
     {"sign",nullptr,sign,nullptr,nullptr,nullptr,napi_default,nullptr},
@@ -223,6 +345,11 @@ NAPI_MODULE_INIT() {
     {"pollPrompt",nullptr,pollPrompt,nullptr,nullptr,nullptr,napi_default,nullptr},
     {"closePrompt",nullptr,closePrompt,nullptr,nullptr,nullptr,napi_default,nullptr},
     {"updatePrompt",nullptr,updatePrompt,nullptr,nullptr,nullptr,napi_default,nullptr},
-    {"focusPrompt",nullptr,focusPrompt,nullptr,nullptr,nullptr,napi_default,nullptr}};
+    {"focusPrompt",nullptr,focusPrompt,nullptr,nullptr,nullptr,napi_default,nullptr},
+    {"openServiceSettings",nullptr,openServiceSettings,nullptr,nullptr,nullptr,napi_default,nullptr},
+    {"pollServiceSettings",nullptr,pollServiceSettings,nullptr,nullptr,nullptr,napi_default,nullptr},
+    {"updateServiceSettings",nullptr,updateServiceSettings,nullptr,nullptr,nullptr,napi_default,nullptr},
+    {"closeServiceSettings",nullptr,closeServiceSettings,nullptr,nullptr,nullptr,napi_default,nullptr},
+    {"focusServiceSettings",nullptr,focusServiceSettings,nullptr,nullptr,nullptr,napi_default,nullptr}};
   napi_define_properties(env,exports,sizeof(properties)/sizeof(properties[0]),properties);return exports;
 }

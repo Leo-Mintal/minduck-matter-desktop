@@ -24,7 +24,11 @@
 
 ## macOS Installation and Build Copies
 
-- 客户端更新打包时，重新拉取并构建 Web 远程 `dev` 的代码；本次已授权的共享界面修改须一并保留。
+- 测试包保留当前客户端版本号，产物放在 `release/<version>/tests/<build-name>/`。
+- 正式包在打包前提高 `package.json` 的 `version`，新版本必须高于线上更新清单的当前版本。测试包保留版本号的约定只适用于测试包。
+- 每次打包客户端（包括正式包、测试包和同版本重打）前，都必须重新获取 Web 仓库远程 `dev` 分支当次最新代码，并重新构建 Web 后再打包客户端；不得直接复用旧的本地 Web 构建产物。
+- 只有用户明确指定打包当前分支或 `main` / `master` 分支时，才改用用户指定的 Web 代码来源；该例外仅对当次指定的打包生效，后续仍默认重新获取远程 `dev`。
+- 本次已授权的共享界面修改须一并保留。
 - Keep the installed application at `/Applications/Minduck Matter.app`; replace that same path and name when an installation is authorized. Quit the installed app before replacing it and preserve its user-data directory.
 - Do not create or retain rollback application backups, including `.app` copies or additional ZIP archives, unless the user explicitly requests them. After verifying the new installation artifact, replace the installed app directly; preserve its user data and normal release artifacts.
 - Use `pnpm dist:mac` and its temporary build directory. Manual signing or packaging workarounds must also clean up their temporary application bundles and detach their mounted DMGs after verification. Preserve required artifacts as DMG/ZIP, plus validation records.

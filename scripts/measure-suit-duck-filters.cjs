@@ -6,7 +6,8 @@ app.whenReady().then(async()=>{
  const win=new BrowserWindow({show:false,width:700,height:500,webPreferences:{offscreen:true,backgroundThrottling:false}})
  const result={}
  try{
-  for(const file of ['working.svg','success.svg','failure.svg']){
+  const project=JSON.parse(fs.readFileSync(path.join(root,'assets/companion-suit-duck/project.json'),'utf8'))
+  for(const {file} of Object.values(project.flows)){
    const filename=path.join(root,'assets/companion-suit-duck/source',file)
    await win.loadFile(filename)
    const bounds=await win.webContents.executeJavaScript(`(()=>{

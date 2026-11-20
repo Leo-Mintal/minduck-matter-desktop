@@ -2,7 +2,7 @@
   "manifest": 2,
   "api": 2,
   "id": "minduck-suit-duck",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": {
     "zh": "西装鸭",
     "en": "Suit Duck"
@@ -30,9 +30,9 @@
         ]
       },
       "about": {
-        "zh": "播放提供的 6 秒待机呼吸与眨眼循环"
+        "zh": "播放提供的 8 秒待机呼吸与眨眼循环"
       },
-      "seconds": 6
+      "seconds": 8
     },
     {
       "id": "happy",
@@ -47,9 +47,9 @@
         ]
       },
       "about": {
-        "zh": "播放提供的 3 秒成功动画：庆祝、勾号和彩纸"
+        "zh": "播放提供的完整 8 秒成功动画：庆祝、勾号和彩纸"
       },
-      "seconds": 3
+      "seconds": 8
     },
     {
       "id": "wink",
@@ -193,9 +193,37 @@
         ]
       },
       "about": {
-        "zh": "播放提供的完整 6 秒掏电脑、工作与收回动画"
+        "zh": "播放提供的完整 8 秒掏电脑、工作与收回动画"
       },
-      "seconds": 6
+      "seconds": 8
+    },
+    {
+      "id": "write",
+      "kind": "motion",
+      "names": { "zh": ["书写", "写字"] },
+      "about": { "zh": "播放完整 8 秒纸笔书写动作" },
+      "seconds": 8
+    },
+    {
+      "id": "think",
+      "kind": "motion",
+      "names": { "zh": ["思考", "想一想"] },
+      "about": { "zh": "播放完整 8 秒思考与气泡动作" },
+      "seconds": 8
+    },
+    {
+      "id": "flag",
+      "kind": "motion",
+      "names": { "zh": ["文件与红旗", "举旗"] },
+      "about": { "zh": "播放完整 8 秒文件与红旗动作" },
+      "seconds": 8
+    },
+    {
+      "id": "carry",
+      "kind": "motion",
+      "names": { "zh": ["抱资料", "抱文件等待"] },
+      "about": { "zh": "播放完整 8 秒抱资料等待动作" },
+      "seconds": 8
     },
     {
       "id": "ask",
@@ -212,9 +240,9 @@
         ]
       },
       "about": {
-        "zh": "播放提供的完整 6 秒纸笔确认动画"
+        "zh": "播放提供的完整 8 秒纸笔确认动画"
       },
-      "seconds": 6
+      "seconds": 8
     },
     {
       "id": "sad",
@@ -229,9 +257,9 @@
         ]
       },
       "about": {
-        "zh": "播放提供的 2.6 秒失败动画：旗帜与叉号"
+        "zh": "播放提供的完整 8 秒失败动画：旗帜与叉号"
       },
-      "seconds": 2.6
+      "seconds": 8
     }
   ],
   "sounds": {},

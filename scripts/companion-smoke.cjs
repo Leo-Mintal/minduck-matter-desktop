@@ -159,7 +159,7 @@ app.whenReady().then(async () => {
     const packs = await (await fetch(petOrigin + '/api/figures')).json()
     for (const pack of packs) {
       const modelData = pack.model ? await (await fetch(petOrigin + pack.base + pack.model)).json() : null
-      const descriptor = { id: pack.id, base: pack.base, entry: pack.entry, export: pack.export,
+      const descriptor = { id: pack.id, base: pack.base, entry: pack.entry, export: pack.export, vocab: pack.vocab,
         modelData, scheme: pack.presets[0]?.id ?? '' }
       const compatible = await settings.webContents.executeJavaScript(
         probeSource + '\nprobeSuitDuck(' + JSON.stringify(petOrigin) + ',' + JSON.stringify(descriptor) + ')')
