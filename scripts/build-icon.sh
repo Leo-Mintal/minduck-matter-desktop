@@ -3,7 +3,8 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 project_dir="$(cd "$script_dir/.." && pwd)"
-source_icon="$project_dir/build/app-icon.svg"
+source_dir="$project_dir/assets/macos"
+source_icon="$source_dir/app-icon.svg"
 iconset_dir="$project_dir/build/icon.iconset"
 output_icon="$project_dir/build/icon.icns"
 modern_icon_dir="$project_dir/build/AppIcon.icon"
@@ -40,6 +41,7 @@ iconutil -c icns "$iconset_dir" -o "$output_icon"
 # icon. Copying the raw .icon document to Resources leaves LaunchServices with
 # only Electron's legacy icon. The legacy ICNS above remains the fallback.
 cp "$iconset_dir/icon_512x512@2x.png" "$modern_icon_asset"
+cp "$source_dir/icon.json" "$modern_icon_dir/icon.json"
 xcrun actool \
   --compile "$project_dir/build" \
   --platform macosx \

@@ -14,12 +14,12 @@ function prepare({ profile, output, root = path.join(__dirname, '..'), exec = ex
   const authorized = entitlements['com.apple.application-identifier']
   const team = extract('TeamIdentifier.0')
   if (!/^[A-Z0-9]{10}$/.test(team)) throw new Error('Invalid profile team identifier')
-  const appId = require(path.join(root, 'package.json')).build.appId
+  const { appId, mac } = require(path.join(root, 'package.json')).build
   const identifier = `${team}.${appId}`
   const matches = (rule, value) => typeof rule === 'string' && (rule === value || rule.endsWith('*') && value.startsWith(rule.slice(0, -1)))
   if (!matches(authorized, identifier)) throw new Error('The profile does not authorize this desktop application identifier')
   if (!(entitlements['keychain-access-groups'] || []).some(value => matches(value, identifier))) throw new Error('The profile does not authorize the desktop Keychain access group')
-  fs.copyFileSync(path.join(root, 'build', 'entitlements.mac.plist'), output)
+  fs.copyFileSync(path.resolve(root, mac.entitlements), output)
   // plutil treats dots as path separators unless escaped; entitlements use
   // literal dotted keys at the root of the dictionary.
   const put = (key, kind, value) => exec('plutil', ['-insert', key.replace(/\./g, '\\.'), kind, value, output])

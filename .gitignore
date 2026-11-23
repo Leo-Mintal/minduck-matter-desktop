@@ -1,13 +1,6 @@
 node_modules/
 
-# Keep local build output out of Git and allow the macOS packaging inputs.
-/build/*
-!/build/app-icon.svg
-!/build/AppIcon.icon/
-!/build/AppIcon.icns
-!/build/Assets.car
-!/build/entitlements.mac.plist
-!/build/entitlements.mac.inherit.plist
+/build/
 
 release/
 web-dist/

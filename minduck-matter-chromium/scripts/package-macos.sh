@@ -23,6 +23,7 @@ if [[ ! -x "$chromium_app/Contents/MacOS/Chromium" ]]; then
   exit 1
 fi
 
+"$project_dir/scripts/build-icon.sh"
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources/extensions" "$release_dir"
 cp "$script_dir/Info.plist" "$app_bundle/Contents/Info.plist"
 cp "$script_dir/packaged-launch.sh" "$app_bundle/Contents/MacOS/minduck-matter-chromium"

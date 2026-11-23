@@ -28,7 +28,7 @@
 
 ## Recent Updates
 
-- 2026-11-23：`build/` 默认忽略本地生成物，Git 保留 macOS 打包使用的图标资源和签名配置。桌宠预览截图可由回归脚本重新生成，见[桌宠集成](companion.md)。
+- 2026-11-23：macOS 图标原稿、Icon Composer 图层配置和签名权限声明集中在 `assets/macos/`。根目录 `build/` 仅在本地生成，由 Git 整体忽略。见[打包手册](../macos-distribution.md)。
 - 2026-11-23 运行 `pnpm release:mac` 可自动选取本地和线上较高版本，将补丁号加一后打包发布。已有正式包用 `pnpm upload:mac` 按原版本上传。[发布命令](../macos-distribution.md#标准一键发布)
 - 2026-11-23 客户端“下载最新版”和正式发布脚本统一使用固定地址 `https://matter-desktop.yogeeai.com/download`。服务器在发布时将该地址切换到新正式版的 arm64 DMG。[macOS 分发](../macos-distribution.md#静态下载与菜单检查更新)
 - 2026-11-23 修复桌宠实时订阅占满 HTTP/1.1 连接时聊天附件一直等待的问题。桌宠使用独立连接池；六条实时连接保持打开时，两份磁盘文件可同时上传。[桌面网络转发](architecture.md)

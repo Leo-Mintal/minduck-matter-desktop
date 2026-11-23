@@ -7,7 +7,7 @@ This file stays aligned with `AGENTS.md`.
 - Treat current user instructions, code, and tests as authoritative over the wiki.
 - Run the fastest relevant validation and update affected wiki pages for behavior, configuration, architecture, test-command, or important-constraint changes.
 - Fast-path keywords use the smallest safe scoped change.
-- In this project, a request to push to the remote includes merging the verified changes into `main` and confirming the remote result, unless the user specifies a branch-only push.
+- Push verified changes to `main` and confirm the remote result. Keep `main` as the only remote branch by default. Before removing a temporary branch, verify its code is included in `main`. Follow explicit requests to keep a particular branch.
 - Record unexpected command and integration failures in `.learnings/ERRORS.md`.
 
 ## macOS Installation and Build Copies

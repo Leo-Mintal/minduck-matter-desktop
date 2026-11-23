@@ -468,7 +468,7 @@ security find-identity -v -p codesigning
 
 输出中应出现类似 `Developer ID Application: Your Organization (TEAMID)` 的有效身份。证书文件和私钥不得提交到仓库；若要迁移打包机，用受控密码管理或企业密钥管理方式转移，不要放在项目目录。
 
-项目的 `build/entitlements.mac.plist` 和 `build/entitlements.mac.inherit.plist` 是受版本控制的应用权限声明。凭据配置时不要修改它们。
+项目的 `assets/macos/entitlements.mac.plist` 和 `assets/macos/entitlements.mac.inherit.plist` 是受版本控制的应用权限声明。凭据配置时不要修改它们。
 
 ### 3. 创建 App Store Connect API Key 与 `.p8`
 

@@ -9,9 +9,11 @@ const { prepare } = require('./prepare-desktop-access-profile.cjs')
 test('packaging rejects incompatible profiles before writing entitlements', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'matter-profile-test-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
-  fs.mkdirSync(path.join(root, 'build'))
-  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ build: { appId: 'com.minduck.matter' } }))
-  fs.writeFileSync(path.join(root, 'build/entitlements.mac.plist'), '<?xml version="1.0"?><plist version="1.0"><dict><key>existing</key><true/></dict></plist>')
+  const { appId, mac: { entitlements } } = require('../package.json').build
+  const basePlist = path.join(root, entitlements)
+  fs.mkdirSync(path.dirname(basePlist), { recursive: true })
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ build: { appId, mac: { entitlements } } }))
+  fs.writeFileSync(basePlist, '<?xml version="1.0"?><plist version="1.0"><dict><key>existing</key><true/></dict></plist>')
   const valid = { Platform: '["OSX"]', ExpirationDate: '2099-01-01T00:00:00Z', 'TeamIdentifier.0': 'TEAM123456',
     Entitlements: JSON.stringify({ 'com.apple.application-identifier': 'TEAM123456.com.minduck.matter', 'keychain-access-groups': ['TEAM123456.*'] }) }
   const output = path.join(root, 'out.plist')

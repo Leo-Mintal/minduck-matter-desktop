@@ -6,7 +6,7 @@
 - Before development, read `docs/wiki/index.md` and then only task-relevant pages.
 - Code, tests, and current user instructions take precedence over wiki content.
 - Fast-path requests use the smallest safe scoped change.
-- In this project, a request to push to the remote includes merging the verified changes into `main` and confirming the remote result, unless the user specifies a branch-only push.
+- Push verified changes to `main` and confirm the remote result. Keep `main` as the only remote branch by default. Before removing a temporary branch, verify its code is included in `main`. Follow explicit requests to keep a particular branch.
 
 ## Development Loop
 
