@@ -1,0 +1,36 @@
+/* Portable rules from Matter Web's Button, Input and DataTable primitives.
+   Source: src/design/primitives/{buttons,field,data-table}.css.
+   Keep the original class names so these nodes map directly back to the React components. */
+.b{--button-size:var(--size-control);display:inline-flex;box-sizing:border-box;align-items:center;justify-content:center;gap:var(--sp-1-5);min-block-size:var(--button-size);font:inherit;font-size:var(--fs-body);line-height:1.2;color:var(--ink);white-space:nowrap}
+.b:disabled{cursor:not-allowed;opacity:var(--state-disabled-opacity)}
+.b-contrast{color:var(--canvas);background:var(--ink-strong);border:1px solid var(--ink-strong);border-radius:8px;padding:var(--sp-2) var(--sp-4);cursor:pointer;line-height:1.2}
+.b-contrast:hover:not(:disabled){background:var(--ink2);border-color:var(--ink2)}
+.b-contrast:disabled{opacity:1;color:var(--ink3);background:var(--sunken);border-color:var(--sunken)}
+.b-tertiary{color:var(--ink);background:transparent;border:1px solid var(--line2);border-radius:8px;padding:var(--sp-2) var(--sp-4);cursor:pointer;line-height:1.2}
+.b-tertiary:hover:not(:disabled){background:var(--surface-control-hover);color:var(--ink)}
+.b-danger{color:var(--brand-ink);background:var(--risk);border:1px solid var(--risk);border-radius:8px;padding:var(--sp-2) var(--sp-4);cursor:pointer;line-height:1.2}
+.b-pill{border-radius:var(--r-pill)}
+.b-lg{--button-size:var(--size-control-lg)}
+.b-icon{--icon-button-size:var(--size-icon-button);inline-size:var(--icon-button-size);block-size:var(--icon-button-size);min-inline-size:var(--icon-button-size);min-block-size:var(--icon-button-size);padding:0;border:0;border-radius:var(--r-pill);background:transparent;color:var(--icon-button-fg);cursor:pointer;transition:background var(--dur-1) var(--ease-out),color var(--dur-1) var(--ease-out)}
+.b-icon.b-sm{--icon-button-size:var(--size-control-sm)}
+.b-icon:not(:disabled):is(:hover,:focus-visible){background:var(--list-hover);color:var(--icon-button-fg)}
+.b-icon:disabled{cursor:not-allowed;opacity:1;background:transparent;color:var(--icon-button-disabled-fg)}
+.field-control-wrap{position:relative;width:100%}
+.field-control-wrap>.field-control{display:block}
+.field-control-start-icon{position:absolute;inset-block-start:50%;inset-inline-start:var(--sp-3);color:var(--ink3);pointer-events:none;transform:translateY(-50%)}
+.input-control{box-sizing:border-box;width:100%;height:var(--size-control-lg);padding:0 var(--sp-3);border:var(--border-width) solid var(--field-control-border);border-radius:var(--r-row);background:var(--field-control-bg);color:var(--ink);font:inherit;font-size:var(--fs-body);line-height:1.2;outline:0}
+.field-control-wrap--with-start-icon .input-control{padding-inline-start:calc(var(--sp-3) + var(--size-icon-xs) + var(--sp-2))}
+.field-control{transition:background var(--dur-2) var(--ease-out),border-color var(--dur-2) var(--ease-out),box-shadow var(--dur-2) var(--ease-out)}
+.field-control::placeholder{color:var(--ink3);opacity:1}
+.field-control:focus{border-color:#3A83F7}
+.field-control:disabled{background:var(--sunken);color:var(--ink3);cursor:not-allowed;opacity:var(--state-disabled-opacity)}
+.data-table-scroll{position:relative;isolation:isolate;box-sizing:border-box;inline-size:100%;max-width:100%;min-width:0;background-color:transparent}
+.data-table,.data-table thead,.data-table th,.data-table td{background-color:transparent}
+.data-table{inline-size:100%;min-inline-size:max-content;table-layout:auto;border-collapse:separate;border-spacing:0;margin:0;color:var(--ink);font-size:var(--fs-body)}
+.data-table thead{background-image:linear-gradient(var(--data-table-line),var(--data-table-line));background-position:0 bottom;background-repeat:no-repeat;background-size:100% var(--border-width)}
+.data-table th,.data-table td{box-sizing:border-box;min-width:0;border:0;padding:11px var(--sp-4);text-align:left;vertical-align:middle;white-space:normal;line-height:1.6}
+.data-table th{color:var(--ink);font-size:var(--fs-body);font-weight:500}
+.data-table td{color:var(--ink)}
+.data-table tbody tr:not(:last-child){background-color:transparent;background-image:linear-gradient(var(--data-table-line),var(--data-table-line));background-position:0 bottom;background-repeat:no-repeat;background-size:100% var(--border-width)}
+.data-table-empty-cell{padding:0!important}
+.data-table-empty{display:grid;min-height:180px;place-items:center;padding:24px;color:var(--ink3);text-align:center}

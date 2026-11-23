@@ -61,20 +61,20 @@ async function runSandboxed(options, program, args, extra = {}) {
       ...extra, cwd: sandbox.cwd, env: { ...sandbox.env, ...extra.env },
     })
     result.sandbox_denied = result.exit_code !== 0 && /operation not permitted|sandbox|permission denied/i.test(result.stderr)
+    result.command_executed = true
+    result.may_have_partial_effects = result.exit_code !== 0 || result.cancelled || result.timed_out
     if (result.sandbox_denied) {
       result.allowed_directories = options.roots
-      result.permission_hint = '请检查系统设置中的完全磁盘访问、文件自身权限，以及是否涉及受保护的凭据或应用数据目录。完全磁盘访问不会绕过这些保护。不要重复原命令或换写法绕过。'
+      result.permission_hint = '本次访问可能被系统权限或命令沙箱拒绝，不表示系统不支持。若刚才选择了“不允许”，请停止此项任务；否则核对目标路径及文件自身权限。此诊断不能确认用户点击了哪个按钮，也不能证明缺少完全磁盘访问。命令可能已部分执行，不要自动重放或换写法绕过。'
     }
     return result
   } finally { await sandbox.cleanup() }
 }
 
-async function resolveUserPath(shell = process.env.SHELL) {
-  const safeShell = ['/bin/bash', '/bin/zsh'].includes(shell) ? shell : '/bin/zsh'
-  const result = await runProcess(safeShell, ['-ilc', 'printf "\\0MATTER_PATH\\0%s\\0" "$PATH"'], {
-    env: process.env, cwd: require('node:os').homedir(), timeoutMs: 5000, outputLimit: 65536,
-  })
-  return result.stdout.split('\0MATTER_PATH\0').pop()?.split('\0')[0] || process.env.PATH
+async function resolveUserPath() {
+  // Do not run unrestricted login scripts while enabling the executor.
+  return [...new Set([...(process.env.PATH || '').split(':'), '/opt/homebrew/bin', '/usr/local/bin',
+    '/usr/bin', '/bin', '/usr/sbin', '/sbin'].filter(value => value.startsWith('/') && !value.includes('\0')))].join(':')
 }
 
 module.exports = { OUTPUT_LIMIT, runProcess, runSandboxed, resolveUserPath }

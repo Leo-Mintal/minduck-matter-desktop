@@ -47,6 +47,15 @@ test('keeps legacy desktop preferences and ignores retired local chat switches',
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, 'utf8')), settings)
 }))
 
+test('persists and reloads the HTTP test service on port 8080', () => withSettings((directory) => {
+  const settings = {
+    fullDiskAccessPromptAcknowledged: true, rightPanelWidth: 700, matterOrigin: 'http://192.168.11.70:8080',
+  }
+  saveDesktopSettings(directory, settings)
+  assert.deepEqual(JSON.parse(fs.readFileSync(desktopSettingsPath(directory), 'utf8')), settings)
+  assert.deepEqual(loadDesktopSettings(directory), settings)
+}))
+
 test('rejects invalid desktop settings and malformed saved data', () => withSettings((directory) => {
   const defaults = loadDesktopSettings(directory)
   for (const invalid of [

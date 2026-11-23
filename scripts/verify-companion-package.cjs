@@ -6,8 +6,12 @@ const { assertRuntime } = require('../src/companion/runtime.cjs')
 // It therefore has a separate mapping, verified before a DMG can be produced.
 module.exports = async ({ appOutDir, packager }) => {
   const resources = packager.getResourcesDir(appOutDir)
-  for (const file of ['AppIcon.icns', 'Assets.car']) {
+  for (const file of ['AppIcon.icns', 'Assets.car', 'native/desktop-access.node']) {
     if (!fs.existsSync(path.join(resources, file))) throw new Error(`Packaged application icon resource is missing: ${file}`)
+  }
+  const activationModule = fs.readFileSync(path.join(__dirname, '../build/desktop-access/desktop-access.node'))
+  if (!activationModule.equals(fs.readFileSync(path.join(resources, 'native/desktop-access.node')))) {
+    throw new Error('Packaged desktop activation module differs from the current native build')
   }
   assertRuntime(path.join(resources, 'companion-runtime'))
   for (const file of ['node_modules/koffi/package.json', 'node_modules/ws/package.json',
@@ -31,7 +35,7 @@ module.exports = async ({ appOutDir, packager }) => {
     const manifest = JSON.parse(fs.readFileSync(figure, 'utf8'))
     if (manifest.api !== 2 || manifest.id !== id) throw new Error(`Invalid packaged API 2 figure: ${id}`)
     for (const file of [manifest.entry, manifest.thumb, 'flow-player.js', 'flow-state.js', 'LICENSE-Coopanion.txt',
-      ...(id === 'minduck-duck' ? ['flow-artwork.js'] : [])]) {
+      'artwork.js', 'flow-artwork.js']) {
       if (!fs.existsSync(path.join(path.dirname(figure), file))) throw new Error(`Missing packaged figure asset: ${id}/${file}`)
     }
   }

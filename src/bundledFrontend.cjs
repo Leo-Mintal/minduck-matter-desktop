@@ -32,16 +32,26 @@ async function bundledFile(root, pathname, navigation) {
   return isInside(realRoot, realFile) ? realFile : null
 }
 
-function createBundledFrontendHandler({ root, origin, fetchImpl, logger = console, backendHeaders }) {
+function createBundledFrontendHandler({ root, origin, fetchImpl, fetchCompanionEvents, logger = console, backendHeaders, backendRequest }) {
   const bundleRoot = path.resolve(root)
   const matterOrigin = normalizeMatterOrigin(origin)
   return async (request) => {
     const url = new URL(request.url)
     if (url.origin !== matterOrigin || isBackendPath(url.pathname)) {
+      if (backendRequest) request = await backendRequest(request)
       // Keep POST bodies, auth headers, uploads and SSE streams unchanged.
       if (backendHeaders) {
-        const headers = backendHeaders(Object.fromEntries(request.headers), request.url)
+        const headers = backendHeaders(Object.fromEntries(request.headers), request.url, request.referrer)
         request = new Request(request, { headers })
+      }
+      // Long-lived pet subscriptions must not consume the chat's HTTP/1 upload connections.
+      if (fetchCompanionEvents && url.origin === matterOrigin && request.method === 'GET'
+        && url.searchParams.get('desktop_companion') === '1' && url.searchParams.get('access_token')
+        && (url.pathname === '/api/events' || /^\/api\/conversations\/[^/]+\/events$/.test(url.pathname))) {
+        url.searchParams.delete('desktop_companion')
+        const headers = new Headers(request.headers)
+        headers.delete('cookie')
+        return fetchCompanionEvents(url.href, { headers, signal: request.signal, credentials: 'omit', redirect: 'error' })
       }
       return fetchImpl(request, { bypassCustomProtocolHandlers: true })
     }
@@ -70,13 +80,17 @@ function createBundledFrontendHandler({ root, origin, fetchImpl, logger = consol
   }
 }
 
-function installBundledFrontend({ app, protocol, net, origin, backendHeaders }) {
+function installBundledFrontend({ app, protocol, net, session, origin, backendHeaders, backendRequest }) {
   const root = path.join(app.getAppPath(), 'web-dist')
   if (!existsSync(path.join(root, 'index.html'))) {
     throw new Error('Matter frontend is missing. Run pnpm run build:web before starting or packaging.')
   }
   const scheme = new URL(origin).protocol.slice(0, -1)
-  protocol.handle(scheme, createBundledFrontendHandler({ root, origin, fetchImpl: net.fetch.bind(net), backendHeaders }))
+  const companionEvents = session.fromPartition('minduck-companion-events', { cache: false })
+  protocol.handle(scheme, createBundledFrontendHandler({
+    root, origin, fetchImpl: net.fetch.bind(net), fetchCompanionEvents: companionEvents.fetch.bind(companionEvents),
+    backendHeaders, backendRequest,
+  }))
   console.log('Matter frontend: bundled web-dist; backend:', origin)
 }
 

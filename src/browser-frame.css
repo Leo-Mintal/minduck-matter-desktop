@@ -1,0 +1,19 @@
+/* Native host decoration; the shared Web components still own browser controls. */
+:root { --desktop-frame: var(--desktop-rail-surface, #202222); --desktop-tab: var(--desktop-rail-selected, #363838); --desktop-line: #ffffff0d; }
+:root[data-theme='light'] { --desktop-frame: var(--desktop-rail-surface, #f7f7f7); --desktop-tab: var(--desktop-rail-selected, #e7e7e7); --desktop-line: #0000000d; }
+:root[data-surface='chrome'] .desktop-chrome .panel { border: 0; background: transparent; }
+.desktop-chrome .pn-top { height: 36px; min-height: 36px; padding: 4px 4px 4px 8px; gap: 8px; border-bottom: 0; background: var(--desktop-frame); -webkit-app-region: drag; }
+.desktop-chrome .pn-acts { flex: 1; margin-left: 0; align-items: center; gap: 8px; }
+.desktop-chrome .pn-acts .b.pn-ib-close { margin-left: auto; }
+.desktop-chrome .pn-ib-close :is(.pn-icon, .ui-icon) { display: none; }
+.desktop-chrome .pn-ib-close::before { content: ''; flex: none; width: var(--desktop-control-icon-size, 16px); height: var(--desktop-control-icon-size, 16px); background: currentColor; mask: var(--desktop-sidebar-icon) center / contain no-repeat; transform: scaleX(-1); }
+.desktop-opener { display: none; }
+.desktop-chrome .pn-top > .desktop-tabs { flex: 0 1 auto; width: max-content; max-width: calc(100% - 80px); }
+.desktop-chrome .desktop-tab-list { gap: 4px; }
+.desktop-chrome .desktop-tab { width: 184px; height: 28px; border: 1px solid transparent; border-radius: 8px; padding-inline: 10px; }
+.desktop-chrome .desktop-tab.is-active { background: var(--desktop-tab); border-color: var(--desktop-line); }
+.desktop-chrome .desktop-tab-select.b { flex: 1; height: 26px; min-height: 26px; max-width: 220px; font-weight: 400; }
+.desktop-chrome .desktop-navigation { height: 48px; padding: 7px 8px; gap: 6px; border: 0; border-radius: 0 12px 0 0; background: var(--app-canvas, var(--canvas)); }
+.desktop-chrome .desktop-address .field-control { height: 34px; min-height: 34px; background: var(--app-canvas, var(--canvas)); border-color: var(--desktop-line); }
+.desktop-chrome .desktop-address .field-control:focus { border-color: #3a83f7; }
+.desktop-chrome .pn-body { scrollbar-gutter: auto; }

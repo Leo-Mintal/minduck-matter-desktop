@@ -13,6 +13,9 @@ test('accepts resolved Web geometry and normalizes opaque native colors', () => 
   assert.equal(parsed.canvas, '#030303')
   assert.equal(parsed.surface, '#161719')
   assert.equal(parsed.divider, '#212222')
+  assert.equal(parsed.frame, '#202222')
+  assert.equal(parseChromeMetrics({ ...metrics, frame: 'rgb(247, 247, 247)' }).frame, '#f7f7f7')
+  assert.equal(parseChromeMetrics({ ...metrics, theme: 'light' }).frame, '#f7f7f7')
   assert.equal(parsed.toolbarHeight, 106)
   assert.equal(parseChromeMetrics({ ...metrics, toolbarHeight: 0 }).toolbarHeight, 0)
 })
@@ -20,7 +23,7 @@ test('accepts resolved Web geometry and normalizes opaque native colors', () => 
 test('rejects malformed dimensions, themes and transparent or invalid native colors', () => {
   for (const patch of [{ panelMin: NaN }, { panelDefault: '384' }, { toolbarHeight: 301 },
     { theme: 'system' }, { panelMaxRatio: 2 }, { resizeHitWidth: -1 },
-    { divider: 'rgba(0,0,0,0)' }, { canvas: 'rgb(999,0,0)' }, { surface: 'transparent' }]) {
+    { divider: 'rgba(0,0,0,0)' }, { canvas: 'rgb(999,0,0)' }, { surface: 'transparent' }, { frame: 'transparent' }]) {
     assert.equal(parseChromeMetrics({ ...metrics, ...patch }), null)
   }
   assert.equal(parseChromeMetrics(null), null)

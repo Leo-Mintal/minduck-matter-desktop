@@ -16,7 +16,7 @@ function installMatterTaskMonitor(qaContract = null) {
     let source, timer, closed = false, sequence = -1, attempt = 0
     function connect() {
       if (closed) return
-      const query = new URLSearchParams({ access_token: state.token })
+      const query = new URLSearchParams({ access_token: state.token, desktop_companion: '1' })
       if (state.org) query.set('org_id', state.org)
       if (replay) query.set('from_seq', String(Math.max(0, sequence)))
       source = new EventSource(`${path}?${query}`)
@@ -121,8 +121,7 @@ function installMatterTaskMonitor(qaContract = null) {
     syncStreams(state)
   }
 
-  // Leave HTTP/1 connection slots for Matter itself and list reconciliation. With more than two
-  // active conversations, rotate replayable streams; keep every task's last public projection.
+  // Bound background subscriptions. Rotate replayable streams while retaining each task's projection.
   function syncStreams(state) {
     const tasks = [...state.tasks.values()]
     if (tasks.length > 2 && Date.now() >= state.rotateAt) {

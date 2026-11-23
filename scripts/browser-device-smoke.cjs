@@ -9,16 +9,15 @@ if (!process.versions.electron) {
   if (result.error) console.error(result.error)
   process.exit(result.status ?? 1)
 }
-const { app, BrowserWindow, WebContentsView, session, net, nativeImage, nativeTheme, ipcMain, webContents, safeStorage } = require('electron')
+const { app, BrowserWindow, WebContentsView, session, net, nativeImage, safeStorage } = require('electron')
 const fs = require('node:fs/promises'), path = require('node:path'), http = require('node:http'), assert = require('node:assert/strict')
 const { WebSocketServer } = require('../vendor/coopanion/runtime/node_modules/ws')
 const { AgentBrowserCompatibility } = require('../src/agentBrowserCompatibility.cjs')
-const { createBrowserDevice } = require('../src/browser-device/controller.cjs')
-const { createBrowserSettings } = require('../src/browser-device/settings.cjs')
+const { createClientRuntime } = require('../src/client-runtime.cjs')
 app.setPath('userData', path.join(process.argv[2], 'profile'))
 process.on('uncaughtException', error => { console.error(error); app.exit(1) })
 const tabs = new Map(), pending = new Map(), replies = new Set()
-let host, matter, device, settings, server, wss, socket, origin, activeTab, next = 0, schemas, compatibility
+let host, matter, device, settings, server, wss, socket, origin, activeTab, next = 0, schemas, compatibility, jwt
 const watchdog = setTimeout(() => { console.error('native browser smoke timed out'); app.exit(1) }, 75000)
 async function until(predicate) {
   for (let i = 0; i < 250; i++) { const value = await predicate(); if (value) return value; await new Promise(resolve => setTimeout(resolve, 20)) }
@@ -62,15 +61,7 @@ const payload = result => JSON.parse(result.content.find(item => item.type === '
 app.whenReady().then(async () => {
   try {
     server = http.createServer((request, response) => {
-      if (request.url === '/api/extensions/devices/pairings') {
-        const chunks = []; request.on('data', chunk => chunks.push(chunk)); request.on('end', () => {
-          assert.equal(JSON.parse(Buffer.concat(chunks)).kind, 'browser')
-          response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ code: 'test-code', ws_url: origin.replace('http:', 'ws:') + '/api/extensions/device-link/ws' }))
-        }); return
-      }
-      if (request.url === '/api/extensions/device-link/redeem') {
-        response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ device_id: 'native-smoke', device_token: 'native-test-token', ws_url: origin.replace('http:', 'ws:') + '/api/extensions/device-link/ws' })); return
-      }
+      assert.ok(!/pairings|redeem|devices\/register/.test(request.url), 'must never register or pair')
       if (request.url === '/media/redirect') { response.writeHead(302, { location: '/page' }); response.end(); return }
       if (request.url === '/media/oversized') { response.writeHead(200, { 'content-length': 21 * 1024 * 1024 }); response.end('oversized'); return }
       if (request.url === '/media/stream') { response.writeHead(200, { 'content-type': 'text/plain' }); response.end(Buffer.alloc(20 * 1024 * 1024 + 1)); return }
@@ -91,18 +82,18 @@ app.whenReady().then(async () => {
         <button aria-label="确认"><span>显示文字</span></button></footer>`)
     })
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = 'http://127.0.0.1:' + server.address().port
-    wss = new WebSocketServer({ server, path: '/api/extensions/device-link/ws' })
+    wss = new WebSocketServer({ server, path: '/api/client-runtime/ws' })
     wss.on('connection', current => {
       socket = current
       current.on('message', raw => {
         const value = JSON.parse(raw)
         if (value.type === 'auth') {
-          assert.equal(value.device_id, 'native-smoke'); assert.equal(value.extension_version, '1.3.2')
-          current.send(JSON.stringify({ type: 'auth_ok', device_id: value.device_id }))
+          assert.ok(value.runtime_id.startsWith('rt_')); assert.equal(value.device_id,undefined); assert.equal(value.token,jwt)
+          current.send(JSON.stringify({ type: 'auth_ok', runtime_id: value.runtime_id }))
           current.send(JSON.stringify({ jsonrpc: '2.0', id: 'init', method: 'initialize', params: { protocolVersion: '2025-06-18' } }))
         } else if (value.id === 'init') {
-          assert.equal(value.result.capabilities.localExec, undefined)
-          current.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))
+          assert.equal(value.result.capabilities.clientRuntime.version, 1)
+          current.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }));current.send(JSON.stringify({type:'runtime_ready',runtime_context:'native-runtime-proof'}))
           current.send(JSON.stringify({ jsonrpc: '2.0', id: 'list', method: 'tools/list' }))
         } else if (value.id === 'list') schemas = value.result.tools
         else if (value.id) { replies.add(value.id); pending.get(value.id)?.(value); pending.delete(value.id) }
@@ -113,17 +104,17 @@ app.whenReady().then(async () => {
     host.contentView.addChildView(matter); matter.setBounds({ x: 0, y: 0, width: 420, height: 680 })
     await host.loadURL('about:blank'); host.focus();
     await matter.webContents.loadURL(origin + '/matter')
-    const jwt = 'h.' + Buffer.from(JSON.stringify({ uid: 'native-smoke-user', exp: Date.now() / 1000 + 600 })).toString('base64url') + '.s'
+    jwt = 'h.' + Buffer.from(JSON.stringify({ uid: 'native-smoke-user', exp: Date.now() / 1000 + 600 })).toString('base64url') + '.s'
     await matter.webContents.executeJavaScript(`localStorage.setItem('matter.token',${JSON.stringify(jwt)})`)
     compatibility = new AgentBrowserCompatibility({ createTab, closeTab, getBrowserTabs: () => [...tabs.values()],
       getMainWindow: () => host, getActiveTabId: () => activeTab, selectTab })
-    device = createBrowserDevice({ app, safeStorage, fetchImpl: net.fetch.bind(net), origin, getContents: () => matter.webContents,
+    device = createClientRuntime({ app, localExec:{snapshot:()=>({enabled:false,state:'未授权'}),execute:async()=>assert.fail('shell not permitted')},bridgePort:19477, fetchImpl: net.fetch.bind(net), origin, getContents: () => matter.webContents,
       compatibility, extensionRoot: path.join(__dirname, '..', 'extensions/matter-browser'), nativeImage })
     compatibility.notifyGroupChanged = tab => device.notifyTabUpdated(tab, { groupId: tab.groupId })
     compatibility.notifyTabUpdated = (tab, change) => device.notifyTabUpdated(tab, change)
     await device.refresh(); await until(() => schemas)
     assert.equal(schemas.length, 15)
-    assert.equal(await device.presenceDeviceId(), 'native-smoke')
+    await until(()=>device.snapshot().available);assert.equal(device.snapshot().browser,true)
     assert.equal(session.fromPartition('native-browser-smoke').extensions.getAllExtensions().length, 0)
     const manual = createTab(origin + '/manual')
     await until(() => manual.navigationCommitted)
@@ -190,51 +181,30 @@ app.whenReady().then(async () => {
     await until(() => contents.executeJavaScript('globalThis.__cancelStarted === true'))
     const busy = new Promise(resolve => pending.set('busy-test', resolve))
     socket.send(JSON.stringify({ jsonrpc: '2.0', id: 'busy-test', method: 'tools/call', params: { name: 'get_windows_and_tabs' } }))
-    assert.equal((await busy).error.code, -32602)
+    assert.equal((await busy).result.isError,true)
     socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: cancelledId } }))
     await until(() => !compatibility.debuggerOwners.has(tabId))
     await new Promise(resolve => setTimeout(resolve, 100))
     await call('chrome_fill_or_select', { tabId, selector: '#name', value: 'After cancellation' })
     assert.equal(await contents.executeJavaScript("document.querySelector('#name').value"), 'After cancellation')
     assert.equal(replies.has(cancelledId), false)
-    function SettingsWindow(options) {
-      const window = new BrowserWindow({ ...options, webPreferences: { ...options.webPreferences, offscreen: true, backgroundThrottling: false } })
-      window.show = () => {}; window.focus = () => {}
-      return window
-    }
-    settings = createBrowserSettings({ BrowserWindow: SettingsWindow, ipcMain, controller: device, getWindow: () => host })
-    settings.open()
-    const ui = await until(() => webContents.getAllWebContents().find(item => item.getURL().endsWith('/browser-device/settings.html')))
-    await until(() => ui.executeJavaScript("document.querySelector('#status').textContent.includes('在线')"))
-    const settingsWindow = BrowserWindow.fromWebContents(ui)
-    for (const theme of ['light', 'dark']) {
-      nativeTheme.themeSource = theme
-      for (const width of [360, 560]) {
-        settingsWindow.setContentSize(width, 700)
-        await ui.executeJavaScript('document.fonts.ready.then(()=>true)')
-        assert.equal(await ui.executeJavaScript('document.documentElement.scrollWidth <= innerWidth'), true)
-        if (process.env.MINDUCK_BROWSER_DEVICE_PREVIEWS) {
-          await fs.mkdir(process.env.MINDUCK_BROWSER_DEVICE_PREVIEWS, { recursive: true })
-          const capture = await until(async () => {
-            try { const value = await ui.capturePage(); return value.isEmpty() ? null : value } catch { return null }
-          })
-          await fs.writeFile(path.join(process.env.MINDUCK_BROWSER_DEVICE_PREVIEWS, `browser-settings-${theme}-${width}.png`), capture.toPNG())
-        }
-      }
-    }
     assert.equal(await contents.executeJavaScript('typeof window.browserSettings'), 'undefined')
-    await ui.executeJavaScript("window.browserSettings.request('enable',false)")
-    assert.equal(await device.presenceDeviceId(), '')
-    await ui.executeJavaScript("window.browserSettings.request('enable',true)")
+    await matter.webContents.executeJavaScript("localStorage.removeItem('matter.token')")
+    await device.refresh()
+    assert.equal(device.snapshot().available, false)
+    await device.refresh()
+    await matter.webContents.executeJavaScript(`localStorage.setItem('matter.token',${JSON.stringify(jwt)})`)
+    await device.refresh()
     await until(() => device.snapshot().state === '在线')
+    assert.equal(BrowserWindow.getAllWindows().length, 1, 'automatic registration opens no settings window')
     await call('chrome_navigate', { tabId, url: origin + '/next' })
     await call('chrome_fill_or_select', { tabId, ref, value: 'stale' }, true)
     await call('chrome_close_tabs', { tabIds: [tabId] })
     assert.equal(tabs.has(manual.id), true)
-    console.log('PASS native WS pairing, all 15 tools, task tabs, refs, isolated helpers, frames, upload, screenshots, dialogs, cancellation, navigation and settings')
+    console.log('PASS login runtime without pairing, all 15 tools, task tabs, refs, isolated helpers, frames, upload, screenshots, dialogs, cancellation, and navigation')
   } catch (error) { console.error(error); process.exitCode = 1 }
   finally {
-    clearTimeout(watchdog); settings?.dispose(); device?.dispose()
+    clearTimeout(watchdog); device?.dispose()
     for (const tab of [...tabs.values()]) closeTab(tab.id)
     if (host && !host.isDestroyed()) host.destroy()
     wss?.clients.forEach(client => client.terminate()); wss?.close(); server?.close()

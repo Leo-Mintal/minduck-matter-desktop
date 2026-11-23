@@ -1,0 +1,119 @@
+{
+  "base": {
+    "file": "idle.svg",
+    "sha256": "7138340a3595672fbe342197f7e543af8ae53936957458275c9abf1880b2cfdf",
+    "paths": 31,
+    "filters": 4,
+    "artworkPaths": 29
+  },
+  "gait": {
+    "file": "walking.svg",
+    "sha256": "10e4d4c192ffc652699c7d025dbe1b30e45680ee9c792b3addaf0386b2fefca2",
+    "paths": 29,
+    "filters": 4,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
+    "duration": 8.0,
+    "tracks": 17
+  },
+  "idle": {
+    "file": "idle.svg",
+    "sha256": "7138340a3595672fbe342197f7e543af8ae53936957458275c9abf1880b2cfdf",
+    "paths": 31,
+    "filters": 4,
+    "artworkPaths": 29,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
+    "repairedSleeveOutlines": 0,
+    "duration": 8.0,
+    "tracks": 5
+  },
+  "work": {
+    "file": "working.svg",
+    "sha256": "ea8b7f8acfa052d4019c7d280f281671d65eae86956ab8e81a8a061a6397cdb0",
+    "paths": 1481,
+    "filters": 196,
+    "artworkPaths": 1479,
+    "repairedFilterRegions": 188,
+    "repairedSleeveClips": 0,
+    "repairedSleeveOutlines": 49,
+    "duration": 8.0,
+    "tracks": 780
+  },
+  "write": {
+    "file": "writing.svg",
+    "sha256": "9acf83608f5c0727312d76718b8ef796c61a14c9066e823bbb6c0f45a5981393",
+    "paths": 406,
+    "filters": 8,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
+    "duration": 8.0,
+    "tracks": 168
+  },
+  "ask": {
+    "file": "confirmation.svg",
+    "sha256": "1f6bfaf29825963862b2f40d6f9f7703996b50a51f3e37edde6aa242c313589c",
+    "paths": 336,
+    "filters": 4,
+    "artworkPaths": 334,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 29,
+    "repairedSleeveOutlines": 29,
+    "duration": 8.0,
+    "tracks": 171
+  },
+  "happy": {
+    "file": "success.svg",
+    "sha256": "4feb868fcab9b43099bb4d1adbc83cb164e9c73896087308a9c723d8ffeee834",
+    "paths": 407,
+    "filters": 8,
+    "artworkPaths": 405,
+    "repairedFilterRegions": 4,
+    "repairedSleeveClips": 0,
+    "repairedSleeveOutlines": 49,
+    "duration": 8.0,
+    "tracks": 179
+  },
+  "sad": {
+    "file": "failure.svg",
+    "sha256": "9b788cd836e46c6c0cbff277b33ee0056160033b8ddccbbacb895e265e3a29cf",
+    "paths": 397,
+    "filters": 8,
+    "artworkPaths": 395,
+    "repairedFilterRegions": 4,
+    "repairedSleeveClips": 0,
+    "repairedSleeveOutlines": 49,
+    "duration": 8.0,
+    "tracks": 168
+  },
+  "think": {
+    "file": "thinking.svg",
+    "sha256": "79a20b0b3b1874eaaf505ce58d0358df0c742e0ba3e1ad63f7cb5d4a17598bb8",
+    "paths": 31,
+    "filters": 4,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
+    "duration": 8.0,
+    "tracks": 10
+  },
+  "flag": {
+    "file": "flag.svg",
+    "sha256": "6024ff01395f2d4d73ff378cf954a79afa9c897d05931bcbab3adbfacb41c149",
+    "paths": 400,
+    "filters": 8,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 0,
+    "duration": 8.0,
+    "tracks": 170
+  },
+  "carry": {
+    "file": "carry.svg",
+    "sha256": "ffe8e24c46ee91d2c1e9312bce4253908dfe4e47dc827e613d0087e0ccac0aaa",
+    "paths": 499,
+    "filters": 12,
+    "repairedFilterRegions": 0,
+    "repairedSleeveClips": 29,
+    "duration": 8.0,
+    "tracks": 152
+  }
+}

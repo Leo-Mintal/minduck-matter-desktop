@@ -4,6 +4,29 @@ const assert = require('node:assert/strict')
 const modulePath = '../vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-thinking/idle.js'
 const load = () => import(modulePath)
 
+test('pack-owned idle thinking replaces the shared view and uses its own host-driven duration', async () => {
+  const { withIdleThinking } = await load()
+  let shared = 0, disposed = 0
+  const frames = [], holds = []
+  const view = { seconds: 8, draw: t => frames.push(t), hide: () => frames.push(null), dispose: () => disposed++ }
+  const original = { step() {}, layout: () => ({ mode: 'idle', moving: false }),
+    set: value => holds.push(value.hold), do: () => true, createIdleThinkingView: () => view }
+  const body = withIdleThinking(original, {}, { random: () => 0,
+    createView() { shared++; throw new Error('generic artwork must not mount') } })
+  const tick = seconds => { for (let i = 0; i < seconds * 20; i++) body.step(.05) }
+  tick(20.1); tick(6)
+  assert.equal(shared, 0)
+  assert.equal(body.layout().moving, true)
+  assert.ok(frames.some(time => time > 6 && time < 8))
+  assert.ok(holds.includes(8.2))
+  tick(2)
+  assert.equal(body.layout().moving, false)
+  assert.equal(frames.at(-1), null)
+  tick(20.1); body.do('work')
+  assert.equal(frames.at(-1), null)
+  body.dispose(); assert.equal(disposed, 1)
+})
+
 async function setup(random = () => 0, custom) {
   const { withIdleThinking } = await load()
   const state = { mode: 'idle', moving: false, busy: false, pressing: false }

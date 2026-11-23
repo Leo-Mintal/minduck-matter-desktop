@@ -1,0 +1,50 @@
+:root {
+  color-scheme: dark;
+  --frame: var(--desktop-rail-surface, #202222);
+  --frame-ink: var(--desktop-rail-ink, #ffffff);
+  --update-accent: #22c658;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --frame: var(--desktop-rail-surface, #f7f7f7);
+  --frame-ink: var(--desktop-rail-ink, #6e6e6e);
+  --update-accent: #168b3c;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--frame); color: var(--frame-ink); font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; user-select: none; }
+/* The bounded native drag view owns empty titlebar space; never cover sibling browser controls. */
+.titlebar { height: 36px; display: flex; align-items: center; padding: 0 12px 0 92px; }
+.page-navigation { display: flex; align-items: center; gap: 4px; }
+#activation-connection-status { position: absolute; left: 208px; top: 0; line-height: 36px; white-space: nowrap; }
+.back-icon { --icon: url('assets/navigation-back.svg'); }
+.forward-icon { --icon: url('assets/navigation-back.svg'); transform: rotate(180deg); }
+.reload-icon { --icon: url('assets/icons/browser-reload.svg'); }
+#browser-toggle { margin-left: auto; }
+:root[data-browser-open='true'] #browser-toggle { visibility: hidden; }
+.rail { position: fixed; top: 36px; bottom: 4px; left: 0; width: 49px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; padding: 4px 5px 4px 4px; }
+.rail-tools { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.rail .icon, .rail .available-icon, .rail .update-progress, .rail .update-progress svg { width: 20px; height: 20px; }
+.icon-button { -webkit-app-region: no-drag; }
+.icon { width: 16px; height: 16px; background: currentColor; mask: var(--icon) center / contain no-repeat; -webkit-mask: var(--icon) center / contain no-repeat; }
+.sidebar-icon { --icon: url('assets/sidebar-toggle.svg'); transform: scaleX(-1); }
+.settings-icon { --icon: url('assets/companion-settings.svg'); }
+.update-icon { --icon: url('assets/update-check.svg'); }
+.available-icon { --icon: url('assets/update-available.svg'); display: none; width: 16px; height: 16px; color: var(--update-accent); }
+#check-update[data-available='true'] .update-icon { display: none; }
+#check-update[data-available='true'] .available-icon { display: block; }
+#check-update[aria-busy='true'] .update-icon { animation: checking 1s linear infinite; }
+#check-update[aria-busy='true'] { opacity: 1; }
+#check-update[aria-busy='true'] .available-icon { display: none; }
+#check-update[aria-busy='true']:not([data-phase='downloading']) .update-icon { display: block; }
+#check-update[data-phase='downloading'] .update-icon { display: none; }
+#check-update[aria-disabled='true'] { cursor: default; }
+.update-progress { color: var(--update-accent); }
+.update-progress, .update-progress svg { display: block; width: 18px; height: 18px; }
+.update-progress[hidden] { display: none; }
+.update-progress circle { fill: none; stroke: currentColor; stroke-width: 2; }
+.update-progress-track { opacity: .2; }
+.update-progress-value { transform: rotate(-90deg); transform-origin: center; stroke-linecap: round; transition: stroke-dashoffset 180ms linear; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@keyframes checking { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .icon-button, .update-progress-value { transition: none; } .update-icon { animation: none !important; } }

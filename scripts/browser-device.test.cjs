@@ -14,7 +14,13 @@ const safeStorage = { isEncryptionAvailable: () => true, encryptString: value =>
 async function fixture(t, options = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'matter-browser-test-'))
   let token = jwt('u1'), connection, stops = 0, destroyed = false
-  const requests = [], store = createStore(directory)
+  const requests = []
+  if (options.saved !== undefined) {
+    await fs.mkdir(path.join(directory, 'browser-device'), { recursive: true })
+    await fs.writeFile(path.join(directory, 'browser-device/settings.json'),
+      typeof options.saved === 'string' ? options.saved : JSON.stringify(options.saved))
+  }
+  const store = createStore(directory)
   const fetchImpl = async (url, init) => {
     requests.push({ url, init })
     if (options.fetch) return options.fetch(url, init)
@@ -48,23 +54,82 @@ test('browser pairs as browser, encrypts its token separately and exposes its ow
   assert.equal(f.requests.length, 2)
 })
 
-test('account change blocks presence and execution before polling; revocation stays disabled', async t => {
+test('browser waits for login and automatically registers despite a retired disabled preference', async t => {
+  const f = await fixture(t, { saved: { enabled: false, pairing: null } })
+  f.token('')
+  await f.controller.refresh()
+  assert.equal(f.requests.length, 0)
+  assert.equal(await f.controller.presenceDeviceId(), '')
+  f.token(jwt('u1'))
+  await f.controller.refresh()
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
+  assert.equal(f.store.get().enabled, undefined)
+})
+
+test('upgrading a disabled paired browser reuses its encrypted identity without registering another device', async t => {
+  const f = await fixture(t, { saved: { enabled: false, pairing: {
+    account: 'u1', origin, deviceId: 'browser-test', wsURL: 'wss://matter.test/api/extensions/device-link/ws',
+    encryptedToken: safeStorage.encryptString('browser-secret').toString('base64'),
+  } } })
+  await f.controller.refresh()
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
+  assert.equal(f.requests.length, 0)
+})
+
+test('account change blocks old calls immediately and automatically pairs the current account', async t => {
   const f = await fixture(t)
   await f.controller.refresh()
+  const previous = f.connection()
   f.token(jwt('u2'))
   assert.equal(await f.controller.presenceDeviceId(), '')
-  await assert.rejects(f.connection().execute({ name: 'chrome_navigate', arguments: {} }, new AbortController().signal), /账号/)
+  await assert.rejects(previous.execute({ name: 'chrome_navigate', arguments: {} }, new AbortController().signal), /账号/)
   await f.controller.refresh()
-  assert.equal(f.store.get().enabled, false)
+  assert.equal(f.store.get().pairing.account, 'u2')
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
   assert.ok(f.stops() > 0)
-  await f.controller.setEnabled(true)
-  f.connection().onRevoked()
-  assert.equal(f.store.get().enabled, false)
-  await f.controller.refresh()
+  previous.onRevoked(4003)
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
   assert.equal(f.requests.length, 4)
 })
 
-test('late pairing after disable is discarded and newly issued credentials are revoked', async t => {
+test('server revocation is respected until the user logs in again', async t => {
+  const f = await fixture(t)
+  await f.controller.refresh()
+  f.connection().onRevoked(4003)
+  assert.equal(f.store.get().pairing, null)
+  assert.equal(await f.controller.presenceDeviceId(), '')
+  await f.controller.refresh()
+  assert.equal(f.requests.length, 2)
+  f.token(''); await f.controller.refresh()
+  f.token(jwt('u1')); await f.controller.refresh()
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
+  assert.equal(f.requests.length, 4)
+})
+
+test('invalid device credentials automatically re-pair after backoff', async t => {
+  const f = await fixture(t)
+  await f.controller.refresh()
+  f.connection().onRevoked(4001)
+  await f.controller.refresh()
+  assert.equal(f.requests.length, 2)
+  const now = Date.now()
+  t.mock.method(Date, 'now', () => now + 30001)
+  await f.controller.refresh()
+  assert.equal(f.requests.length, 4)
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
+})
+
+test('a replaced connection does not fight the other client or erase reusable credentials', async t => {
+  const f = await fixture(t)
+  await f.controller.refresh()
+  f.connection().onRevoked(4002)
+  await f.controller.refresh()
+  assert.equal(f.requests.length, 2)
+  assert.equal(f.store.get().pairing.deviceId, 'browser-test')
+  assert.equal(await f.controller.presenceDeviceId(), '')
+})
+
+test('late pairing after closing the window is discarded and newly issued credentials are revoked', async t => {
   let complete, f
   f = await fixture(t, { fetch: async (url, init) => {
     if (url.endsWith('/pairings')) return { ok: true, status: 200, json: async () => ({ code: '123', ws_url: 'wss://matter.test/api/extensions/device-link/ws' }) }
@@ -76,18 +141,18 @@ test('late pairing after disable is discarded and newly issued credentials are r
   } })
   const pending = f.controller.refresh()
   while (!complete) await new Promise(resolve => setTimeout(resolve, 1))
-  await f.controller.setEnabled(false)
+  f.controller.suspend(); f.destroyed(true)
   complete(); await pending
   assert.equal(f.store.get().pairing, null)
   assert.equal(f.connection(), undefined)
   assert.equal(f.requests.at(-1).init.method, 'DELETE')
 })
 
-test('corrupt browser settings fail closed', async t => {
-  const f = await fixture(t)
-  await fs.mkdir(path.join(f.directory, 'browser-device'), { recursive: true })
-  await fs.writeFile(path.join(f.directory, 'browser-device/settings.json'), '{broken')
-  assert.equal(createStore(f.directory).get().enabled, false)
+test('corrupt credentials are discarded and recovered through verified login', async t => {
+  const f = await fixture(t, { saved: '{broken' })
+  assert.equal(f.store.get().pairing, null)
+  await f.controller.refresh()
+  assert.equal(await f.controller.presenceDeviceId(), 'browser-test')
 })
 
 test('closing and reopening the window reconnects the same device without pairing again', async t => {
@@ -95,7 +160,6 @@ test('closing and reopening the window reconnects the same device without pairin
   await f.controller.refresh()
   f.controller.suspend(); f.destroyed(true)
   await f.controller.refresh()
-  assert.equal(f.store.get().enabled, true)
   assert.equal(await f.controller.presenceDeviceId(), '')
   f.destroyed(false)
   await f.controller.refresh()
@@ -108,8 +172,8 @@ test('browser settings retain their previous state if atomic persistence fails',
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
   await fs.writeFile(path.join(directory, 'browser-device'), 'blocks the settings directory')
-  assert.throws(() => store.update({ enabled: false }))
-  assert.equal(store.get().enabled, true)
+  assert.throws(() => store.update({ pairing: { deviceId: 'not-persisted' } }))
+  assert.equal(store.get().pairing, null)
 })
 
 test('native runtime loads all 15 pinned tools without starting an extension and rejects cancelled work', async () => {

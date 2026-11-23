@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="referrer" content="no-referrer" />
+    <title>邀请码 · Minduck Matter</title>
+    <link rel="icon" href="./assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./web-primitives.css" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./config.js"></script>
+    <script src="./theme.js"></script>
+    <script src="./core.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></symbol>
+      <symbol id="icon-moon" viewBox="0 0 24 24"><path d="M20.5 14A8.6 8.6 0 0 1 10 3.5 8.6 8.6 0 1 0 20.5 14Z"/></symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    </svg>
+
+    <main class="page">
+    <header class="page-header">
+      <h1>邀请码</h1>
+      <div class="header-actions">
+        <button class="b b-tertiary b-pill" id="logout-button" type="button" hidden>退出</button>
+        <span class="mode-badge" id="mode-badge"><span class="status-dot"></span>演示 · 不可激活</span>
+        <button class="b b-icon theme-toggle" id="theme-toggle" type="button" aria-label="切换为浅色模式" title="切换为浅色模式">
+          <svg class="icon sun" aria-hidden="true"><use href="#icon-sun"/></svg>
+          <svg class="icon moon" aria-hidden="true"><use href="#icon-moon"/></svg>
+        </button>
+      </div>
+    </header>
+
+      <section class="password-gate" id="password-gate" aria-labelledby="password-title">
+        <form id="password-form">
+          <h2 id="password-title">管理员密码</h2>
+          <label class="field-control-wrap input input--square"><span class="sr-only">管理员密码</span><input class="field-control input-control" id="admin-password" type="password" autocomplete="current-password" placeholder="输入管理员密码" required /></label>
+          <p class="dialog-error" id="password-error" role="alert" hidden></p>
+          <button class="b b-contrast b-pill b-lg" id="login-button" type="submit" disabled>正在连接…</button>
+        </form>
+      </section>
+      <div id="console-content" hidden>
+        <section class="generator" aria-labelledby="generator-title">
+          <h2 id="generator-title" class="sr-only">摇码</h2>
+          <div class="reels-area" id="reels-area" aria-hidden="true">
+            <div class="reel"><div class="reel-track"><span>—</span></div></div>
+            <div class="reel"><div class="reel-track"><span>—</span></div></div>
+            <div class="reel"><div class="reel-track"><span>—</span></div></div>
+            <div class="reel"><div class="reel-track"><span>—</span></div></div>
+            <div class="reel"><div class="reel-track"><span>—</span></div></div>
+            <div class="reel"><div class="reel-track"><span>—</span></div></div>
+          </div>
+          <div class="result-caption" id="result-caption" role="status" aria-live="polite"></div>
+          <div class="generator-actions">
+            <button class="b b-contrast b-pill b-lg" id="generate-button" type="button" disabled>
+              <span class="asset-icon refresh-icon" aria-hidden="true"></span>
+              <span id="generate-label">摇码</span>
+            </button>
+            <button class="b b-tertiary b-pill b-lg" id="copy-button" type="button" disabled>
+              <span class="asset-icon copy-icon" aria-hidden="true"></span>复制
+            </button>
+          </div>
+          <div class="operation-message" id="operation-message" role="status" aria-live="polite"></div>
+        </section>
+
+      <section class="history" aria-labelledby="history-title">
+        <div class="history-heading">
+          <div class="section-title"><h2 id="history-title">发码记录</h2><span class="count" id="record-count">0</span></div>
+          <button class="b b-icon" id="refresh-button" type="button" aria-label="刷新发码记录" title="刷新记录"><span class="asset-icon refresh-icon" aria-hidden="true"></span></button>
+        </div>
+        <div class="history-toolbar">
+          <div class="filters" role="group" aria-label="按邀请码状态筛选">
+            <button type="button" class="filter is-selected" data-filter="current" aria-pressed="true">当前</button>
+            <button type="button" class="filter" data-filter="active" aria-pressed="false">未使用</button>
+            <button type="button" class="filter" data-filter="used" aria-pressed="false">已使用</button>
+            <button type="button" class="filter" data-filter="revoked" aria-pressed="false">已作废</button>
+          </div>
+          <label class="field-control-wrap input input--square field-control-wrap--with-start-icon search-field"><svg class="icon field-control-start-icon" aria-hidden="true"><use href="#icon-search"/></svg><span class="sr-only">搜索邀请码或备注</span><input class="field-control input-control" id="search-input" type="search" placeholder="搜索邀请码或备注" autocomplete="off" spellcheck="false" /></label>
+        </div>
+        <div class="history-error" id="history-error" role="alert" hidden></div>
+        <div class="data-table-scroll" id="table-wrap">
+          <table class="data-table">
+            <thead><tr><th scope="col">邀请码</th><th scope="col">状态</th><th scope="col">生成时间</th><th scope="col" class="actions-column">操作</th></tr></thead>
+            <tbody id="history-rows"><tr id="empty-row"><td colspan="4" class="data-table-empty-cell"><div class="data-table-empty" id="empty-state" role="status">暂无记录</div></td></tr></tbody>
+          </table>
+        </div>
+        <div class="history-pagination"><button class="b b-tertiary b-pill b-lg" id="load-more" type="button" hidden>加载更多</button></div>
+      </section>
+      </div>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <dialog class="confirm-dialog" id="revoke-dialog" aria-labelledby="revoke-title" aria-describedby="revoke-description">
+      <form id="revoke-form">
+        <div class="dialog-heading"><h2 id="revoke-title">作废这个邀请码？</h2><button class="b b-icon" type="button" id="close-dialog" aria-label="关闭对话框"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+        <p id="revoke-description">邀请码 <strong class="mono" id="revoke-code"></strong><span id="revoke-effect"> 作废后将无法使用，此操作不可撤销。</span></p>
+        <p class="dialog-error" id="revoke-error" role="alert" hidden></p>
+        <div class="dialog-actions"><button class="b b-tertiary b-pill b-lg" id="cancel-revoke" type="button" autofocus>取消</button><button class="b b-danger b-pill b-lg" id="confirm-revoke" type="submit">作废</button></div>
+      </form>
+    </dialog>
+    <dialog class="confirm-dialog" id="note-dialog" aria-labelledby="note-title" aria-describedby="note-code">
+      <form id="note-form">
+        <div class="dialog-heading"><h2 id="note-title">邀请码备注</h2><button class="b b-icon" type="button" id="close-note" aria-label="关闭备注"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+        <p class="note-code"><strong class="mono" id="note-code"></strong></p>
+        <label class="field-control-wrap input input--square"><span class="sr-only">备注，最多 200 个字符</span><textarea class="field-control input-control note-input" id="note-input" rows="3" placeholder="例如：发给张三" aria-describedby="note-error"></textarea></label>
+        <p class="dialog-error" id="note-error" role="alert" hidden></p>
+        <div class="dialog-actions"><button class="b b-tertiary b-pill b-lg" id="cancel-note" type="button">取消</button><button class="b b-contrast b-pill b-lg" id="save-note" type="submit">保存</button></div>
+      </form>
+    </dialog>
+    <noscript><p class="noscript">请启用 JavaScript 后使用邀请码页面。</p></noscript>
+  </body>
+</html>

@@ -32,14 +32,14 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/figure-frame.js",
       "upstreamSha256": "b90276c5ac811dc4bc54832b1c21c6a458b667293304e8bc35a1883e60204cd5",
-      "integratedSha256": "d0a06fc3a386258b3910e5e791d7118524d39fadb34439e05ae0bb5b45a107f0",
+      "integratedSha256": "a94f4bc01423c16a8e2db9b06a39bb0df787d7e045266ccb16ac14090e3294ea",
       "reason": "Shared random idle thinking effect; source SVG and original thought-bubble keyframes retained without replacing figures. Shared action recovery retains interrupted work/ask until landing or dizzy recovery completes, without editing figure packs. Compose the automatic Matter activity controller inside the existing opaque figure sandbox; preserve manual flow recovery and idle thinking."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/idle.js",
       "upstreamSha256": null,
-      "integratedSha256": "27a1345863baa47982560e3fcc27b1279b0cf23213415304d192094251336e60",
-      "reason": "Shared idle thought-bubble effect and direct short-click trigger. The persistent thoughtShown preference does not block the effect; the click replaces poke bounce/jump while preserving drag and original figure artwork. Stationary business states and pending action recovery suppress idle/click thinking. Automatic Matter activity, including terminal expressions, suppresses idle and click thinking."
+      "integratedSha256": "5c49250a74df96ae3eaba6de84800d968778f9671876eb269c5ed05c453c6daa",
+      "reason": "Shared idle thought-bubble effect and direct short-click trigger. The persistent thoughtShown preference does not block the effect; the click replaces poke bounce/jump while preserving drag and original figure artwork. Stationary business states and pending action recovery suppress idle/click thinking. Automatic Matter activity, including terminal expressions, suppresses idle and click thinking. A pack may provide an idle thinking view and host-driven duration, replacing the generic artwork for the new Suit Duck without changing other packs."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-thinking/view.js",
@@ -80,7 +80,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "f5f64c29c1e1e94b8c7bcb265923f96bfda6d6cb3cf804ecd7bdd1793a3aecae",
-      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
     },
     {
@@ -110,14 +110,14 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-recovery.js",
       "upstreamSha256": null,
-      "integratedSha256": "c9379b0df19be2833a6237bef7c70b45a0bd7f2f300a6071ea8ac2b159196f56",
-      "reason": "Shared sandbox wrapper preserves interrupted finite work/ask flows through dragging and complete landing recovery; newer commands replace or cancel pending recovery. Automatic Matter activity owns drag recovery using the latest lifecycle; manual recovery remains finite and cannot resurrect an obsolete automatic flow."
+      "integratedSha256": "57e81bcd668584826cbd7ba22153094b360a1a37b8fefab5ff858e058f515f2f",
+      "reason": "Shared sandbox wrapper preserves interrupted finite work/ask flows through dragging and complete landing recovery; newer commands replace or cancel pending recovery. Automatic Matter activity owns drag recovery using the latest lifecycle; manual recovery remains finite and cannot resurrect an obsolete automatic flow. Honor explicitly declared additional recoverable flow vocabulary, used by Suit Duck writing, flag and carry actions."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-activity.js",
       "upstreamSha256": null,
       "reason": "Loop real work/ask flows, finish current animations before switching, recover the latest activity after complete landing, play happy/sad terminal cues once, and allow roaming only when idle without changing figure packs.",
-      "integratedSha256": "b946b1f0471bb7cf9cc6301688c8480119c6bbe0086f955898afb6e48f92a12b"
+      "integratedSha256": "fee0151ea9def9f5fd595483d76a77f9be7344616c1893c69d3b76337754b42c"
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
@@ -134,7 +134,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "ed09d4678bfd087d97ad6626398c25603780c62f96901885285f381e0659ace1",
-      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
     },
     {
@@ -158,7 +158,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "4a12d31bfffe306e2acc5b9af15d70acbe7979f518c6d0988edf6c46a35b1132",
-      "integratedSha256": "db6d027ffcde4f1db05931ce75b59283760bbc534041afd859cfb4caf8167b7b",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Forward every bounded public active task/QA to the compact message queue while preserving primary-first initial ordering, all-task automatic activity, isolated focus and quick-composer behavior."
     },
     {
@@ -200,7 +200,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/dress.js",
       "upstreamSha256": "2016762775edf46da5738806b6ae600184e12090d89c663d906a7cf8c6de54b2",
-      "integratedSha256": "950d0880db97f1ecbf20e4c69f9a76edd05368072021b9538caa7cbb393a136d",
+      "integratedSha256": "235e972fd5cfc86418818d17cf1e49c9ab7ccc17b64c8c0ffe934b320217f893",
       "reason": "Hide Coo and DeepSeek whale choices in the Minduck dress picker while retaining packs, custom figure imports and the selected default duck."
     },
     {
@@ -236,7 +236,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "d80cb5e21dd1734bdb1a75f66e1dd3996393e74f99cba0e8ed862ed9ef6fa8f9",
-      "integratedSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Default the pet renderer halo to off before preferences arrive, preserving explicit glow preferences and the existing independent panel-scaling changes."
     },
     {
@@ -260,7 +260,7 @@
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
-      "integratedSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
       "reason": "Apply saved bubble size live to top and bottom panels and reserve scaled floor space; preserve the independent default-off glow."
     },
     {
@@ -276,34 +276,124 @@
       "reason": "Scale from top-left and constrain panel widths to fit the viewport at up to 150%."
     },
     {
-      "file": "node_modules/cortico-world-desktop-pet/host/content-window.cjs",
-      "upstreamSha256": null,
-      "integratedSha256": "078739fd1d0b6725031e4f4fa229b41d2f9dd1c452b1e5dfaef40bff0dd5824b",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
-    },
-    {
       "file": "node_modules/cortico-world-desktop-pet/host/electron-main.cjs",
       "upstreamSha256": "5b88cfd25e85a4a2be985a366db5bab6be38f260f5a6e540d513dc93278c6353",
-      "integratedSha256": "0e159a45d0bfc29401f7fd2728242af6b11392cbcff0f0bff5f8fc38cdafee88",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "e7ec018f73e8a0d0564407e550710800002cf186a71ce03fba2fb178010ce6bf",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/host/preload.cjs",
       "upstreamSha256": "57038ad911784af5d2f5073e6831691a59b6a8ff44afb39a2c6741576c4374f8",
-      "integratedSha256": "9d740f020e96283c94b1d4468d26aae043c3b464a98f3c4deec9b898ee6453e6",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "57038ad911784af5d2f5073e6831691a59b6a8ff44afb39a2c6741576c4374f8",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/host/overlay.cjs",
       "upstreamSha256": "fe2be2eda6bc758c3d4509bdac7f9db8a29f3f1b69c6adbaed6f1b8e781d7199",
-      "integratedSha256": "e4763f10a1ebeabd1ec1a4691bd760a6b0ad86b4a9f4f478fa1ebd5672ed1fb4",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "fe2be2eda6bc758c3d4509bdac7f9db8a29f3f1b69c6adbaed6f1b8e781d7199",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
     },
     {
       "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
       "upstreamSha256": "13e7b7a83c28ddc82e41d85723efdd88cec5a50949084de051d055f5fd64f1b0",
-      "integratedSha256": "254e526c653e58a5e9367701123ffdbff1930db5df20592de8bd2061c4878bcb",
-      "reason": "On macOS, crop only the native window around the visible pet and panels using a transparent WebContentsView with the original display-sized viewport. Preserve animation, sandbox, input and overlay coordinates; debounce contraction and avoid breathing-driven native resizes. Other platforms retain their original host."
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
+      "reason": "Restore the original transparent BrowserWindow covering the entire display work area at idle and during motion/panel changes. Remove the native content crop, renderer geometry IPC and virtual scene adapter; retain guarded input, display migration, original animation, Matter actions and OBS content placement."
+    },
+    {
+      "file": "build/console/index.js",
+      "upstreamSha256": "104b1517e5a9020ba1e8114a56ad600aeefab9364a24487758e0ebf2f8c5383d",
+      "integratedSha256": "9ebc55c63a814459481abe28f6a680accdccb66ec0d9470047d244382b871560",
+      "reason": "Restore only the walking preference row in Habits, retaining the original segmented control and API. Simplified Chinese offers 多走动 / 多待机 / 不乱动; absent preferences select calm and explicit saved choices remain unchanged."
+    },
+    {
+      "file": "core/seed.ts",
+      "upstreamSha256": "d4c241f078621fea09c2d548e6e0916dd54f24ac6eaa13a42d54d4ffe3244d6c",
+      "integratedSha256": "b9f300e2a38d7ff92ff0cab5bf374be98158a24643f5d3b3c7a0822dbd7784bd",
+      "reason": "Explicitly seed calm (多待机) for fresh profiles. Existing saved walking preferences remain unchanged."
+    },
+    {
+      "file": "core/console-theme.ts",
+      "upstreamSha256": "e28db26be5abb0c0aa1ad1a813a4dde5a46905685870e4912d41ce6ba417ed36",
+      "integratedSha256": "e789d618b40ac077510794835066dce9e8cb16c5ae71ebf02cf8c3c81fdf5389",
+      "reason": "Use a dedicated Matter Web palette for the bundled ducks: dark accent #ff9500, light accent #ff9a2e and pure-black dark settings canvas/sidebar/titlebar. Migrate the former automatic Claude palette on startup, retain explicit independent palettes and saved appearance, and keep figure artwork unchanged."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-activity.js",
+      "upstreamSha256": "b946b1f0471bb7cf9cc6301688c8480119c6bbe0086f955898afb6e48f92a12b",
+      "integratedSha256": "fee0151ea9def9f5fd595483d76a77f9be7344616c1893c69d3b76337754b42c",
+      "reason": "Bundled packs loop only the original work/ask hold section for Matter activities and stow on lifecycle changes; manual finite commands and unsupported third-party packs retain their previous semantics."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/body-host.js",
+      "upstreamSha256": "ea32926615acd854625c0b901260cf2f2dd399ea1c14f8e804745c615fc71217",
+      "integratedSha256": "bd7af386a3df2e172a6135f2b4fcc792215159d93fed40a457cda3f2e5da2944",
+      "reason": "Preserve a bounded boolean authored-animation signal separately from physical movement, so animated idle artwork can use the configured frame rate without suppressing idle thinking."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/pet-app.js",
+      "upstreamSha256": "de04e908b7d0dcead2ffa02cda9556207489d6b51128272b7b6431ef604bfbe2",
+      "integratedSha256": "a1d6e6b86a6b66c3d0324ccf2b5384e19767ca672c3746622eb72a26df15ec2f",
+      "reason": "Use the configured animation frame rate for authored idle clips while preserving resting throttling for static figures and explicit frame-rate preferences."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.js",
+      "upstreamSha256": "950d0880db97f1ecbf20e4c69f9a76edd05368072021b9538caa7cbb393a136d",
+      "integratedSha256": "235e972fd5cfc86418818d17cf1e49c9ab7ccc17b64c8c0ffe934b320217f893",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.html",
+      "upstreamSha256": "0a12a4b62e86fd77baa56d88b3bb2ef87c1ec25143e9dcb65a62384b6a5f5b21",
+      "integratedSha256": "8eab1454b5d7092f45981c0850d10171029cefaef9a2a1dbbc812f1ddf3ab231",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/dress.css",
+      "upstreamSha256": "5ab77e1a777a6a18c3591c42aea88dd581573fb55a7b34211c62084b9cbedaa0",
+      "integratedSha256": "0c677ebfa09f783ea93b789c84a7699e9cd4f6d7f2ea15edc788b3a8780e1635",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/body-host.js",
+      "upstreamSha256": "40dc14449eeb2361f0facf8a52b585c02b26e000377a6efd312c52021d57349c",
+      "integratedSha256": "bd7af386a3df2e172a6135f2b4fcc792215159d93fed40a457cda3f2e5da2944",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/figure-frame.js",
+      "upstreamSha256": "d0a06fc3a386258b3910e5e791d7118524d39fadb34439e05ae0bb5b45a107f0",
+      "integratedSha256": "a94f4bc01423c16a8e2db9b06a39bb0df787d7e045266ccb16ac14090e3294ea",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/i18n/zh.js",
+      "upstreamSha256": "ef12ed7633dfe6b0834895ba19eccd57202ac6e96d13c8683e66339f3f5a2304",
+      "integratedSha256": "65b53548dd222a6b1129ca69fb53b671ebf6ad5f3a79766206a09fd0ad55b5da",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/i18n/en.js",
+      "upstreamSha256": "157ce400f0857228d6318bd5935c33f2797576c2d00cbd9369bb3f73a6bf9170",
+      "integratedSha256": "013b921abcd6d691064bedfd7f52b584b7957cec04312d860e7d74df6bd551aa",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-preview.js",
+      "upstreamSha256": null,
+      "integratedSha256": "f84e3750ae1fc3a319e590d3a88bfe92768b8c7ac843b1bdf2b2fa40ddfefec1",
+      "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "56ff982d6576d4346d469be949233ce8f241efa8ba3db80c7e3a715efb4c99a4",
+      "integratedSha256": "3a8b8b9ad05318bc1c0f8214bc8fb4ae6480fba5101e2a1c4612509b9c33abd2",
+      "reason": "Measure the conversation and its stack before choosing space above the figure or below its controls. Preserve compact message padding at the top edge and limit long questions to the available space."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "3a8b8b9ad05318bc1c0f8214bc8fb4ae6480fba5101e2a1c4612509b9c33abd2",
+      "integratedSha256": "3f583bacb920af25982f826e9bf5b5a020aeefb38e18cef4f44eec8fce322451",
+      "reason": "Center the collapsed handle and expanded bottom controls on the body's standing position through asymmetric and mirrored actions."
     }
   ]
 }

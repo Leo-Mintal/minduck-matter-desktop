@@ -101,7 +101,7 @@ module.exports = async function probeTasks({ companion, data, state, waitFor }) 
     const expectActivity = kind => waitFor(() => evaluate('taskActivityProbe.latest'),
       layout => kind === 'idle' ? layout?.matterActivity === null
         : layout?.matterActivity === kind && (kind === 'work' ? layout.work : kind === 'ask' ? layout.ask
-          : layout.expression === (kind === 'success' ? 'happy' : 'sad')), 'actual sandbox activity ' + kind)
+          : [layout.expression, layout.gesture].includes(kind === 'success' ? 'happy' : 'sad')), 'actual sandbox activity ' + kind)
 
     await expectHidden()
     await expectNotifications(0)

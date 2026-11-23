@@ -58,8 +58,26 @@ async function verifyNewTab({ chrome, state, waitFor, temporary }) {
     await waitFor(state, (value) => value.theme === theme, 'new-tab theme follows Matter')
     await waitFor(() => chrome.executeJavaScript('document.documentElement.dataset.theme'), (value) => value === theme, 'chrome theme')
     await waitFor(() => page.executeJavaScript('document.documentElement.dataset.theme'), (value) => value === theme, 'new-tab theme')
+    const conversationColor = await matter.executeJavaScript(`(() => {
+      const probe = document.createElement('div'); probe.style.background = 'var(--app-canvas)';
+      document.body.append(probe); const color = getComputedStyle(probe).backgroundColor; probe.remove(); return color;
+    })()`)
+    assert.equal(await page.executeJavaScript(`getComputedStyle(document.querySelector('.browser-new-tab')).backgroundColor`),
+      conversationColor, 'new-tab background matches the conversation surface')
     for (const width of [375, 768, 1024, 1440]) await assertViewport(page, width)
     await assertViewport(page, 530)
+    const icon = await waitFor(() => page.executeJavaScript(`(() => {
+      const frame = document.querySelector('.browser-new-tab-symbol'); const image = frame.querySelector('img');
+      const outer = frame.getBoundingClientRect(); const inner = image.getBoundingClientRect();
+      return { loaded: image.complete && image.naturalWidth > 0, width: outer.width, height: outer.height,
+        imageWidth: inner.width, imageHeight: inner.height, insetX: inner.x - outer.x, insetY: inner.y - outer.y,
+        overflow: getComputedStyle(frame).overflow, radius: getComputedStyle(frame).borderRadius,
+        fit: getComputedStyle(image).objectFit };
+    })()`), value => value.loaded && value.imageWidth === 48, 'new-tab icon fills its container')
+    assert.deepEqual(icon, { loaded: true, width: 48, height: 48, imageWidth: 48, imageHeight: 48,
+      insetX: 0, insetY: 0, overflow: 'hidden', radius: '16px', fit: 'cover' })
+    assert.equal(await page.executeJavaScript('document.body.innerText.includes("也可以在上方地址栏输入网址或关键词")'),
+      false, 'new-tab omits the redundant address-bar hint')
     await capture(page, path.join(temporary, `newtab-${theme}.png`))
     await capture(chrome, path.join(temporary, `newtab-chrome-${theme}.png`))
     joinViews(path.join(temporary, `newtab-chrome-${theme}.png`), path.join(temporary, `newtab-${theme}.png`),

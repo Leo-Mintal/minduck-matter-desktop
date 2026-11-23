@@ -1,11 +1,11 @@
 /**
- * The settings window's colours follow the pet's look. Coo wears Cortico's `mint`; each preset of a
+ * Settings use Matter's palette for the bundled ducks, independently of their artwork. Each preset of a
  * figure pack that gives settings-window colours (`presets[].console` in its figure.json, the whale's
  * eight schemes among them) has a console scheme here, written into the deployment's `theme.json` as
- * custom schemes so 「配色方案」 on the 开始 page lists them too. The large surfaces stay neutral grey for every scheme; the brand colour goes to the
- * accent, the timeline's text colours and the charts.
+ * custom schemes so 「配色方案」 on the 开始 page lists them too. Matter uses a black dark-mode
+ * canvas; the brand colour goes to the accent, the timeline's text colours and the charts.
  *
- * The window follows the pet while its scheme is `mint` or one of these. A scheme the person picked
+ * The window follows the pet while its scheme is `mint`, `minduck-matter` or one of these. A scheme the person picked
  * under 「配色方案」, another built-in one or one of their own, stays until they pick one of
  * these again. The schemes are named in the app language when written; an app language change
  * writes them again.
@@ -19,16 +19,16 @@ import { coreText } from './i18n/index.ts';
 /** The scheme Coo wears: the app's default (`web.theme` in companion.ts). */
 export const COO_SCHEME = 'mint';
 /** Minduck's settings default is independent of its ordinary duck figure. */
-export const MINDUCK_SCHEME = 'coo-whale-claude';
+export const MINDUCK_SCHEME = 'minduck-matter';
 
 interface Hues {
   /** accent: buttons, the active page, chart-1 */
   a: string;
   /** accent-2: the second accent and chart-2 */
   a2: string;
-  /** on-accent: text on the accent, at least 4.5:1 against it */
+  /** on-accent: text and icons on the accent */
   on: string;
-  /** the brand colour as text on the sheet, at least 4.5:1: links, the timeline's tool results */
+  /** the brand colour as text on the sheet: links, the timeline's tool results */
   t: string;
   /** chart-3 and chart-4 */
   c3: string;
@@ -59,6 +59,27 @@ const palette = (neutral: ThemePalette, h: Hues): ThemePalette => ({
   'ink-blue': h.t, violet: h.t, 'tool-result': h.t,
   'chart-output': h.a, 'chart-1': h.a, 'chart-2': h.a2, 'chart-3': h.c3, 'chart-4': h.c4,
 });
+
+/** Match Matter Web's colors.css; only the requested dark settings canvas is pure black. */
+const matterScheme: ThemeScheme = {
+  id: MINDUCK_SCHEME, name: 'Matter', note: 'Minduck Matter', custom: true,
+  palettes: {
+    light: palette({
+      ...NEUTRAL_LIGHT,
+      paper: '#f7f7f8', 'paper-2': '#f7f7f8', sheet: '#ffffff', 'sheet-2': '#eff0f2', 'sheet-3': '#e9eaed',
+      ink: '#0d0d0d', 'ink-soft': '#595b63', 'ink-dim': '#73757d',
+      line: '#e7e7e7', 'line-2': '#dfe1e5', 'line-strong': '#9e9e9e',
+      ok: '#27885a', warn: '#a86b00', danger: '#d00e17',
+    }, { a: '#ff9a2e', a2: '#d17b25', on: '#ffffff', t: '#d17b25', c3: '#27885a', c4: '#a86b00' }),
+    dark: palette({
+      ...NEUTRAL_DARK,
+      paper: '#000000', 'paper-2': '#000000', sheet: '#161719', 'sheet-2': '#1d1e21', 'sheet-3': '#262626',
+      ink: '#ffffff', 'ink-soft': '#9fa1a7', 'ink-dim': '#86888e',
+      line: '#1c1c1e', 'line-2': '#252525', 'line-strong': '#55555b',
+      ok: '#4cb782', warn: '#e0a83e', danger: '#f9655c',
+    }, { a: '#ff9500', a2: '#ffa827', on: '#ffffff', t: '#ff9500', c3: '#4cb782', c4: '#e0a83e' }),
+  },
+};
 
 /** A pack's name in `language`, else in its fallback, else the first one given, else `fallback`. */
 const nameIn = (n: Record<string, string> | undefined, fallback: string, language: Language) =>
@@ -94,8 +115,7 @@ function schemeForSkin(skin: { figure?: string; scheme?: string } | undefined, p
   const pack = packs.find((p) => p.id === skin?.figure);
   const presets = pack?.manifest.presets.filter((p) => p.console) ?? [];
   if (!pack || !presets.length) {
-    return packs.some((p) => p.id === 'whale' && p.manifest.presets.some((preset) => preset.id === 'claude' && preset.console))
-      ? MINDUCK_SCHEME : COO_SCHEME;
+    return MINDUCK_SCHEME;
   }
   const picks = String(skin?.scheme ?? '').split('-');
   const shared = (p: (typeof presets)[number]) => pack.manifest.axes.filter((a, i) => p.pick[a.id] === picks[i]).length;
@@ -109,11 +129,11 @@ function schemeForSkin(skin: { figure?: string; scheme?: string } | undefined, p
  */
 export function followPetLook(deployDir: string, skin: { figure?: string; scheme?: string } | undefined, packs: readonly FigurePack[], language: Language = 'zh'): void {
   const state = readDeploymentTheme(deployDir).state ?? { ...defaultStoredTheme(), selectedId: COO_SCHEME };
-  const follows = state.selectedId === COO_SCHEME || isFigureScheme(state.selectedId);
+  const follows = state.selectedId === COO_SCHEME || state.selectedId === MINDUCK_SCHEME || isFigureScheme(state.selectedId);
   const next = normalizeStoredTheme({
     ...state,
     selectedId: follows ? schemeForSkin(skin, packs) : state.selectedId,
-    custom: [...state.custom.filter((s) => !isFigureScheme(s.id)), ...figureSchemes(packs, language)],
+    custom: [...state.custom.filter((s) => s.id !== MINDUCK_SCHEME && !isFigureScheme(s.id)), matterScheme, ...figureSchemes(packs, language)],
   });
   if (JSON.stringify(next) !== JSON.stringify(state)) writeDeploymentTheme(deployDir, next);
 }

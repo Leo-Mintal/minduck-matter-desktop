@@ -24,7 +24,10 @@ async function fileOperation(request, options, signal) {
   if (result.cancelled || result.timed_out) throw new Error('文件操作已取消或超时')
   let parsed
   try { parsed = JSON.parse(result.stdout) } catch { throw new Error('文件工具执行失败：' + result.stderr.slice(0, 1000)) }
-  if (result.exit_code !== 0 || parsed.error) throw new Error(parsed.error || result.stderr)
+  if (result.exit_code !== 0 || parsed.error) throw Object.assign(new Error(parsed.error || result.stderr), {
+    code: parsed.code, path: parsed.path, operation_started: result.command_executed === true,
+    may_have_partial_effects: request.action === 'commit',
+  })
   return parsed
 }
 

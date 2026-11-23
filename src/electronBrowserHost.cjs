@@ -1,5 +1,8 @@
 const { WebContentsView } = require('electron')
+const path = require('node:path')
 const { isBrowserStartURL } = require('./browserStartPage.cjs')
+const { BrowserViewport } = require('./browserViewport.cjs')
+const { BrowserCorner } = require('./browserCorner.cjs')
 const {
   AGENT_BROWSER_PARTITION,
   LOCAL_SANDBOX_PARTITION,
@@ -13,7 +16,6 @@ const DEFAULT_BROWSER_URL = 'https://www.google.com/'
 class ElectronBrowserHost {
   constructor({
     rightPanelView,
-    backgroundColor,
     browserNavigationDisposition,
     isExtensionPage,
     onExternal,
@@ -25,7 +27,6 @@ class ElectronBrowserHost {
     onShortcut,
   }) {
     this.rightPanelView = rightPanelView
-    this.backgroundColor = backgroundColor
     this.browserNavigationDisposition = browserNavigationDisposition
     this.isExtensionPage = isExtensionPage
     this.onExternal = onExternal
@@ -38,7 +39,11 @@ class ElectronBrowserHost {
     this.tabs = new Map()
     this.activeTabId = undefined
     this.panelHidden = false
+    this.panelSuppressed = false
     this.nextTabId = 1
+    this.viewports = new WeakMap()
+    this.frameColor = '#202222'
+    this.corner = undefined
   }
 
   getTabs() {
@@ -58,7 +63,15 @@ class ElectronBrowserHost {
   }
 
   isPanelOpen() {
-    return !this.panelHidden && Boolean(this.getActiveTab())
+    return !this.panelSuppressed && !this.panelHidden && Boolean(this.getActiveTab())
+  }
+
+  setPanelSuppressed(suppressed) {
+    if (this.panelSuppressed === suppressed) return
+    // Route visibility is temporary; keep the user's open/closed preference and tabs.
+    this.panelSuppressed = suppressed
+    this.onLayoutChange()
+    this.onStateChange()
   }
 
   closePanel() {
@@ -73,11 +86,6 @@ class ElectronBrowserHost {
     else this.createBrowserTab()
   }
 
-  setBackgroundColor(color) {
-    this.backgroundColor = color
-    for (const tab of this.tabs.values()) tab.view.setBackgroundColor(color)
-  }
-
   setStartPageTheme(theme) {
     for (const tab of this.browserTabs()) {
       if (!tab.view.webContents.isDestroyed() && isBrowserStartURL(tab.view.webContents.getURL())) {
@@ -85,6 +93,11 @@ class ElectronBrowserHost {
           .catch((error) => console.error('Failed to update new tab theme:', error))
       }
     }
+  }
+
+  setFrameColor(color) {
+    this.frameColor = color
+    this.corner?.setColor(color)
   }
 
   selectTab(tabId) {
@@ -149,6 +162,7 @@ class ElectronBrowserHost {
     if (partition === LOCAL_SANDBOX_PARTITION) getLocalSandboxSession()
     const view = new WebContentsView({
       webPreferences: {
+        preload: path.join(__dirname, 'browser-viewport-preload.cjs'),
         partition,
         contextIsolation: true,
         sandbox: true,
@@ -158,7 +172,18 @@ class ElectronBrowserHost {
         webviewTag: false,
       },
     })
-    view.setBackgroundColor(this.backgroundColor)
+    view.setBackgroundColor('#00000000')
+    this.viewports.set(view, new BrowserViewport(view))
+    view.webContents.on('dom-ready', () => {
+      // A root clip scrolls with the document and cuts off overflowing websites.
+      // Keep host decoration confined to the trusted, non-scrolling start page.
+      if (!isBrowserStartURL(view.webContents.getURL())) return
+      const startPageStyles = `html[data-surface='newtab'] .browser-new-tab-symbol { border: 0; overflow: hidden; }
+        html[data-surface='newtab'] .browser-new-tab-symbol > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+        html[data-surface='newtab'] .browser-new-tab-hint { display: none; }`
+      void view.webContents.insertCSS(startPageStyles)
+        .catch(error => console.error('Failed to apply browser page decoration:', error))
+    })
     view.setVisible(false)
     view.webContents.on('will-attach-webview', (event) => event.preventDefault())
     if (this.onShortcut) view.webContents.on('before-input-event', this.onShortcut)
@@ -402,15 +427,24 @@ class ElectronBrowserHost {
     const activeTab = this.getActiveTab()
     for (const tab of this.tabs.values()) {
       if (tab.id === activeTab?.id && tab.hasPainted !== false && layout.browser && layout.panel) {
-        tab.view.setBounds(localBounds(layout.browser, layout.panel))
+        const bounds = localBounds(layout.browser, layout.panel)
+        tab.view.setBounds(bounds)
+        this.viewports.get(tab.view)?.resize(bounds)
         setViewVisible(tab.view, true)
       } else {
         setViewVisible(tab.view, false)
       }
     }
+    if (activeTab?.hasPainted !== false && layout.browser && layout.panel && activeTab) {
+      this.corner ??= new BrowserCorner(this.rightPanelView, this.frameColor)
+      this.corner.layout(activeTab.view, localBounds(layout.browser, layout.panel))
+    } else {
+      this.corner?.layout()
+    }
   }
 
   dispose() {
+    this.corner?.dispose()
     for (const tab of this.getTabs()) {
       this.onTabForgotten(tab)
       this.rightPanelView.removeChildView(tab.view)

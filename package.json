@@ -1,6 +1,6 @@
 {
   "name": "minduck-matter-desktop",
-  "version": "0.1.5",
+  "version": "0.1.16",
   "private": true,
   "description": "Electron desktop app bundling the shared Matter web frontend.",
   "main": "src/main.cjs",
@@ -12,17 +12,20 @@
     "icon": "scripts/build-icon.sh",
     "build:web": "node scripts/build-web.cjs",
     "build:companion-qa": "node scripts/build-companion-qa.cjs",
-    "prestart": "pnpm run check:companion && pnpm run build:web",
+    "build:desktop-access": "node scripts/build-desktop-access.cjs",
+    "prestart": "pnpm run check:companion && pnpm run build:desktop-access && pnpm run build:web",
     "start": "electron .",
     "test": "node --test scripts/*.test.cjs",
     "test:local-exec": "node scripts/local-exec-smoke.cjs",
     "test:browser-device": "node scripts/browser-device-smoke.cjs",
     "test:bundled-frontend": "node scripts/bundled-frontend-smoke.cjs",
+    "test:desktop-access": "pnpm run build:desktop-access && node scripts/desktop-access-smoke.cjs",
     "test:extension": "electron scripts/matter-browser-extension-smoke.cjs",
     "test:extension-bridge": "electron scripts/extension-bridge-probe.cjs",
     "test:extension-compatibility": "electron scripts/matter-browser-extension-compatibility-smoke.cjs",
     "dist:mac": "scripts/package-macos.sh",
     "release:mac": "node scripts/release-macos.cjs",
+    "upload:mac": "node scripts/release-macos.cjs --upload-only",
     "chromium:download": "bash minduck-matter-chromium/scripts/download-chromium-macos.sh",
     "chromium:start": "node minduck-matter-chromium/scripts/launch.cjs",
     "chromium:smoke": "node minduck-matter-chromium/scripts/extension-smoke.cjs",
@@ -30,6 +33,8 @@
     "check:companion": "node scripts/check-companion.cjs",
     "test:companion": "node scripts/companion-smoke.cjs",
     "test:browser-chrome": "electron scripts/browser-chrome-smoke.cjs",
+    "test:desktop-update": "electron scripts/desktop-update-smoke.cjs",
+    "test:permission-settings": "electron scripts/browser-chrome-smoke.cjs --permission-settings-only",
     "test:matter-service-settings": "electron scripts/matter-service-settings-smoke.cjs"
   },
   "devDependencies": {
@@ -39,6 +44,10 @@
   "build": {
     "appId": "com.minduck.matter",
     "productName": "Minduck Matter",
+    "publish": {
+      "provider": "generic",
+      "url": "https://matter-desktop.yogeeai.com/download/"
+    },
     "directories": {
       "output": "release"
     },
@@ -49,6 +58,10 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "build/desktop-access/desktop-access.node",
+        "to": "native/desktop-access.node"
+      },
       {
         "from": "build/AppIcon.icns",
         "to": "AppIcon.icns"
@@ -99,6 +112,12 @@
           "arch": [
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity",
@@ -108,15 +127,21 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "extendInfo": {
+        "UIDesignRequiresCompatibility": true,
         "CFBundleIconFile": "AppIcon",
         "CFBundleIconName": "AppIcon",
         "NSMicrophoneUsageDescription": "启用桌宠语音输入时使用麦克风，在本机识别语音。",
-        "NSDesktopFolderUsageDescription": "按你在 Matter 中提出的任务访问桌面文件；授权范围内的命令和文件操作可自动执行。",
-        "NSDocumentsFolderUsageDescription": "按你在 Matter 中提出的任务访问文稿文件；授权范围内的命令和文件操作可自动执行。",
-        "NSDownloadsFolderUsageDescription": "按你在 Matter 中提出的任务访问下载文件；授权范围内的命令和文件操作可自动执行。",
+        "NSPhotoLibraryUsageDescription": "Minduck Matter 需要访问你的照片图库，以完成你发起的照片查找、统计和文件处理任务。相关文件内容和任务结果可能回传你配置的 Matter 服务。",
+        "NSDesktopFolderUsageDescription": "Minduck 需要访问桌面文件，以完成你发起的读取、整理和编辑任务。任务结果会回传你配置的 Matter 服务。",
+        "NSDocumentsFolderUsageDescription": "Minduck 需要访问文稿文件，以完成你发起的读取、整理和编辑任务。任务结果会回传你配置的 Matter 服务。",
+        "NSDownloadsFolderUsageDescription": "Minduck 需要访问下载文件，以完成你发起的读取、整理和编辑任务。任务结果会回传你配置的 Matter 服务。",
+        "NSFileProviderDomainUsageDescription": "Minduck 需要访问你指定的 iCloud 云盘或其他云盘文件，以完成当前任务。文件内容和任务结果可能回传你配置的 Matter 服务。",
         "NSAppleEventsUsageDescription": "在你授权桌宠操作电脑时切换应用。"
       }
     },
     "afterPack": "scripts/verify-companion-package.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
   }
 }

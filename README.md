@@ -120,7 +120,7 @@ pnpm dist:mac
 
 此命令会从 Web 仓库远端拉取最新 `dev` 分支到临时目录，按锁定依赖构建共享 Web、生成图标并打包；
 不会使用兄弟 Web 工作区当前分支或未提交的改动。输出为
-`release/MinduckMatter-<package.json 中的 version>-arm64.dmg`，对应 `.blockmap` 和 `.sha256` 保存在 `release/metadata/`。发布记录 JSON 也归入 `metadata/`，已替代的旧包及其辅助文件归入 `release/archive/<版本>/`。
+`release/<version>/MinduckMatter-<version>-arm64.dmg` 和同目录的 `.zip`，其中 `<version>` 来自 `package.json`。ZIP 用于应用内更新；该版本的更新清单 `latest-mac.yml`、`.blockmap`、`.sha256`、发布报告和验证记录统一保存在 `release/<version>/metadata/`。独立测试构建放入同版本的 `tests/<构建名>/`，历史归档保留在同版本的 `archive/`；版本之间不共享或覆盖更新清单。
 默认会使用 Developer ID 签名整个 Electron 应用，提交最终 DMG 至 Apple 公证服务，等待结果并装订票据。
 打包机的“登录”钥匙串必须已安装 `Developer ID Application` 证书，且 Apple 公证凭据须已通过
 `xcrun notarytool store-credentials` 保存为 `MinduckNotary`。默认不会读取或保存 `.p8` 文件；凭据从 macOS 钥匙串中名为
@@ -139,26 +139,24 @@ Apple 证书、App Store Connect API Key（`.p8`）、钥匙串 profile、公证
 
 ### 检查客户端更新
 
-macOS 应用菜单 **Minduck Matter → 检查更新…** 由桌面主进程读取固定的发布清单
-`https://matter-desktop.yogeeai.com/download/latest.json`。发现更高版本时，客户端会用系统默认浏览器
-打开 `https://matter-desktop.yogeeai.com/download/MinduckMatter-<version>-arm64.dmg`；用户下载后将应用拖入“应用程序”覆盖即可。它不依赖 Matter Web 或业务后端，
-也不会自动下载安装或替换正在运行的应用。
+macOS 应用菜单 **Minduck Matter → 检查更新…** 和侧栏更新按钮使用 `electron-updater`，读取固定 HTTPS 下载目录下的 `latest-mac.yml`。发现新版后先提示，点击“下载并重启更新”才下载；侧栏显示百分比，校验完成后交给系统更新组件验证签名，再停止桌宠并重启安装。正在执行任务时会再次确认，选择“稍后”后可点击更新按钮继续安装。失败可重试，不打开浏览器。此流程仅用于已安装在“应用程序”中的 Apple Silicon 正式客户端，开发预览不安装更新。
 
-清单和 DMG 当前由独立静态下载服务发布。客户端仅接受下载目录和文件名严格匹配的 HTTPS 链接，
-以及精确匹配版本的旧 `http://124.70.149.30:8091/MinduckMatter-<version>-arm64.dmg` 兼容值；旧值在新客户端中转换为上述 HTTPS 地址，且忽略相同或更低版本。每次发布必须先上传
-DMG，再原子替换 `latest.json`，详见 [macOS 客户端打包与直发手册](docs/macos-distribution.md)。
-发布清单保留旧地址字段以兼容已安装客户端；本次源码切换从下一版安装包生效，现有 `0.1.5` 不重打包。
+更新时无需先卸载或清除登录数据。按用户要求不创建或保留回滚备份（包括额外备份 ZIP）；更新下载的 ZIP 和系统安装暂存文件属于更新流程，不是长期旧版本备份。首版关闭增量下载及其旧 ZIP 缓存。临时打包应用在验证后清理，正常发布安装包保留，详见 [安装与清理规范](docs/macos-distribution.md#安装更新与避免重复应用入口)。
 
-日常发布使用一个命令，并显式传入要发布的版本号：
+发布服务需同时提供 DMG、ZIP、`latest-mac.yml` 和兼容旧客户端的 `latest.json`。新客户端只接受与清单版本精确匹配的 arm64 文件名及 SHA-512/大小信息；HTTPS 下载目录固定，禁止降级和预发布更新。每次发布先上传并校验全部文件，再切换两个清单，详见 [macOS 客户端打包与直发手册](docs/macos-distribution.md)。
+
+此功能从下一份包含更新器的安装包生效；当前已安装的 0.1.7 仍需手动升级一次。旧客户端继续读取 `latest.json` 并打开 DMG 下载链接，因此保留其旧地址兼容字段。本次源码接入没有替换安装版或上传服务器。
+
+在桌面项目根目录运行以下命令即可发布新版。脚本比较本地和线上的版本号，取较高者，将最后一位加一。
 
 ```bash
-pnpm release:mac 0.1.4
+pnpm release:mac
 ```
 
 该命令先读取服务器当前版本，拒绝降级或覆盖已发布版本，并在打包前建立服务器 SSH 连接；然后检查 `MinduckNotary`、运行单测、更新
-`package.json`、从远端 Web `dev` 打包并公证、计算 DMG SHA-256、上传临时文件、在服务器复核 SHA-256，
-最后原子替换 `latest.json` 并从公网回读验证。它不重启 Caddy 或其他服务器容器。若打包或公证失败，
-不会上传文件或变更服务器清单；本地版本号会保留，便于修复凭据后用同一个版本重试。
+`package.json`、从远端 Web `dev` 打包并公证、校验 DMG/ZIP 和最终更新清单、上传临时文件、在服务器复核 SHA-256，
+最后将固定下载地址 `https://matter-desktop.yogeeai.com/download` 指向新版，更新两份清单并从公网验证。
+需要指定版本或重试上次未发出的版本时，使用 `pnpm release:mac <版本号>`。已经打包并公证的安装包可以直接用 `pnpm upload:mac` 按原版本上传。
 
 首次可以使用 SSH 密码，命令会在开始时询问一次，并在打包、上传和清单切换间复用连接。长期建议配置服务器 SSH 公钥，之后全程无交互。
 
@@ -169,6 +167,7 @@ pnpm run build:web
 pnpm test
 pnpm run test:bundled-frontend
 pnpm run test:browser-chrome
+pnpm run test:desktop-update
 ```
 
 `web-dist/` 是生成目录，不维护前端源码，已从 Git 排除；它会被包含在 Electron 的
@@ -218,7 +217,7 @@ MINDUCK_MATTER_ORIGIN=http://localhost:8080 pnpm start
 
 也可以在 `Minduck Matter > 配置 Matter 服务地址...` 中配置其他 HTTPS 后端。
 环境变量优先于保存设置；HTTP 仅允许回环地址及内置测试服
-`http://192.168.11.70:3001`。本地 API 服务无需提供前端页面。
+`http://192.168.11.70:3001`、`http://192.168.11.70:8080`，其他地址或端口仍需 HTTPS。本地 API 服务无需提供前端页面。
 
 ## Other commands
 
@@ -231,7 +230,7 @@ pnpm chromium:start
 pnpm chromium:dist:mac
 ```
 
-The resulting Apple Silicon DMG is written to `release/`; it contains Electron,
+The resulting Electron Apple Silicon DMG is written to `release/<version>/`; it contains Electron,
 the shared Web build, the independent Coopanion runtime, and both unpacked extension directories,
 but not the Matter business service or a second Chromium runtime. Recipients only
 need to install the application and have network access to the configured Matter
@@ -243,9 +242,10 @@ the configured Matter deployment. The existing unavailable page is used if the
 local frontend itself cannot load.
 `scripts/package-macos.sh` is the manually runnable equivalent of `pnpm dist:mac`;
 it checks the local toolchain, rebuilds the Web frontend and icon, and prints the
-DMG SHA-256 after packaging. Block maps and checksum files are stored in
-`release/metadata/`; superseded installers and their sidecars are kept under
-`release/archive/<version>/`.
+DMG SHA-256 after packaging. DMG/ZIP files are stored in `release/<version>/`,
+with that version's manifests, block maps, checksums and verification records in
+`release/<version>/metadata/`. Distinct test builds and historical archives stay
+within the same version directory, under `tests/<build-name>/` and `archive/`.
 右侧面板只保留浏览器：标签页、地址栏、导航、分隔拖拽和 Matter Browser 扩展控制桥。
 独立 Local Agent 会话、模型配置、会话流、操作确认、本机文件/Bash 工具和 Go Gateway
 已经移除，启动和打包不再依赖 Go。Matter 后续通过保留的扩展与浏览器控制桥接入，
@@ -257,17 +257,19 @@ The standalone prototype package remains under
 
 ## Matter 本机执行（macOS，使用系统权限）
 
-客户端启动即检查 macOS 完全磁盘访问。缺少权限时显示一次原生提示，点击“打开系统设置”进入“隐私与安全性 → 完全磁盘访问”，由用户为 Minduck Matter 开启；没有独立的本机执行设置页或菜单项。系统已授权时不重复提示，登录 Matter 后自动连接本机 Shell 和文件工具。后端仍需迁移 `000109`、`000110` 和 `MATTER_LOCAL_EXEC=on`。设备通过既有 API 以 `kind=desktop` 配对，令牌使用 safeStorage 加密保存。
+登录后，本机 Shell 与文件工具通过内置客户端运行时连接当前账号，不创建扩展设备记录，不需要再次配对。后端需开启 `MATTER_LOCAL_EXEC=on`，并与客户端协商 `localPermissions:{version:1,mode:"macos-native"}`；旧版本不执行不兼容的权限请求。
 
-权限以实际系统探测为准，不以旧页面的“已看过”标记或保存的开关为准。相同 bundle ID、签名身份与用户数据目录的升级/覆盖安装通常沿用系统授权，不因版本变化重新请求；macOS 可能要求开启权限后重启应用。卸载应用不保证清除系统 TCC 记录，撤销权限请在系统设置中关闭。客户端不重置 TCC，也不能自行授予完全磁盘访问。缺少权限时每次启动最多提示一次；撤销后停止连接和执行，重新授予后自动恢复。
+当前执行策略为 `native-file-access-v1`：默认工作目录是用户主目录，显式 cwd/path 使用指定位置，不再按会话创建文件夹；读取、查看、打开及权限检查不创建任务产物目录，只有实际写入才创建所需父目录。启动时不检查完全磁盘访问或自动打开系统设置。显式路径访问前，Electron 主进程执行最小真实访问，由 macOS 决定是否显示原生“允许／不允许”窗口。权限工具必须指定具体 `path`，可选 `reason`；不执行任务命令。系统记忆选择，应用不能强制重复弹窗、自行授权或重置 TCC。iCloud／其他云盘也按系统资源申请。
 
-当前执行策略为 `system-access-v1`：系统授权后可访问当前系统用户可读写的目录，不再逐目录选择。每个会话仍默认使用 `~/Matter/<清理后的标题>-<完整会话ID>/`；可通过显式 cwd/path 指定项目或标准目录（如 `cwd:"~/Desktop", command:"ls -la"`）。敏感凭据、Keychains、Application Support 与 userData 仍禁止读写，包括符号链接及 Shell 访问。旧设置标记不会被当作系统授权。切换账号/服务源会停止旧连接，仅当前登录账号可重新配对；远程 Matter 没有新增执行 IPC 或 preload。
+预检被拒绝时停止相关任务，返回“未获得访问权限”，不把它解释为系统不支持。同一 run 不重复申请同一拒绝资源。普通 `EPERM/EACCES` 无法单独证明用户点击了“不允许”，因此保留未知拒绝来源；执行后失败保留可能的部分效果，不自动重放。手动完全磁盘访问菜单仅用于需要它的特定任务。
 
-Shell 与文件 worker 继续经过 macOS `/usr/bin/sandbox-exec`，缺失时停用，不退回裸执行。写入和读取均排除敏感目录，命令只继承登录 PATH 和白名单环境，临时文件/缓存隔离。每次命令默认无网络，仅显式声明 `needs_network=true` 时开放网络，不再有独立联网开关。命令输出与文件内容回传服务端；文件写入保留内容摘要冲突检查并返回 diff。自动模式仍依赖当前账号与服务端的可信性。
+`.netrc`、`.npmrc`、`.pypirc`、Keychains、Application Support、Messages、Mail 和 Matter userData 改为按当前任务原生确认具体路径及读取／修改范围；授权仅保留在内存，按账号、会话和 run 隔离，文件工具与 Shell 共用同一授权约束。普通目录不增加 Matter 确认；`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker` 及原有系统配置排除仍保留。首次启动会用 `rmdir` 清理旧根目录内已记录或符合旧命名规则的空会话目录（含空的 `.matter-cache`）；含文件、非空缓存、符号链接和无法确认归属的目录保留，不迁移或删除产物。切换账号／服务源会停止旧连接，迟到授权不能启动旧任务；远程页面没有新增执行 IPC。
+
+Shell 与文件 worker 继续经过 macOS `/usr/bin/sandbox-exec`，缺失时停用。命令使用清理后的继承 PATH 与标准工具目录，不加载登录 Shell 启动脚本；环境白名单和独立临时／缓存目录保留。每次命令默认无网络，仅显式声明 `needs_network=true` 时开放网络。系统允许不覆盖沙箱、ACL 或系统完整性限制。命令输出与文件内容回传服务端；文件写入保留内容摘要冲突检查并返回 diff。
 
 文件工具仅支持整个文件不超过 256KB 的 UTF-8 文本；覆盖前需同一会话读取，内容哈希变化时要求重读。Shell 上限 2 分钟，stdout/stderr 各 1MB；退出、取消、超时及断线清理进程组。无 PTY、持续 stdin、后台任务、Windows/Linux 或团队成员执行支持。普通平台/团队聊天可用，组队及公开/触发/自定义 API 不挂载。
 
-实现位于 `src/local-exec/`。`main.cjs` 连接系统权限提示与生命周期，默认 session 请求头与内置前端转发共用精确源、账号、就绪设备策略；`file-worker.cjs` 打包到 ASAR 外供受沙箱保护的 Electron Node 子进程调用。未替换本机安装版、未部署后端，真实模型全栈验收尚待进行。
+实现位于 `src/local-exec/`。`main.cjs` 连接原生访问预检与生命周期，默认 session 请求头与内置前端转发共用精确源、账号、就绪设备策略；`file-worker.cjs` 打包到 ASAR 外供受沙箱保护的 Electron Node 子进程调用。正式安装版不随测试客户端热更；真实系统弹窗由用户亲自验收。
 
 ```bash
 pnpm test                 # 含真实 macOS Seatbelt 与 WebSocket 回归

@@ -84,6 +84,7 @@ test('a fresh profile explicitly opens the desktop window with the default duck'
     assert.equal(config.worlds['desktop-pet'].enabled, true)
     assert.equal(config.worlds['desktop-pet'].window.enabled, true)
     assert.equal(config.worlds['desktop-pet'].skin.figure, 'minduck-duck')
+    assert.equal(config.worlds['desktop-pet'].roam, 'calm')
     assert.equal(config.worlds['desktop-pet'].asr.enabled, false)
     assert.equal(config.companion.telemetry, false)
   } finally { fs.rmSync(home, { recursive: true, force: true }) }
@@ -97,6 +98,7 @@ test('seeding again preserves explicit existing visibility and character choices
     config.worlds['desktop-pet'].enabled = false
     config.worlds['desktop-pet'].window = { enabled: false, scale: 1.25 }
     config.worlds['desktop-pet'].skin.figure = 'minduck-suit-duck'
+    config.worlds['desktop-pet'].roam = 'free'
     fs.writeFileSync(file, JSON.stringify(config))
     seedProfile(home)
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), config)

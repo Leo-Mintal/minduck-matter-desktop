@@ -7,10 +7,13 @@ function inside(root, filename) {
   return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative))
 }
 
-function sensitivePaths(home = os.homedir(), userData) {
-  return ['.ssh', '.aws', '.gnupg', '.kube', '.docker', '.netrc', '.npmrc', '.pypirc',
-    'Library/Keychains', 'Library/Application Support', 'Library/Messages', 'Library/Mail']
-    .map(value => path.join(home, value)).concat(userData ? [userData] : [])
+function sensitivePaths(home = os.homedir()) {
+  return ['.ssh', '.aws', '.gnupg', '.kube', '.docker'].map(value => path.join(home, value))
+}
+
+function approvalPaths(home = os.homedir(), userData) {
+  return ['.netrc', '.npmrc', '.pypirc', 'Library/Keychains', 'Library/Application Support',
+    'Library/Messages', 'Library/Mail'].map(value => path.join(home, value)).concat(userData ? [userData] : [])
 }
 
 async function canonical(filename) {
@@ -25,34 +28,23 @@ async function canonical(filename) {
   }
 }
 
-function createWorkspaces({ store, userData, home = os.homedir(), systemAccess = false }) {
-  const denied = sensitivePaths(home, userData)
+function createWorkspaces({ store, home = os.homedir(), systemAccess = false }) {
+  const denied = sensitivePaths(home)
   const forbidden = filename => denied.some(root => inside(root, filename))
   async function validateRoot(selected = store.get().root) {
     const root = await canonical(selected)
     if (root !== path.resolve(selected)) throw new Error('根目录已被符号链接替换，请重新选择')
     if (forbidden(root) || inside(root, home)) throw new Error('工作目录范围过大或位于敏感目录')
-    await fs.mkdir(root, { recursive: true, mode: 0o700 })
     return root
   }
-  async function folder(conversationId, title = '') {
+  async function folder(conversationId) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(conversationId)) throw new Error('会话标识无效')
-    const root = await validateRoot()
-    let name = store.get().workspaces[conversationId]
-    if (!name) {
-      const safeTitle = String(title).normalize('NFKC').replace(/[^\p{L}\p{N}_-]/gu, '-').slice(0, 50) || '会话'
-      name = `${safeTitle}-${conversationId}`
-      store.update({ workspaces: { ...store.get().workspaces, [conversationId]: name } })
-    }
-    if (path.basename(name) !== name) throw new Error('工作目录映射无效')
-    const directory = await canonical(path.join(root, name))
-    if (directory !== path.join(root, name) || forbidden(directory)) throw new Error('工作目录越界或被符号链接替换')
-    await fs.mkdir(directory, { recursive: true, mode: 0o700 })
-    return directory
+    // Resolving or inspecting a path must never create a conversation directory.
+    return systemAccess ? home : validateRoot()
   }
   async function roots(conversationId, title) {
     const workspace = await folder(conversationId, title)
-    // Only the main-process controller opts in after checking actual OS permission.
+    // Restricted application data is separately gated by task-scoped approval.
     if (systemAccess) return [workspace, path.parse(home).root]
     const saved = store.get().grants[conversationId] || []
     const grants = await Promise.all(saved.map(canonical))
@@ -77,4 +69,4 @@ function createWorkspaces({ store, userData, home = os.homedir(), systemAccess =
   return { folder, roots, resolve, grant, denied, validateRoot }
 }
 
-module.exports = { canonical, inside, sensitivePaths, createWorkspaces }
+module.exports = { canonical, inside, sensitivePaths, approvalPaths, createWorkspaces }

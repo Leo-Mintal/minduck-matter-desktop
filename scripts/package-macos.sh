@@ -5,8 +5,8 @@
 # Run from the project root or from any directory:
 #   bash scripts/package-macos.sh
 #
-# The build writes the final DMG to release/ and its block map and checksum
-# to release/metadata/. Electron
+# The build writes the final DMG/ZIP to release/<version>/ and update
+# metadata/checksums to release/<version>/metadata/. Electron
 # Builder uses a temporary output directory so intermediate app bundles do not
 # remain in the repository. It builds a fresh shallow checkout of the Web
 # repository's remote dev branch, so a release never consumes the source
@@ -18,9 +18,11 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 project_dir="$(cd "$script_dir/.." && pwd)"
-release_dir="$project_dir/release"
-metadata_dir="$release_dir/metadata"
 stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/minduck-matter-build.XXXXXX")"
+cleanup() {
+  rm -rf "$stage_dir"
+}
+trap cleanup EXIT
 electron_dist="$project_dir/node_modules/electron/dist"
 default_web_source="$project_dir/../minduck-matter-web-prod"
 web_dev_ref="dev"
@@ -57,9 +59,32 @@ if [[ ! -x "$project_dir/node_modules/.bin/electron-builder" || ! -d "$electron_
 fi
 
 version="$(node -p "require('$project_dir/package.json').version")"
+node -e 'require(process.argv[1]).parseVersion(process.argv[2])' "$project_dir/src/updateCheck.cjs" "$version"
+release_dir="$project_dir/release/$version"
+metadata_dir="$release_dir/metadata"
+activation_profile="${MINDUCK_DESKTOP_ACCESS_PROFILE:-}"
+if [[ "${MINDUCK_DESKTOP_ACCESS_REQUIRED:-0}" == "1" && -z "$activation_profile" ]]; then
+  echo "Desktop activation release requires MINDUCK_DESKTOP_ACCESS_PROFILE (macOS Developer ID profile)." >&2
+  exit 1
+fi
 artifact="MinduckMatter-${version}-arm64.dmg"
+update_archive="MinduckMatter-${version}-arm64.zip"
 sign_release="${MINDUCK_MACOS_SIGN:-1}"
+if [[ -n "$activation_profile" && "$sign_release" != "1" ]]; then
+  echo "A desktop activation provisioning profile requires a signed macOS build." >&2
+  exit 1
+fi
 notary_profile="${MINDUCK_NOTARY_PROFILE:-MinduckNotary}"
+notary_args=(--keychain-profile "$notary_profile")
+notary_env=("APPLE_KEYCHAIN_PROFILE=$notary_profile")
+if [[ -n "${MINDUCK_NOTARY_KEY_FILE:-}${MINDUCK_NOTARY_KEY_ID:-}${MINDUCK_NOTARY_ISSUER:-}" ]]; then
+  if [[ ! -f "${MINDUCK_NOTARY_KEY_FILE:-}" || -z "${MINDUCK_NOTARY_KEY_ID:-}" || -z "${MINDUCK_NOTARY_ISSUER:-}" ]]; then
+    echo "Direct notarization requires MINDUCK_NOTARY_KEY_FILE, MINDUCK_NOTARY_KEY_ID and MINDUCK_NOTARY_ISSUER." >&2
+    exit 1
+  fi
+  notary_args=(--key "$MINDUCK_NOTARY_KEY_FILE" --key-id "$MINDUCK_NOTARY_KEY_ID" --issuer "$MINDUCK_NOTARY_ISSUER")
+  notary_env=("APPLE_API_KEY=$MINDUCK_NOTARY_KEY_FILE" "APPLE_API_KEY_ID=$MINDUCK_NOTARY_KEY_ID" "APPLE_API_ISSUER=$MINDUCK_NOTARY_ISSUER")
+fi
 identity=""
 
 case "$sign_release" in
@@ -83,9 +108,8 @@ case "$sign_release" in
       exit 1
     fi
 
-    if ! xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null; then
-      echo "Could not validate notarization profile '$notary_profile'." >&2
-      echo "Create it with: xcrun notarytool store-credentials \"$notary_profile\" ..." >&2
+    if ! xcrun notarytool history "${notary_args[@]}" >/dev/null; then
+      echo "Could not validate notarization credentials. Configure the Keychain profile or explicit MINDUCK_NOTARY_KEY_* credentials." >&2
       exit 1
     fi
     ;;
@@ -94,11 +118,6 @@ case "$sign_release" in
     exit 1
     ;;
 esac
-
-cleanup() {
-  rm -rf "$stage_dir"
-}
-trap cleanup EXIT
 
 mkdir -p "$metadata_dir"
 
@@ -173,17 +192,28 @@ fi
 # Regenerate the application icon used by the macOS bundle.
 "${pnpm_cmd[@]}" run icon
 
+# N-API uses only system frameworks; private activation keys stay in the host's
+# data-protection Keychain, never in an auxiliary executable or a JSON file.
+node scripts/build-desktop-access.cjs
+
 # Package the Electron app as an Apple Silicon DMG. Keep the output in the
 # temporary staging directory until both final artifacts are ready to move.
 builder_args=(
   --mac
   dmg
+  zip
   --arm64
   --publish
   never
   "--config.directories.output=$stage_dir"
   "--config.electronDist=$electron_dist"
 )
+
+if [[ -n "$activation_profile" ]]; then
+  activation_entitlements="$stage_dir/desktop-access-entitlements.plist"
+  node scripts/prepare-desktop-access-profile.cjs "$activation_profile" "$activation_entitlements"
+  builder_args+=("--config.mac.provisioningProfile=$activation_profile" "--config.mac.entitlements=$activation_entitlements")
+fi
 
 if [[ "$sign_release" == "1" ]]; then
   # electron-builder 26 identifies the certificate type itself and expects
@@ -196,17 +226,17 @@ fi
 
 if [[ "$sign_release" == "1" ]]; then
   # Let electron-builder notarize and staple the app before constructing the DMG.
-  # Use the same validated Keychain profile rather than unrelated Apple env credentials.
+  # Use only the explicitly validated credentials, never inherited Apple credentials.
   env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID \
     -u APPLE_API_KEY -u APPLE_API_KEY_ID -u APPLE_API_ISSUER -u APPLE_KEYCHAIN \
-    APPLE_KEYCHAIN_PROFILE="$notary_profile" \
+    -u APPLE_KEYCHAIN_PROFILE "${notary_env[@]}" \
     "${pnpm_cmd[@]}" exec electron-builder "${builder_args[@]}"
 else
   "${pnpm_cmd[@]}" exec electron-builder "${builder_args[@]}"
 fi
 
-if [[ ! -f "$stage_dir/$artifact" || ! -f "$stage_dir/$artifact.blockmap" ]]; then
-  echo "Electron Builder did not produce the expected DMG artifacts." >&2
+if [[ ! -f "$stage_dir/$artifact" || ! -f "$stage_dir/$artifact.blockmap" || ! -f "$stage_dir/$update_archive" || ! -f "$stage_dir/latest-mac.yml" ]]; then
+  echo "Electron Builder did not produce the expected DMG/ZIP/update artifacts." >&2
   exit 1
 fi
 
@@ -224,7 +254,7 @@ if [[ "$sign_release" == "1" ]]; then
   fi
   codesign --force --timestamp --sign "$identity" "$stage_dir/$artifact"
   codesign --verify --strict --verbose=2 "$stage_dir/$artifact"
-  xcrun notarytool submit "$stage_dir/$artifact" --keychain-profile "$notary_profile" --wait
+  xcrun notarytool submit "$stage_dir/$artifact" "${notary_args[@]}" --wait
   xcrun stapler staple "$stage_dir/$artifact"
   xcrun stapler validate "$stage_dir/$artifact"
 
@@ -245,8 +275,15 @@ buildBlockMap(file, 'gzip', `${file}.blockmap`).then(({ size }) => {
 NODE
 fi
 
+node "$script_dir/macos-update-artifacts.cjs" "$stage_dir" "$version"
+
 mv "$stage_dir/$artifact" "$release_dir/$artifact"
 mv "$stage_dir/$artifact.blockmap" "$metadata_dir/$artifact.blockmap"
+mv "$stage_dir/$update_archive" "$release_dir/$update_archive"
+mv "$stage_dir/latest-mac.yml" "$metadata_dir/latest-mac.yml"
+if [[ -f "$stage_dir/$update_archive.blockmap" ]]; then
+  mv "$stage_dir/$update_archive.blockmap" "$metadata_dir/$update_archive.blockmap"
+fi
 
 echo
 echo "DMG created: $release_dir/$artifact"
@@ -255,8 +292,18 @@ du -h "$release_dir/$artifact"
   cd "$release_dir"
   shasum -a 256 "$artifact"
 ) | tee "$metadata_dir/$artifact.sha256"
+(
+  cd "$release_dir"
+  shasum -a 256 "$update_archive"
+) | tee "$metadata_dir/$update_archive.sha256"
+echo "Update ZIP created: $release_dir/$update_archive"
+echo "Update manifest: $metadata_dir/latest-mac.yml"
 
 if [[ "$sign_release" == "1" ]]; then
   echo "Signed and notarized with: $identity"
-  echo "Notarization profile: $notary_profile"
+  if [[ -n "${MINDUCK_NOTARY_KEY_FILE:-}" ]]; then
+    echo "Notarization authentication: direct API key"
+  else
+    echo "Notarization profile: $notary_profile"
+  fi
 fi

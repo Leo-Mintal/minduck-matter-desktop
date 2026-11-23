@@ -7,7 +7,7 @@ module.exports=async function probeRunning(page,waitFor){
   const send=(method,params)=>page.webContents.debugger.sendCommand(method,params)
   const frame=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
   const task={active:true,status:'running',contextId:'quick-context',conversationId:'queue-source',turnId:'queue-turn',
-    text:'正在整理你需要的资料和信息',detail:'这是当前会话的执行内容'}
+    text:'正在回复',detail:'工具提示没有草稿，我重新读取当前会话的完整内容再继续处理'}
   const update=async(value=task)=>{await evaluate(`panelProbe.output(${JSON.stringify(value)});void 0`);await frame()}
   async function click(selector){
     await waitFor(()=>evaluate(`(()=>{let opacity=1;for(let e=${root}.querySelector(${JSON.stringify(selector)});e;e=e.parentElement || e.getRootNode().host)opacity*=Number(getComputedStyle(e).opacity);return opacity;})()`),
@@ -26,6 +26,26 @@ module.exports=async function probeRunning(page,waitFor){
   const input=text=>evaluate(`(()=>{const f=${root}.querySelector('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(f,${JSON.stringify(text)});f.dispatchEvent(new Event('input',{bubbles:true,composed:true}));})()`)
   await evaluate(`panelProbe.actions=[];panelProbe.targets=[];panelProbe.reply=null;panelProbe.failure='';panelProbe.pause=false`)
   await update()
+  async function checkTopEdge(scale) {
+    const state=await evaluate(`import('/web/pet-app.js').then(({panels})=>{
+      const body=panelProbe.layout, box={...body.box,y:48}, bubble={...body.bubble,y:48};
+      panels.setScale(${scale});
+      try {
+        panels.layout({...body,box,bubble},{hoveringBody:true});
+        const output=document.querySelector('.minduck-output'),card=output.getBoundingClientRect();
+        const content=output.querySelector('.minduck-content'),s=${root};
+        const [title,detail]=[...s.querySelectorAll('.pet-running-message span')].map(el=>el.getBoundingClientRect());
+        const buttons=document.querySelector('.minduck-actions').getBoundingClientRect();
+        return {height:card.height,top:title.top-card.top,bottom:card.bottom-detail.bottom,
+          scroll:content.scrollHeight-content.clientHeight,onScreen:card.top>=15.95 && card.bottom<=innerHeight-15.95,
+          clear:card.bottom<=box.y || card.top>=buttons.bottom};
+      } finally {panels.setScale(1);panels.layout(body)}
+    })`)
+    const near=(actual,expected)=>Math.abs(actual-expected)<.05
+    assert.ok(near(state.top,12*scale) && near(state.bottom,12*scale) && near(state.height,72*scale)
+      && state.scroll===0 && state.onScreen && state.clear,`top-edge running card at ${scale}: ${JSON.stringify(state)}`)
+  }
+  for(const scale of [.8,1,1.5])await checkTopEdge(scale)
   for(const width of [375,768,1024,1440])for(const theme of ['light','dark']){
     page.setContentSize(width,600)
     await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme}]});await frame()

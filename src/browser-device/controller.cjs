@@ -9,16 +9,16 @@ const { createTools } = require('./tools.cjs')
 
 function createStore(userData) {
   const filename = path.join(userData, 'browser-device', 'settings.json')
-  let value = { enabled: true, pairing: null }
+  let value = { pairing: null }
   try {
     const parsed = JSON.parse(fs.readFileSync(filename, 'utf8'))
-    if (!parsed || typeof parsed.enabled !== 'boolean' || (parsed.pairing !== null
+    if (!parsed || (parsed.pairing !== null
       && (!parsed.pairing || typeof parsed.pairing.account !== 'string' || typeof parsed.pairing.origin !== 'string'
         || typeof parsed.pairing.deviceId !== 'string' || typeof parsed.pairing.encryptedToken !== 'string'))) throw new Error('浏览器设置无效')
-    value = { enabled: parsed.enabled, pairing: parsed.pairing }
-  } catch (error) {
-    if (error.code !== 'ENOENT') value = { enabled: false, pairing: null, error: '浏览器设置无法读取，请重新开启' }
-  }
+    // Ignore the retired enable switch; only reuse validated credentials.
+    value = { pairing: parsed.pairing, pendingPairings: parsed.pendingPairings
+      && typeof parsed.pendingPairings === 'object' && !Array.isArray(parsed.pendingPairings) ? parsed.pendingPairings : {} }
+  } catch { /* Missing or corrupt credentials are paired again after login. */ }
   return { get: () => value, update(patch) {
     const next = { ...value, ...patch }
     privateWrite(filename, next); value = next
@@ -29,8 +29,8 @@ function createStore(userData) {
 function createBrowserDevice({ app, safeStorage, fetchImpl, origin, getContents, compatibility,
   extensionRoot, nativeImage, store = createStore(app.getPath('userData')), connect = connectDesktop, tools }) {
   const toolkit = tools || createTools({ compatibility, extensionRoot, origin, fetchImpl, nativeImage })
-  let account = '', state = store.get().error || '等待登录', connection, disposed = false, refreshing = false
-  let generation = 0, retryAt = 0, failure = store.get().error || ''
+  let account = '', state = '等待登录', connection, disposed = false, refreshing = false
+  let generation = 0, retryAt = 0, failure = '', blockedAccount = ''
   let lastIdentity, lastContents
   async function identity() {
     const contents = getContents()
@@ -46,7 +46,7 @@ function createBrowserDevice({ app, safeStorage, fetchImpl, origin, getContents,
     generation++; connection?.stop(); toolkit.release?.(); connection = undefined; state = next
   }
   async function assertActive(expected, expectedAccount, allowDialog = false) {
-    if (disposed || !store.get().enabled || generation !== expected || !expectedAccount || account !== expectedAccount) {
+    if (disposed || generation !== expected || !expectedAccount || account !== expectedAccount || blockedAccount === account) {
       throw new Error('浏览器已关闭、账号已变化或操作已取消')
     }
     // A native JS dialog pauses renderer evaluation. Only its handler may use the
@@ -55,7 +55,7 @@ function createBrowserDevice({ app, safeStorage, fetchImpl, origin, getContents,
     const current = allowDialog ? (contents === lastContents && !contents?.isDestroyed()
       && new URL(contents.getURL() || 'about:blank').origin === origin
       && tokenAccount(lastIdentity?.token) === expectedAccount ? lastIdentity : { account: '' }) : await identity()
-    if (disposed || !store.get().enabled || generation !== expected || !expectedAccount
+    if (disposed || generation !== expected || !expectedAccount || blockedAccount === account
       || account !== expectedAccount || current.account !== expectedAccount) throw new Error('浏览器已关闭、账号已变化或操作已取消')
   }
   function pairingFor(expected, expectedAccount) {
@@ -73,9 +73,13 @@ function createBrowserDevice({ app, safeStorage, fetchImpl, origin, getContents,
         return toolkit.execute(params, signal, check)
       },
       onState: next => { if (generation === expected) state = next },
-      onRevoked: () => {
+      onRevoked: code => {
         if (generation !== expected) return
-        stop('配对已失效，请重新开启'); store.update({ enabled: false, pairing: null })
+        stop('浏览器连接已失效')
+        if (code !== 4002) store.update({ pairing: null })
+        if (code === 4001) { retryAt = Date.now() + 30000; return }
+        blockedAccount = account
+        state = code === 4002 ? '浏览器已由其他客户端接管，请重新登录 Matter' : '浏览器连接已撤销，请重新登录 Matter'
       },
     })
   }
@@ -88,15 +92,11 @@ function createBrowserDevice({ app, safeStorage, fetchImpl, origin, getContents,
       const current = await identity()
       if (disposed) return
       if (current.account !== account) {
-        const previous = account
         account = current.account
         stop(account ? '连接中' : '请先登录 Matter')
-        if (previous || (store.get().pairing && (store.get().pairing.account !== account
-          || store.get().pairing.origin !== origin))) store.update({ enabled: false })
-        retryAt = 0
+        blockedAccount = ''; failure = ''; retryAt = 0
       }
-      if (!store.get().enabled) { state = '已关闭'; return }
-      if (!account || connection || Date.now() < retryAt) return
+      if (!account || blockedAccount === account || connection || Date.now() < retryAt) return
       const expected = generation, expectedAccount = account
       const pairing = pairingFor(expected, expectedAccount)
       if (!store.get().pairing || store.get().pairing.account !== account || store.get().pairing.origin !== origin) {
@@ -107,31 +107,20 @@ function createBrowserDevice({ app, safeStorage, fetchImpl, origin, getContents,
       open(expected, expectedAccount, pairing)
       failure = ''
     } catch (error) {
-      if (!disposed && store.get().enabled) { state = '连接失败'; failure = error.message; retryAt = Date.now() + 30000 }
+      if (!disposed) { state = '连接失败'; failure = error.message; retryAt = Date.now() + (error.retryAfterMs || 30000) }
     } finally { refreshing = false }
   }
   const timer = setInterval(() => void refresh(), 1000)
   timer.unref()
   return {
     refresh,
-    snapshot() { return { enabled: store.get().enabled, canEnable: Boolean(account), state, error: failure,
+    snapshot() { return { state, error: failure,
       paired: Boolean(store.get().pairing && store.get().pairing.account === account && store.get().pairing.origin === origin),
       deviceId: store.get().pairing?.account === account ? store.get().pairing.deviceId : '', toolCount: toolkit.schemas.length } },
-    async setEnabled(enabled) {
-      if (typeof enabled !== 'boolean') throw new Error('浏览器开关值无效')
-      stop(enabled ? '连接中' : '已关闭'); failure = ''; retryAt = 0
-      store.update({ enabled, error: '' })
-      if (enabled) await refresh()
-    },
-    async revoke() {
-      stop('已关闭'); store.update({ enabled: false })
-      await pairingFor(generation, account).revoke()
-      failure = ''
-    },
     async presenceDeviceId() {
       const current = await identity()
       const saved = store.get().pairing
-      return !disposed && store.get().enabled && state === '在线' && current.account === account
+      return !disposed && state === '在线' && current.account === account
         && saved?.account === account && saved.origin === origin ? saved.deviceId : ''
     },
     notifyTabUpdated: (tab, changeInfo) => toolkit.notifyTabUpdated?.(tab, changeInfo),

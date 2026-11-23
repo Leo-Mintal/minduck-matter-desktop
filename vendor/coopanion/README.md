@@ -13,6 +13,13 @@ upstream license and provide the corresponding source as required by it.
 
 Integration changes in the vendored source:
 
+- desktop-pet/host/electron-main.cjs, preload.cjs, overlay.cjs and web/pet-app.js:
+  restore one transparent BrowserWindow covering the entire display work area at
+  idle and throughout walking, running, dragging, flight, landing and panel changes.
+  Remove the compact native crop, geometry IPC and virtual-scene coordinate adapter.
+  Keep the original animation viewport/timing, click-through leases, cross-display
+  input and content-based OBS capture. Window-selection captures now cover the work area.
+
 - desktop-pet/web/pet-app.js, pet.html and minduck-panels.js/css: desktop-only translucent
   output/actions capsules around the unchanged figure, using system light/dark appearance,
   14px text and the supplied 18px icons. The desktop reserves bottom space and replaces
@@ -56,6 +63,9 @@ Integration changes in the vendored source:
   naturally completed flows remain finite. No original character package is changed.
 - desktop-pet/web/kit/body.js: active business states and success/failure expressions stop existing
   walking and prevent autonomous roaming; idle restores the user's configured roaming preference.
+- build/console/index.js restores only the walking preference row under Habits → 行为与互动,
+  reusing the original segmented control and live config API. Simplified Chinese labels are
+  多走动 / 多待机 / 不乱动. Fresh profiles explicitly seed calm (多待机); saved preferences remain intact.
 
 Minduck's adapter in src/companion/ starts and stops the upstream CoreHost, uses this
 application's executable for the pet host, and serves the upstream settings console in its
