@@ -15,6 +15,7 @@ const {
   releaseDownloadURL,
   remoteCleanupScript,
   remotePublishScript,
+  selectReleaseVersion,
   updatePackageVersion,
 } = require('./release-macos.cjs')
 
@@ -27,8 +28,8 @@ test('creates only the expected versioned arm64 artifact and public URL', () => 
 })
 
 test('release refuses unsigned update packages before contacting any server', () => {
-  for (const argument of ['0.1.8', '--upload-only']) {
-    const result = spawnSync(process.execPath, [path.join(__dirname, 'release-macos.cjs'), argument], {
+  for (const args of [[], ['0.1.8'], ['--upload-only']]) {
+    const result = spawnSync(process.execPath, [path.join(__dirname, 'release-macos.cjs'), ...args], {
       encoding: 'utf8', env: { ...process.env, MINDUCK_MACOS_SIGN: '0' },
     })
     assert.equal(result.status, 1)
@@ -106,6 +107,28 @@ test('packaging output keeps installers, sidecars and manifests inside their own
   assert.deepEqual(fs.readdirSync(path.join(project, 'release')).sort(), ['0.1.10', '0.1.11'])
 })
 
+test('automatic release increments the patch above both local and published versions', () => {
+  for (const [currentVersion, latestVersion, expected] of [
+    ['0.1.16', '0.1.15', '0.1.17'],
+    ['0.1.9', '0.1.10', '0.1.11'],
+    ['0.1.16', '0.1.16', '0.1.17'],
+    ['1.9.99', '1.10.0', '1.10.1'],
+  ]) {
+    assert.equal(selectReleaseVersion({ currentVersion, latestVersion }), expected)
+  }
+  assert.throws(() => selectReleaseVersion({ currentVersion: '0.1.1', latestVersion: 'bad' }))
+  assert.throws(() => selectReleaseVersion({ currentVersion: '1.0.' + Number.MAX_SAFE_INTEGER, latestVersion: '0.1.1' }))
+})
+
+test('an explicit version or upload of a built package keeps the chosen version', () => {
+  const versions = { currentVersion: '0.1.16', latestVersion: '0.1.15' }
+  assert.equal(selectReleaseVersion({ ...versions, requestedVersion: '0.2.0' }), '0.2.0')
+  assert.equal(selectReleaseVersion({ ...versions, requestedVersion: '0.1.16' }), '0.1.16')
+  assert.equal(selectReleaseVersion({ ...versions, uploadOnly: true }), '0.1.16')
+  assert.throws(() => selectReleaseVersion({ ...versions, requestedVersion: '0.1.14' }))
+  assert.throws(() => selectReleaseVersion({ ...versions, latestVersion: '0.1.17', uploadOnly: true }))
+})
+
 test('requires a non-decreasing local version and a server-newer release', () => {
   assert.doesNotThrow(() => assertVersionProgression({ currentVersion: '0.1.3', latestVersion: '0.1.2', nextVersion: '0.1.3' }))
   assert.doesNotThrow(() => assertVersionProgression({ currentVersion: '0.1.3', latestVersion: '0.1.2', nextVersion: '0.1.4' }))
@@ -149,6 +172,10 @@ test('remote publisher verifies all artifacts before switching either update man
   const version = '0.1.4'
   const dmg = 'MinduckMatter-' + version + '-arm64.dmg'
   const staged = path.join(directory, dmg + '.uploading')
+  const alias = path.join(directory, 'latest.dmg')
+  const previous = 'MinduckMatter-0.1.3-arm64.dmg'
+  fs.writeFileSync(path.join(directory, previous), 'previous installer')
+  fs.symlinkSync(previous, alias)
   fs.writeFileSync(staged, 'verified installer bytes')
   const zip = dmg.replace('.dmg', '.zip')
   fs.writeFileSync(path.join(directory, zip + '.uploading'), 'verified updater bytes')
@@ -166,9 +193,12 @@ test('remote publisher verifies all artifacts before switching either update man
     assert.equal(fs.readFileSync(path.join(directory, 'latest-mac.yml'), 'utf8'), 'version: 0.1.3\n')
     assert.equal(fs.readFileSync(path.join(directory, 'latest.json'), 'utf8'), '{"version":"0.1.3"}')
     assert.ok(!fs.existsSync(path.join(directory, dmg)))
+    assert.equal(fs.readlinkSync(alias), previous)
   }
   execFileSync('bash', ['-c', script, '--', version, downloadURL, checksum, zipChecksum, manifestChecksum])
   assert.equal(fs.existsSync(path.join(directory, dmg)), true)
+  assert.equal(fs.readlinkSync(alias), dmg)
+  assert.equal(fs.readFileSync(alias, 'utf8'), 'verified installer bytes')
   assert.equal(fs.existsSync(path.join(directory, zip)), true)
   assert.equal(fs.readFileSync(path.join(directory, 'latest-mac.yml'), 'utf8'), 'version: 0.1.4\n')
   for (const name of [dmg, zip, 'latest-mac.yml', 'latest.json']) {

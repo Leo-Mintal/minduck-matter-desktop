@@ -1,6 +1,6 @@
-const UPDATE_MANIFEST_URL = 'https://matter-desktop.yogeeai.com/download/latest.json'
+const LATEST_DMG_URL = 'https://matter-desktop.yogeeai.com/download'
+const UPDATE_MANIFEST_URL = `${LATEST_DMG_URL}/latest.json`
 // Keep the manifest's legacy URL compatible with already installed clients.
-// New clients validate it but always open the HTTPS download URL below.
 const LEGACY_UPDATE_DOWNLOAD_BASE_URL = 'http://124.70.149.30:8091/'
 const UPDATE_TIMEOUT_MS = 10_000
 const MAX_MANIFEST_BYTES = 16 * 1024
@@ -78,11 +78,12 @@ async function checkForUpdate({ currentVersion, fetchImpl, manifestURL = UPDATE_
 
   const latest = parseManifest(manifest, manifestURL)
   return compareVersions(latest.version, currentVersion) > 0
-    ? { available: true, ...latest }
+    ? { available: true, ...latest, downloadURL: manifestURL === UPDATE_MANIFEST_URL ? LATEST_DMG_URL : latest.downloadURL }
     : { available: false, currentVersion, latestVersion: latest.version }
 }
 
 module.exports = {
+  LATEST_DMG_URL,
   LEGACY_UPDATE_DOWNLOAD_BASE_URL,
   MAX_MANIFEST_BYTES,
   UPDATE_MANIFEST_URL,

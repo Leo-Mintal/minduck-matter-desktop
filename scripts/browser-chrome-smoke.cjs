@@ -686,6 +686,10 @@ async function probe() {
   updateVersion = nextVersion
   updateResponse = 0
   await desktop.executeJavaScript('document.querySelector("#check-update").click()')
+  await waitFor(() => updateDownloads.length, count => count === 1, 'manual update opens the public installer')
+  assert.deepEqual(updateDownloads.splice(0), ['https://matter-desktop.yogeeai.com/download'])
+  updateResponse = 2
+  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
   await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'),
     value => value.update.phase === 'downloading' && value.update.percent === 37, 'in-app download progress')
   for (const theme of ['dark', 'light']) {

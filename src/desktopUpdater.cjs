@@ -1,4 +1,4 @@
-const { compareVersions, parseVersion } = require('./updateCheck.cjs')
+const { compareVersions, parseVersion, LATEST_DMG_URL } = require('./updateCheck.cjs')
 
 const UPDATE_BASE_URL = 'https://matter-desktop.yogeeai.com/download/'
 const NATIVE_PREPARE_TIMEOUT_MS = 120_000
@@ -137,9 +137,13 @@ function createDesktopUpdater(options) {
     }
     const confirmation = await showDialog({ type: 'info', title: '发现新版本',
       message: `发现新版本 ${state.version}`,
-      detail: '将在应用内下载，校验完成后自动安装并重启。登录和设置会保留；有任务进行时会再次确认。',
-      buttons: ['下载并重启更新', '稍后'], defaultId: 0, cancelId: 1, noLink: true })
-    if (confirmation.response !== 0) return
+      detail: '在浏览器中下载最新版 macOS 安装包，也可以选择在应用内更新并重启。',
+      buttons: ['下载最新版', '稍后', '应用内更新并重启'], defaultId: 0, cancelId: 1, noLink: true })
+    if (confirmation.response === 0) {
+      await options.openExternal(LATEST_DMG_URL)
+      return
+    }
+    if (confirmation.response !== 2) return
     nativeReady = false
     publish({ phase: 'downloading', percent: 0, error: false, message: '' })
     await updater.downloadUpdate()

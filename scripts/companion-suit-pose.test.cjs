@@ -65,6 +65,26 @@ assert b.repair_sleeve_clips(root) == 0 and b.ET.tostring(root) == before
   assert.equal(result.status, 0, result.stderr || result.stdout)
 })
 
+test('all five business states use the supplied single-motion exports without the presentation cards or sleeve seams', async () => {
+  const { FLOWS } = await import(pack + 'flow-artwork.js')
+  const sources = require('../assets/companion-suit-duck/sources.json')
+  const latest = {
+    idle: ['7138340a3595672fbe342197f7e543af8ae53936957458275c9abf1880b2cfdf', 0],
+    work: ['ea8b7f8acfa052d4019c7d280f281671d65eae86956ab8e81a8a061a6397cdb0', 49],
+    ask: ['1f6bfaf29825963862b2f40d6f9f7703996b50a51f3e37edde6aa242c313589c', 29],
+    happy: ['4feb868fcab9b43099bb4d1adbc83cb164e9c73896087308a9c723d8ffeee834', 49],
+    sad: ['9b788cd836e46c6c0cbff277b33ee0056160033b8ddccbbacb895e265e3a29cf', 49],
+  }
+  for (const [name, [sha, sleeves]] of Object.entries(latest)) {
+    assert.equal(sources[name].sha256, sha, name)
+    assert.equal(sources[name].repairedSleeveOutlines, sleeves, name)
+    assert.match(FLOWS[name].svg, /viewBox="0 0 440 266"/)
+    assert.doesNotMatch(FLOWS[name].svg, /State_label|Original_duration|Single-motion_stage|PLAYER_/)
+    assert.doesNotMatch(FLOWS[name].svg, /<path\b[^>]*stroke="#1F263D"[^>]*mask=/)
+  }
+  assert.equal(sources.base.sha256, latest.idle[0])
+})
+
 test('Suit Duck retains the original collection and all ten complete source actions', async () => {
   const { FLOWS } = await import(pack + 'flow-artwork.js')
   const provenance = require('../assets/companion-suit-duck/sources.json')
@@ -79,7 +99,7 @@ test('Suit Duck retains the original collection and all ten complete source acti
     if (kind === 'base') continue
     assert.equal(FLOWS[kind].duration, source.duration)
     assert.equal(FLOWS[kind].animations.length, source.tracks)
-    assert.equal((FLOWS[kind].svg.match(/<path\b/g) || []).length, source.paths)
+    assert.equal((FLOWS[kind].svg.match(/<path\b/g) || []).length, source.artworkPaths ?? source.paths)
     assert.equal((FLOWS[kind].svg.match(/<filter\b/g) || []).length, source.filters)
     assert.doesNotMatch(FLOWS[kind].svg, /<style|<script|\banimation:/)
     assert.doesNotMatch(FLOWS[kind].svg, /<filter\b[^>]*\b(?:x|y|width|height)="-?(?:inf|nan)"/i)
@@ -115,8 +135,9 @@ test('Suit Duck base preserves the original semantic parts inside independent mo
 import importlib.util
 spec = importlib.util.spec_from_file_location('builder', 'scripts/build-suit-duck.py')
 b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
-source, _ = b.read_source('idle.svg')
-base = b.ET.fromstring(b.compile_base()[0])
+project = b.json.loads((b.ASSETS / 'project.json').read_text())
+source, _ = b.read_motion(project['flows']['idle'])
+base = b.ET.fromstring(b.compile_base(project['flows']['idle'])[0])
 by_id = {n.get('id'): n for n in base.iter()}
 for node in source.find(b.TAG('g')).iter():
     if node is source.find(b.TAG('g')):
@@ -124,7 +145,7 @@ for node in source.find(b.TAG('g')).iter():
     if node.get('id') and node.get('transform'):
         assert by_id['suit-' + node.get('id')].get('transform') == node.get('transform'), node.get('id')
 parents = {child: parent for parent in base.iter() for child in parent}
-for name in ['Body_3', 'Suit_Torso___Exact_IP_2']:
+for name in ['Body', 'Suit_Torso___Exact_IP']:
     assert 'data-upper' in parents[by_id['suit-' + name]].attrib
 `], { cwd: root, encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr || result.stdout)
@@ -137,7 +158,7 @@ from copy import deepcopy
 spec = importlib.util.spec_from_file_location('builder', 'scripts/build-suit-duck.py')
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
-for name, expected in [('walking.svg', 0), ('idle.svg', 0), ('working.svg', 192), ('writing.svg', 0), ('confirmation.svg', 0), ('success.svg', 0), ('failure.svg', 0), ('thinking.svg', 0), ('flag.svg', 0), ('carry.svg', 0)]:
+for name, expected in [('walking.svg', 0), ('idle.svg', 0), ('working.svg', 188), ('writing.svg', 0), ('confirmation.svg', 0), ('success.svg', 4), ('failure.svg', 4), ('thinking.svg', 0), ('flag.svg', 0), ('carry.svg', 0)]:
     root, provenance = b.read_source(name)
     original = deepcopy(root)
     assert b.repair_filter_bounds(root, provenance) == expected

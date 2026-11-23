@@ -1,5 +1,8 @@
 # Companion integration
 
+- 2026-11-23 桌宠脚下的绿色横条和展开按钮以角色站立位置的横坐标居中。思考云、举旗等动作会扩大整幅画面的外框；角色转身时，下方控件仍对准脚下。屏幕边缘继续限制控件的位置以保证可点击。
+- 2026-11-23 修复桌宠靠近屏幕上沿时双行会话气泡被裁短的问题。面板按实际内容和叠层高度优先放在头顶，上方放不下且下方更宽裕时，放到快捷按钮下方。80% 缩放下，双行运行提示高 57.6px，上下各留 9.6px。
+- 2026-11-23：西装鸭 1.3.0 的待机、工作、询问、成功和失败分别取自五份独立原稿，待机也生成通用动作的基础图。桌宠和装扮预览共用同一形象包。工作等姿势的同色袖子描边和填充在生成时消除透黄细线。[源文件与转换规则](../../assets/companion-suit-duck/README.md)
 - 2026-11-20 西装鸭替换为同日提供的十动作 SVG。每组的动作标识、8 秒时长和动画关键帧与前一版一致，新稿更新了部分图层的初始可见性与滤镜。仅工作动作需要校准 192 处滤镜边界。[独立动作与映射](../../assets/companion-suit-duck/README.md)
 - Entry: `src/companion/index.cjs`; process command/path validation: `runtime.cjs`.
 - Child Electron entry: `host.cjs`, dispatched before the business shell starts.

@@ -9,35 +9,10 @@
       "group": "____________________________________________________________",
       "sha256": "10e4d4c192ffc652699c7d025dbe1b30e45680ee9c792b3addaf0386b2fefca2"
     },
-    "idle": {
-      "file": "idle.svg",
-      "group": "Minduck___Business_________",
-      "sha256": "be8eec2b5b6e58a33b970275f33da4cc5001f9241a86b70b5f706e1d3c2044a9"
-    },
-    "work": {
-      "file": "working.svg",
-      "group": "Temporary___Wrist_Alignment_QA",
-      "sha256": "49e8389ec9fd18815dd0ad57da2cc072ccfde0b3c6b4c8e49dba43de7d0398cb"
-    },
     "write": {
       "file": "writing.svg",
       "group": "Minduck___Business__________2",
       "sha256": "9acf83608f5c0727312d76718b8ef796c61a14c9066e823bbb6c0f45a5981393"
-    },
-    "ask": {
-      "file": "confirmation.svg",
-      "group": "Minduck___Business____________",
-      "sha256": "1a7089cbe0d6bec7bd207bcf54d0926cea4dcea38d626f141f2c21146884330f"
-    },
-    "happy": {
-      "file": "success.svg",
-      "group": "Minduck___Business__________3",
-      "sha256": "ccc755673a241e1e0ef17054606d3748b2d7ec746411998bd11e718a4681cef3"
-    },
-    "sad": {
-      "file": "failure.svg",
-      "group": "Minduck___Business__________4",
-      "sha256": "b8a0f05d25b2622ec778e6a7474ec0a44895de5a7de76b112b29abb78bf7fb37"
     },
     "think": {
       "file": "thinking.svg",

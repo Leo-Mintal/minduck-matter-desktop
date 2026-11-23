@@ -96,6 +96,27 @@ module.exports = async function probeSuitPose(url) {
     const idleParity = await compare('idle', idleTime)
     assert.deepEqual(idleParity.problems, [], JSON.stringify(idleParity))
     comparisons += idleParity.count
+    await exec(`(async () => {
+      const style=document.createElement('link');style.rel='stylesheet';style.href='/web/minduck-panels.css';
+      const loaded=new Promise((resolve,reject)=>{style.onload=resolve;style.onerror=reject});
+      document.head.appendChild(style);await loaded;
+      const {createMinduckPanels}=await import('/web/minduck-panels.js');
+      const {readLayout}=await import('/web/body-host.js');
+      const panels=createMinduckPanels();
+      window.measureControls=()=>{
+        const body=readLayout(poseEvents.findLast(event=>event.t==='frame').layout,{W:innerWidth,H:innerHeight,S:1.5});
+        const center=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return r.left+r.width/2};
+        panels.layout(body);const handle=center('.minduck-handle');
+        panels.layout(body,{hoveringBody:true});const buttons=center('.minduck-actions');
+        panels.layout(null);return {handle,buttons};
+      };
+    })()`)
+    async function checkControls(action, facing) {
+      const centers = await exec('measureControls()')
+      const feet = await frame.executeJavaScript("document.querySelector('ellipse.shadow').cx.baseVal.value")
+      assert.ok(Math.abs(centers.handle - feet) < .1 && Math.abs(centers.buttons - feet) < .1,
+        JSON.stringify({action, facing, feet, ...centers}))
+    }
     for (const facing of [1, -1]) {
       await send({ t: 'place', x: 300, facing })
       for (const [activity, word, seconds] of [['work', 'work', 8], ['ask', 'ask', 8],
@@ -132,7 +153,10 @@ module.exports = async function probeSuitPose(url) {
           const parity = await compare(word, value.times[0])
           assert.deepEqual(parity.problems, [], JSON.stringify({ word, facing, at, ...parity }))
           comparisons += parity.count
-          if (at === seconds * .4) await capture(word + (facing === -1 ? '-left' : ''))
+          if (at === seconds * .4) {
+            await checkControls(word, facing)
+            await capture(word + (facing === -1 ? '-left' : ''))
+          }
         }
         // A pending idle state leaves manual finite actions intact.
         await send({ t: 'set', state: { matterActivity: { kind: 'idle' } } })
@@ -156,6 +180,7 @@ module.exports = async function probeSuitPose(url) {
           const parity = await compare(word, value.times[0])
           assert.deepEqual(parity.problems, [], JSON.stringify({ word, facing, at, ...parity }))
           comparisons += parity.count
+          if (at === 3.5) await checkControls(word, facing)
         }
         await send({ t: 'do', word: 'stand' })
         await tick(1)
@@ -236,6 +261,7 @@ module.exports = async function probeSuitPose(url) {
     await tick(65, false)
     value = await measure()
     assert.deepEqual(value.flows, ['think'])
+    await checkControls('click thinking', layout.facing)
     assert.equal(await frame.executeJavaScript("document.querySelectorAll('[data-minduck-thinking]').length"), 0)
     await capture('thinking')
     const thinkingTime = value.times[0]

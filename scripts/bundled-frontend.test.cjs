@@ -90,3 +90,43 @@ test('passes the protocol request referrer to the scoped native header policy', 
   await handler(new Request('http://127.0.0.1:19473/context', { referrer: 'https://matter.example/c/test' }))
   assert.deepEqual(observed, { url: 'http://127.0.0.1:19473/context', referrer: 'https://matter.example/c/test' })
 })
+
+test('isolates only token-authenticated companion event streams after the business gate', async (t) => {
+  const { root } = await fixture(t)
+  const origin = 'https://matter.example'
+  const marked = '?desktop_companion=1&access_token=fixture&org_id=org&from_seq=18'
+  const forwarded = []
+  let active = true
+  const handler = createBundledFrontendHandler({
+    root, origin,
+    backendRequest(request) {
+      if (!active) throw new Error('activation required')
+      return request
+    },
+    fetchImpl: async () => new Response('default'),
+    fetchCompanionEvents: async (url, options) => {
+      forwarded.push({ url, options })
+      return new Response('companion')
+    },
+  })
+  for (const pathname of ['/api/events', '/api/conversations/chat/events']) {
+    const request = new Request(origin + pathname + marked, { headers: { Cookie: 'fixture=1', 'Last-Event-ID': '18' } })
+    assert.equal(await (await handler(request)).text(), 'companion')
+    const { url, options } = forwarded.at(-1)
+    assert.equal(url, origin + pathname + '?access_token=fixture&org_id=org&from_seq=18')
+    assert.equal(options.headers.get('last-event-id'), '18')
+    assert.equal(options.headers.has('cookie'), false)
+    assert.equal(options.credentials, 'omit')
+    assert.equal(options.redirect, 'error')
+  }
+  for (const [url, method = 'GET'] of [
+    [origin + '/api/events?access_token=fixture'], [origin + '/api/events?desktop_companion=1'],
+    [origin + '/api/attachments' + marked, 'POST'], [origin + '/api/events' + marked, 'POST'],
+    ['https://other.example/api/events' + marked],
+  ]) {
+    assert.equal(await (await handler(new Request(url, { method }))).text(), 'default')
+  }
+  active = false
+  await assert.rejects(handler(new Request(origin + '/api/events' + marked)), /activation required/)
+  assert.equal(forwarded.length, 2)
+})

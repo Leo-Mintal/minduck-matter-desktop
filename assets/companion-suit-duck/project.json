@@ -14,17 +14,17 @@
     },
     "idle": {
       "file": "idle.svg",
-      "group": "Minduck___Business_________",
+      "motionGroup": "UNMODIFIED_ORIGINAL___Minduck___Business_________",
       "scale": 1.0,
-      "x": -66.9369,
-      "y": -156.977
+      "x": -172.992,
+      "y": -55.3043
     },
     "work": {
       "file": "working.svg",
-      "group": "Temporary___Wrist_Alignment_QA",
+      "motionGroup": "UNMODIFIED_ORIGINAL___Temporary___Wrist_Alignment_QA",
       "scale": 1.0515021263,
-      "x": -68.65037794,
-      "y": -278.57906517
+      "x": -175.29677295,
+      "y": -60.3375907
     },
     "write": {
       "file": "writing.svg",
@@ -35,24 +35,24 @@
     },
     "ask": {
       "file": "confirmation.svg",
-      "group": "Minduck___Business____________",
+      "motionGroup": "UNMODIFIED_ORIGINAL___Minduck___Business____________",
       "scale": 1.0,
-      "x": -66.93712697,
-      "y": -480.97633672
+      "x": -168.41032697,
+      "y": -54.99933672
     },
     "happy": {
       "file": "success.svg",
-      "group": "Minduck___Business__________3",
+      "motionGroup": "UNMODIFIED_ORIGINAL___Minduck___Business_________",
       "scale": 1.0,
-      "x": -66.93182383,
-      "y": -588.98584747
+      "x": -167.64982383,
+      "y": -55.31314747
     },
     "sad": {
       "file": "failure.svg",
-      "group": "Minduck___Business__________4",
+      "motionGroup": "UNMODIFIED_ORIGINAL___Minduck___Business_________",
       "scale": 1.0,
-      "x": -66.93322621,
-      "y": -696.97956086
+      "x": -167.15502621,
+      "y": -55.30686086
     },
     "think": {
       "file": "thinking.svg",

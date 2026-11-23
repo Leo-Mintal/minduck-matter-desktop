@@ -1,5 +1,9 @@
 # Unexpected Errors
 
+## 2026-11-23 - Chat attachment uploads with active event streams
+
+- A file-picker upload succeeded against an idle HTTP/1.1 fixture but timed out with six simultaneous foreground and companion subscriptions. Closing conversations in isolation released their backend connections. Keep subscriptions open for the upload regression, verify the received bytes, then wait for the backend close events during cleanup.
+
 ## 2026-11-20 - Companion action test package
 
 - A read-only lookup guessed an absent workspace probe filename; located and used `scripts/workspace-shell-smoke.cjs` instead.
@@ -1628,3 +1632,14 @@ The new VM regressions first reproduced missing `crypto.randomUUID` in both real
 ## 2026-11-20 - Parallel desktop test run
 
 - The first parallel pnpm test run had one failure in the process-group cleanup test: process.kill returned EPERM. Running node --test scripts/local-exec.test.cjs alone passed all 25 tests; the serial full suite passed all 302 tests.
+
+## 2026-11-20 - Suit Duck test package
+
+- The signed Electron build completed app signing, but notarytool could not find the MinduckNotary keychain item during submission. The documented unsigned local-test mode produced the preview package.
+- The first package-input verification compared the DMG against the primary checkout instead of the isolated build snapshot. It wrote no report; rerunning against the snapshot verified all 4,898 inputs.
+- Initial checksum and metadata-copy commands used an incorrect working directory. Reran them from the desktop repository; both artifact checksums and the archived web patch were then verified.
+- The first installed-app preservation check used the repository parent instead of /Applications/Minduck Matter.app. The corrected path check passed along with both existing 0.1.15 release artifact hashes.
+
+## 2026-11-23 - Suit Duck dressing preview
+
+- All 53 preview choices ran on the first pass, then the appearance check timed out during the viewport sweep. Repeating the unchanged probe in a fresh disposable profile passed all four widths in both themes.

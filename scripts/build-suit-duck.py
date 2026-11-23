@@ -144,6 +144,29 @@ def prefix(root, name):
             node.set(key, value)
 
 
+def repair_sleeve_outlines(root):
+    """Overlap identical solid fill and stroke at their antialiased join."""
+    repaired = 0
+    for group in root.iter(TAG("g")):
+        if not re.fullmatch(r"Jacket_Sleeve_Near(?:_\d+)?", group.get("id", "")):
+            continue
+        masked = [node for node in group.findall(TAG("path")) if node.get("mask")]
+        if not masked:
+            continue
+        mask, fill, outline = list(group)
+        if (masked != [outline] or mask.tag != TAG("mask") or fill.tag != TAG("path")
+                or outline.get("mask") != "url(#" + mask.attrib["id"] + ")"
+                or mask.get("fill") != "black" or len(mask) != 2 or mask[0].tag != TAG("rect")
+                or mask[0].get("fill") != "white" or mask[1].tag != TAG("path")
+                or mask[1].attrib != {"d": fill.attrib["d"]} or outline.get("d") != fill.get("d")
+                or fill.get("fill") != "#1F263D" or outline.get("stroke") != fill.get("fill")
+                or outline.get("stroke-width") != "0.56"):
+            raise ValueError("Unreviewed sleeve outline: " + group.attrib["id"])
+        del outline.attrib["mask"]
+        repaired += 1
+    return repaired
+
+
 def parse_frames(body):
     properties = {"transform": "transform", "opacity": "opacity", "offset-distance": "offsetDistance",
                   "animation-timing-function": "easing"}
@@ -204,9 +227,11 @@ def compile_rules(name, by_id, keyframes, rules):
 
 
 def compile_flow(name, spec):
-    root, provenance = read_source(spec["file"])
+    root, provenance = read_motion(spec)
     provenance["repairedFilterRegions"] = repair_filter_bounds(root, provenance)
     provenance["repairedSleeveClips"] = repair_sleeve_clips(root)
+    if "motionGroup" in spec:
+        provenance["repairedSleeveOutlines"] = repair_sleeve_outlines(root)
     by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
     css = "\n".join(e.text or "" for e in root.iter(TAG("style")))
     animations, duration = compile_rules(name, by_id, *parse_css(css))
@@ -260,6 +285,22 @@ def collection_definitions(group, by_id, definitions):
     return [deepcopy(d) for d in definitions if any(e.get("id") in refs for e in d.iter())]
 
 
+def read_motion(spec):
+    root, provenance = read_source(spec["file"])
+    if "motionGroup" in spec:
+        by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
+        stage = by_id["Single-motion_stage"]
+        group = stage.find(".//" + TAG("g") + "[@id='" + spec["motionGroup"] + "']")
+        if group is None:
+            raise ValueError("Missing character in single-motion stage: " + spec["file"])
+        defs = root.find(TAG("defs"))
+        defs[:] = collection_definitions(group, by_id, list(defs))
+        # Keep the export's viewport for motion paths, discarding the presentation card.
+        root[:] = [root.find(TAG("style")), group, defs]
+        provenance["artworkPaths"] = sum(1 for _ in root.iter(TAG("path")))
+    return root, provenance
+
+
 def split_collection(project, check):
     root, provenance = read_source("collection.svg")
     by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
@@ -267,6 +308,8 @@ def split_collection(project, check):
     definitions = list(root.find(TAG("defs")))
     sources = {}
     for word, spec in project["flows"].items():
+        if "motionGroup" in spec:
+            continue
         group = by_id[spec["group"]]
         ids = {e.get("id") for e in group.iter() if e.get("id")}
         output = ET.Element(TAG("svg"), root.attrib)
@@ -286,18 +329,18 @@ def split_collection(project, check):
     return {**provenance, "actions": sources}
 
 
-def compile_base():
-    root, provenance = read_source("idle.svg")
+def compile_base(spec):
+    root, provenance = read_motion(spec)
     root.remove(root.find(TAG("style")))
     character = root.find(TAG("g"))
     character.attrib.pop("transform")
     root.attrib.update({"viewBox": "0 0 46.0165 51.38756", "width": "46.0165", "height": "51.38756",
                         "overflow": "visible"})
-    roles = {"Wings_Far_3": "wing-back", "Legs_Right_2": "foot-back", "Wings_Near_3": "wing-front",
-             "LeftEye_Glow_2": "eye-left-glow", "RightEye_Glow_2": "eye-right-glow",
-             "LeftEye_2": "eye-left", "RightEye_2": "eye-right", "Beak_3": "beak",
-             "LeftLegAndFoot_2": "foot-front", "HeadTuft_3": "crest",
-             "Gold_Glasses___Original_IP_2": "monocle"}
+    roles = {"Wings_Far": "wing-back", "Legs_Right": "foot-back", "Wings_Near": "wing-front",
+             "LeftEye_Glow": "eye-left-glow", "RightEye_Glow": "eye-right-glow",
+             "LeftEye": "eye-left", "RightEye": "eye-right", "Beak": "beak",
+             "LeftLegAndFoot": "foot-front", "HeadTuft": "crest",
+             "Gold_Glasses___Original_IP": "monocle"}
     found = set()
     for parent in list(root.iter()):
         for index, node in enumerate(list(parent)):
@@ -314,7 +357,7 @@ def compile_base():
     if found != set(roles.values()):
         raise ValueError("Missing semantic base parts: " + str(set(roles.values()) - found))
     for index, node in enumerate(list(character)):
-        if node.get("id") in {"Body_3", "Suit_Torso___Exact_IP_2"}:
+        if node.get("id") in {"Body", "Suit_Torso___Exact_IP"}:
             wrapper = ET.Element(TAG("g"), {"data-upper": ""})
             character.remove(node)
             character.insert(index, wrapper)
@@ -326,7 +369,7 @@ def compile_base():
 def generate(check=False):
     project = json.loads((ASSETS / "project.json").read_text())
     collection = split_collection(project, check)
-    base, provenance = compile_base()
+    base, provenance = compile_base(project["flows"]["idle"])
     flows, sources = {}, {"base": provenance}
     for name, spec in project["flows"].items():
         flows[name], sources[name] = compile_flow(name, spec)

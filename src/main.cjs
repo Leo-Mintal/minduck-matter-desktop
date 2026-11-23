@@ -10,7 +10,7 @@ if (process.argv.includes('--minduck-companion-host')) {
 const path = require('node:path')
 const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
-const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell, View, WebContentsView, safeStorage, nativeImage } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell, View, WebContentsView, safeStorage, nativeImage } = require('electron')
 const { createClientRuntime } = require('./client-runtime.cjs')
 const { createController } = require('./local-exec/controller.cjs')
 const { createAccessDialog } = require('./local-exec/access-dialog.cjs')
@@ -885,6 +885,7 @@ function getDesktopUpdater() {
   desktopUpdater ??= createDesktopUpdater({ ...(stylePreviewOnly
     ? { unavailableReason: '本地样式预览不安装更新。' } : macUpdateRuntime(app)), currentVersion: app.getVersion(),
     showDialog: showUpdateDialog,
+    openExternal: url => shell.openExternal(url),
     onState: (state) => {
       desktopUpdate = state
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1240,7 +1241,7 @@ async function stopDesktopBusiness() {
 app.whenReady().then(async () => {
   matterOrigin = loadMatterOrigin()
   desktopAccessService = createDesktopAccessService({ origin: matterOrigin, keys: createKeyProvider({ app, origin: matterOrigin }) })
-  installBundledFrontend({ app, protocol, net, origin: matterOrigin,
+  installBundledFrontend({ app, protocol, net, session, origin: matterOrigin,
     backendHeaders: (headers, url, referrer) => browserDevice?.headers(headers, url, referrer) || headers,
     backendRequest: request => {
       if (!businessAllowed) throw new Error('Desktop activation required')

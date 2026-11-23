@@ -61,7 +61,7 @@ test('reports only newer releases and bypasses cached manifest responses', async
   assert.deepEqual(newer, {
     available: true,
     version: '0.1.3',
-    downloadURL: 'https://matter-desktop.yogeeai.com/download/MinduckMatter-0.1.3-arm64.dmg',
+    downloadURL: 'https://matter-desktop.yogeeai.com/download',
   })
   assert.equal(calls[0].url, UPDATE_MANIFEST_URL)
   assert.equal(calls[0].url, 'https://matter-desktop.yogeeai.com/download/latest.json')

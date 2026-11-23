@@ -20,7 +20,7 @@ function fixture(overrides = {}) {
   updater.quitAndInstall = () => calls.push('install')
   nativeUpdater.checkForUpdates = () => { calls.push('verify'); queueMicrotask(() => nativeUpdater.emit('update-downloaded')) }
   const controller = createDesktopUpdater({ updater, nativeUpdater, currentVersion: '0.1.7',
-    showDialog: async (options) => { dialogs.push(options); return { response: 0 } },
+    showDialog: async (options) => { dialogs.push(options); return { response: options.title === '发现新版本' ? 2 : 0 } },
     onState: (state) => states.push(state), prepareToQuit: async () => calls.push('stop'), logger: { error() {} },
     ...overrides })
   return { updater, nativeUpdater, controller, calls, states, dialogs }
@@ -54,7 +54,19 @@ test('checks reject untrusted URLs, mismatched versions, duplicate files and mis
   assert.ok(!f.calls.includes('download'))
 })
 
-test('one explicit update action downloads, verifies natively, stops children, then installs once', async () => {
+test('default confirmation opens the fixed DMG once without installing or stopping tasks', async () => {
+  const opened = []
+  const f = fixture({ openExternal: async url => opened.push(url), showDialog: async options => {
+    assert.equal(options.buttons[options.defaultId], '下载最新版')
+    return { response: options.defaultId }
+  } })
+  await Promise.all([f.controller.run(), f.controller.run()])
+  assert.deepEqual(opened, ['https://matter-desktop.yogeeai.com/download'])
+  assert.deepEqual(f.calls, ['check'])
+  assert.equal(f.controller.snapshot().phase, 'available')
+})
+
+test('one explicit in-app update downloads, verifies natively, stops children, then installs once', async () => {
   const f = fixture()
   const first = f.controller.run()
   await Promise.all([first, f.controller.run()])
@@ -76,7 +88,7 @@ test('cancelling the initial prompt leaves the installed app and download untouc
 test('active tasks defer restart, and a later explicit action uses the downloaded package', async () => {
   let active = true
   const f = fixture({ hasActiveTasks: () => active,
-    showDialog: async options => ({ response: options.title === '重启更新' ? 1 : 0 }) })
+    showDialog: async options => ({ response: options.title === '重启更新' ? 1 : 2 }) })
   await f.controller.run()
   assert.deepEqual(f.calls, ['check', 'download'])
   assert.equal(f.controller.snapshot().phase, 'downloaded')
@@ -88,7 +100,7 @@ test('active tasks defer restart, and a later explicit action uses the downloade
 test('a task starting during native preparation receives confirmation before any child stops', async () => {
   let active = false
   const f = fixture({ hasActiveTasks: () => active,
-    showDialog: async options => ({ response: options.title === '重启更新' ? 1 : 0 }) })
+    showDialog: async options => ({ response: options.title === '重启更新' ? 1 : 2 }) })
   f.nativeUpdater.checkForUpdates = () => {
     active = true; queueMicrotask(() => f.nativeUpdater.emit('update-downloaded'))
   }

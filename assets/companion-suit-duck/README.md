@@ -1,10 +1,9 @@
 # 西装鸭十动作源素材
 
-用户于 2026-11-20 提供的完整合集逐字节保存为 `source/collection.svg`。
-`collection.json` 记录原始 SHA-256、十个语义组 ID 和拆分文件哈希；`sources.json` 记录轨道、路径与滤镜数量。
-`scripts/build-suit-duck.py` 每次先按 `project.json` 的语义组重建独立 SVG，再生成运行资源。
+待机、工作、询问、成功和失败来自 2026-11-23 提供的五个独立 SVG。原件逐字节保存在下表对应文件中。`project.json` 的 `motionGroup` 指向每张卡片的角色组；生成时保留 440×266 视口、道具、完整动作，去掉标题、时长文字和卡片底色。待机也是缩略图与通用表情的基础图。
+走路、书写、思考、举旗和抱资料从 2026-11-20 的十动作原件 `source/collection.svg` 拆分。`collection.json` 记录本次仍从合集拆分的动作，`sources.json` 记录所有使用中的源文件哈希和轨道数。
 
-询问和抱资料的袖子各有 29 个单白色轮廓遮罩。生成时将这些遮罩转为同坐标、同路径的 `clipPath`，避免缩小时袖子边缘混出底下的黄色；原始 SVG 不修改，`sources.json` 的 `repairedSleeveClips` 记录处理数量，其他遮罩保持原样。
+新版工作、询问、成功、失败各有 49、29、49、49 个深蓝袖子外描边。生成时仅在描边与实心填充同色、同路径且遮罩确为其反向轮廓时解除描边遮罩，让交界处覆盖黄色翅膀。白色袖口保留。询问和抱资料原有的单白色轮廓遮罩继续转为同路径裁剪。以上处理只发生在生成物中。
 
 | 原组序号 | 独立文件 | 用途 |
 | --- | --- | --- |
@@ -20,7 +19,7 @@
 | 10 | carry.svg | 抱资料等待 |
 
 十个源动作均为 8 秒，共 1,820 条轨道。`project.json` 保持形象 ID `minduck-suit-duck`，通过原始脚掌的局部边界统一比例与地线。
-工作稿约需放大 1.0515 倍；其他动作按实测脚掌宽度对齐。保留原 SVG 188×1140 内层视口，避免 motion-path 和 transform-box 坐标发生变化。
+工作稿约需放大 1.0515 倍；其他动作按实测脚掌宽度对齐。保留各自的原始内层视口，避免 motion-path 和 transform-box 坐标发生变化。
 基础图按 Eyes、Wings、Legs、Suit 等语义组生成，保留新西装袖口；`base.svg` 是旧版静态素材留存，不再参与生成。
 
 ```sh
@@ -31,7 +30,7 @@ MINDUCK_COMPANION_SUIT_POSE_ONLY=1 pnpm run test:companion
 ```
 
 生成目标：`src/companion/figures/minduck-suit-duck/` 的 `artwork.svg`、`artwork.js`、`flow-artwork.js`。
-本批素材只有电脑工作动作含有非法 `inf/-inf` 滤镜区域，共 192 个。
+五份独立原稿中，工作有 188 个非法滤镜区域，成功、失败各 4 个。
 `filter-bounds.json` 按滤镜所属图形的局部 `getBBox()` 加四倍高斯模糊标准差测得有限边界；构建时仅替换这四个区域属性，保留滤镜原语及原文件。
 校准数据绑定源 SHA-256，源变更或出现未校准的非法区域会明确报错；使用项目现有 Electron 重新测量：
 

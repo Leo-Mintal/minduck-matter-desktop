@@ -73,7 +73,7 @@ async function verifyDownload(mode) {
   updater.autoDownload = false; updater.autoInstallOnAppQuit = false
   updater.disableDifferentialDownload = true; updater.logger = logger
   const controller = createDesktopUpdater({ updater, nativeUpdater: native, currentVersion: version, logger,
-    showDialog: async () => ({ response: 0 }), prepareToQuit: async () => lifecycle.push('stop') })
+    showDialog: async options => ({ response: options.title === '发现新版本' ? 2 : 0 }), prepareToQuit: async () => lifecycle.push('stop') })
   try {
     await controller.run()
     if (mode === 'corrupt') {

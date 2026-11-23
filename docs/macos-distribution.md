@@ -15,8 +15,14 @@
 
 现有 119 项文件/目录已按版本归类，5,645 个文件逐一核对 SHA-256、权限、inode 和符号链接，内容未变。迁移记录在 `release/0.1.11/metadata/directory-layout-20261117.json`。以下日期记录中的旧路径保留为当时的事实；查找文件时以迁移记录为准，例如原 `release/metadata/build-0.1.11-20261116/` 现为 `release/0.1.11/metadata/build-0.1.11-20261116/`。旧记录附带的一次性脚本也原样归档，日常上传使用当前 `pnpm upload:mac`。
 
+### 0.1.16 西装鸭十动作正式包（2026-11-21）
+
+- macOS arm64 正式 DMG 和自动更新 ZIP 位于 `release/0.1.16/`。桌面源码为 `947791a`，前端基于 Web `dev` 的 `fb7ed292` 及已授权的共享界面修改重新构建。应用与 DMG 均获 Apple 公证，签名、票据和两种归档内的应用内容已核验。两份更新清单和验证记录位于该版本的 `metadata/`。本次为本地交付，线上清单在核查时为 0.1.15。
+- 正式包携带匹配的激活授权文件。已用签名应用加载包内激活模块，从本机钥匙串签名，连接本地服务 `http://127.0.0.1:8080` 后已有设备恢复为 `active`。本次未核销新码。本机当时保存的内网测试服务连接超时，生产服务的 `/health` 返回 200，`/api/desktop-access/policy` 返回 404。正式环境核销仍待后端提供激活接口后验证。
+
 ### 0.1.15 桌宠动作预览本地测试包（2026-11-20）
 
+- 西装鸭素材刷新包位于 `release/0.1.15/tests/suit-duck-refresh-20261120/`，保留原版本号，包含当天的新版十动作和最新 Web `dev`（`fb7ed292`）。DMG/ZIP 完整性、包内 4,898 项输入哈希及西装鸭版本核验通过，未安装或上传。Apple 公证凭据项 `MinduckNotary` 当前不可用，签名版未能提交公证；为提供本机预览，按脚本支持的本地测试模式生成 unsigned 包。macOS 可能要求用户通过右键“打开”确认运行。具体记录见该目录 `metadata/verification.json`。
 - 保留当前 `0.1.15`，macOS arm64 DMG/ZIP 位于 `release/0.1.15/tests/companion-actions-20261120/`。包含装扮页动作选择和重播、西装鸭桌面表情帧率与肩膀黄色虚边修复，以及此前客户端界面和激活断网修复。仅交付本地替换测试包；正式包、更新清单与本机安装版保持不变，未上传服务器。
 - 重新 fetch Web 远程 `dev` `e2bf04ad274fe7e6a0568a4cadaf8998cad43306`，保留已确认的共享客户端界面后重建 Web/desktop-shell。302 项桌面测试、81 项相关 Web 测试及真实工作区/浏览器双主题回归通过；核对冻结输入后复用刚完成的 53 项动作预览、完整桌宠回归和原动画属性对照。
 - 从隔离快照通过 `pnpm dist:mac` 签名、公证；应用和 DMG 均为 Accepted。最终核验 4,898 项包内输入、DMG/ZIP 的 5,557 项内容/权限/链接、9,492 个最终增量块、实际原生模块加载、签名/profile/票据、版本/arm64 和更新元数据。权威记录见测试包 `metadata/verification.json`；`spctl` 的本机 security-disabled override 不作为干净机器验收。临时构建、验证应用和挂载已清理，未更改主工作区打包脚本。
@@ -344,9 +350,9 @@ Web 输入为远端 `dev` 的 `6beb91cbf357d19d2f0b62819b86f970b5ac43b8`。应�
 
 ## 静态下载与菜单检查更新
 
-桌面端应用菜单的“检查更新…”只读取一个静态 JSON，不调用 Matter Web 或业务后端。源码中的发布源为
-`https://matter-desktop.yogeeai.com/download/latest.json`，下载地址为 `https://matter-desktop.yogeeai.com/download/` 后拼接 `MinduckMatter-<version>-arm64.dmg`。例如 `https://matter-desktop.yogeeai.com/download/MinduckMatter-0.1.5-arm64.dmg`。Caddy 容器 `minduck-download` 只读提供服务器目录
-`/root/minduck-matter-download/releases/`。不要改动 `/opt` 下的其他服务、Caddy、MinIO 或现有容器。
+对外分享和客户端“下载最新版”使用 `https://matter-desktop.yogeeai.com/download`。公网入口容器 `caddy` 将该请求映射到 `/srv/matter-desktop/latest.dmg`，浏览器收到的文件名为 `MinduckMatter-arm64.dmg`。发布脚本校验安装包后，在宿主机 `/root/minduck-matter-download/releases/` 中原子切换该符号链接，再更新清单。
+
+旧版检查更新使用 `https://matter-desktop.yogeeai.com/download/latest.json`。应用内更新读取同一目录的 `latest-mac.yml` 并下载对应版本的 ZIP。
 
 清单格式如下，版本必须是 `x.y.z`，DMG 文件名必须和版本完全一致。`downloadUrl` 保留旧值供现有安装版做同源校验，新源码读取后转换为上述 HTTPS 下载地址：
 
@@ -361,11 +367,13 @@ Web 输入为远端 `dev` 的 `6beb91cbf357d19d2f0b62819b86f970b5ac43b8`。应�
 
 ### 标准一键发布
 
-恢复好 `MinduckNotary` 钥匙串 profile 和服务器 SSH 登录后，每次只需在桌面项目根目录运行，传入一个明确的新版本号：
+配置好 `MinduckNotary` 钥匙串 profile 和服务器 SSH 登录后，在桌面项目根目录运行以下命令即可发布新版。
 
 ```bash
-pnpm release:mac 0.1.4
+pnpm release:mac
 ```
+
+省略版本号时，脚本取 `package.json` 和线上 `latest.json` 中的较高版本，把补丁号加一。需要指定主版本、次版本或重试上次未发布的版本时，运行 `pnpm release:mac <版本号>`。
 
 `release:mac` 依次执行：读取当前公开清单并拒绝回退、建立可复用的服务器 SSH 连接、验证公证 profile、运行单测、更新 `package.json`、
 从最新远端 Web `dev` 构建签名并公证 DMG/ZIP、校验本地文件与应用内更新清单、上传三个 `.uploading` 临时文件、让服务器复核全部 SHA-256，
@@ -420,6 +428,8 @@ test -s "$release_dir/$dmg.uploading"
 actual_checksum="$(shasum -a 256 "$release_dir/$dmg.uploading" | awk '{print $1}')"
 test "$actual_checksum" = "$expected_checksum"
 mv "$release_dir/$dmg.uploading" "$release_dir/$dmg"
+ln -sfn "$dmg" "$release_dir/latest.dmg.next"
+mv -Tf "$release_dir/latest.dmg.next" "$release_dir/latest.dmg"
 
 # Keep the manifest compatible with the same-origin check in installed 0.1.5 and earlier.
 download_url="${scheme}://${public_host}:${port}/${dmg}"

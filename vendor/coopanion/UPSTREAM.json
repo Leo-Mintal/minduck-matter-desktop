@@ -382,6 +382,18 @@
       "upstreamSha256": null,
       "integratedSha256": "f84e3750ae1fc3a319e590d3a88bfe92768b8c7ac843b1bdf2b2fa40ddfefec1",
       "reason": "Local dressing action selector and replay use the actual factory vocabulary and optional interaction capabilities in an independent sandbox. Include task lifecycle and physical interactions; preserve manifest-only model vocabulary and avoid saving preview choices."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "56ff982d6576d4346d469be949233ce8f241efa8ba3db80c7e3a715efb4c99a4",
+      "integratedSha256": "3a8b8b9ad05318bc1c0f8214bc8fb4ae6480fba5101e2a1c4612509b9c33abd2",
+      "reason": "Measure the conversation and its stack before choosing space above the figure or below its controls. Preserve compact message padding at the top edge and limit long questions to the available space."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/minduck-panels.js",
+      "upstreamSha256": "3a8b8b9ad05318bc1c0f8214bc8fb4ae6480fba5101e2a1c4612509b9c33abd2",
+      "integratedSha256": "3f583bacb920af25982f826e9bf5b5a020aeefb38e18cef4f44eec8fce322451",
+      "reason": "Center the collapsed handle and expanded bottom controls on the body's standing position through asymmetric and mirrored actions."
     }
   ]
 }

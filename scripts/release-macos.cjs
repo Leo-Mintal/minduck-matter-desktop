@@ -7,6 +7,7 @@ const path = require('node:path')
 const { createHash } = require('node:crypto')
 const { verifyUpdateArtifacts } = require('./macos-update-artifacts.cjs')
 const {
+  LATEST_DMG_URL,
   LEGACY_UPDATE_DOWNLOAD_BASE_URL,
   UPDATE_MANIFEST_URL,
   compareVersions,
@@ -58,6 +59,17 @@ function assertVersionProgression({ currentVersion, latestVersion, nextVersion, 
   }
 }
 
+function selectReleaseVersion({ currentVersion, latestVersion, requestedVersion, uploadOnly = false }) {
+  let nextVersion = uploadOnly ? currentVersion : requestedVersion
+  if (nextVersion === undefined) {
+    const base = compareVersions(currentVersion, latestVersion) >= 0 ? currentVersion : latestVersion
+    const [major, minor, patch] = parseVersion(base)
+    nextVersion = `${major}.${minor}.${patch + 1}`
+  }
+  assertVersionProgression({ currentVersion, latestVersion, nextVersion, allowSameVersion: uploadOnly })
+  return nextVersion
+}
+
 function updatePackageVersion(packagePath, version) {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'))
   parseVersion(packageJson.version)
@@ -90,6 +102,8 @@ function remotePublishScript() {
     'chmod 644 "$release_dir/$dmg.uploading" "$release_dir/$zip.uploading" "$release_dir/latest-mac.yml.uploading"',
     'mv "$release_dir/$dmg.uploading" "$release_dir/$dmg"',
     'mv "$release_dir/$zip.uploading" "$release_dir/$zip"',
+    'ln -sfn "$dmg" "$release_dir/latest.dmg.next"',
+    'mv -f "$release_dir/latest.dmg.next" "$release_dir/latest.dmg"',
     'mv "$release_dir/latest-mac.yml.uploading" "$release_dir/latest-mac.yml"',
     '',
     "printf '{\\n  \"version\": \"%s\",\\n  \"downloadUrl\": \"%s\"\\n}\\n' \"$version\" \"$download_url\" > \"$release_dir/latest.json.next\"",
@@ -198,6 +212,8 @@ function verifyPublishedRelease({ version, downloadURL, updateManifest }) {
     downloadURL,
   ])
   run('curl', ['--head', '--silent', '--show-error', '--fail', '--noproxy', '*', '--max-time', '30',
+    LATEST_DMG_URL])
+  run('curl', ['--head', '--silent', '--show-error', '--fail', '--noproxy', '*', '--max-time', '30',
     new URL(artifactName(version, 'zip'), UPDATE_MANIFEST_URL).href])
 }
 
@@ -227,13 +243,14 @@ function openReleaseSSH(remoteTarget) {
   }
 }
 
-function publish(version, { uploadOnly = false } = {}) {
-  parseVersion(version)
+function publish(requestedVersion, { uploadOnly = false } = {}) {
+  if (requestedVersion !== undefined) parseVersion(requestedVersion)
   if (process.env.MINDUCK_MACOS_SIGN === '0') throw new Error('对外发布必须启用签名和公证')
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'))
   const remote = remoteLatestRelease()
-  assertVersionProgression({ currentVersion: packageJson.version, latestVersion: remote.version,
-    nextVersion: version, allowSameVersion: uploadOnly })
+  const version = selectReleaseVersion({ currentVersion: packageJson.version, latestVersion: remote.version,
+    requestedVersion, uploadOnly })
+  console.log(`准备${uploadOnly ? '上传' : '发布'} ${version}（本地 ${packageJson.version}，线上 ${remote.version}）`)
   const remoteTarget = `${REMOTE_USER}@${REMOTE_HOST}`
   const ssh = openReleaseSSH(remoteTarget)
 
@@ -277,22 +294,22 @@ function publish(version, { uploadOnly = false } = {}) {
         input: remoteCleanupScript(), stdio: ['pipe', 'inherit', 'inherit'],
       })
     }
-    console.log(`发布完成：${downloadURL}`)
+    console.log(`发布完成：${LATEST_DMG_URL}`)
   } finally {
     ssh.close()
   }
 }
 
 function main() {
-  const uploadOnly = process.argv[2] === '--upload-only'
-  const version = uploadOnly ? JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')).version : process.argv[2]
-  if (!version || process.argv.length !== 3) {
-    console.error('用法：pnpm release:mac <x.y.z> 或 pnpm upload:mac')
+  const argument = process.argv[2]
+  if (process.argv.length > 3) {
+    console.error('用法：pnpm release:mac [x.y.z] 或 pnpm upload:mac')
     process.exitCode = 1
     return
   }
   try {
-    publish(version, { uploadOnly })
+    const uploadOnly = argument === '--upload-only'
+    publish(uploadOnly ? undefined : argument, { uploadOnly })
   } catch (error) {
     console.error(`发布未完成：${error.message}`)
     process.exitCode = 1
@@ -310,5 +327,6 @@ module.exports = {
   releaseDownloadURL,
   remotePublishScript,
   remoteCleanupScript,
+  selectReleaseVersion,
   updatePackageVersion,
 }
