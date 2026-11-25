@@ -11,7 +11,8 @@ test('Suit Duck manifest aliases are globally unique and all new actions are dec
   const manifest = require(pack + 'figure.json')
   const aliases = manifest.vocab.flatMap(word => [word.id, ...Object.values(word.names).flat()])
   assert.equal(new Set(aliases).size, aliases.length)
-  for (const id of ['work', 'ask', 'happy', 'sad', 'write', 'think', 'flag', 'carry']) {
+  assert.ok(['think', 'flag', 'carry'].every(id => !manifest.vocab.some(word => word.id === id)))
+  for (const id of ['work', 'ask', 'happy', 'sad', 'write']) {
     assert.equal(manifest.vocab.find(word => word.id === id)?.seconds, 8)
   }
 })
@@ -45,7 +46,7 @@ import importlib.util
 from copy import deepcopy
 s = importlib.util.spec_from_file_location('build', 'scripts/build-suit-duck.py')
 b = importlib.util.module_from_spec(s); s.loader.exec_module(b)
-for name, count in [('confirmation.svg', 29), ('carry.svg', 29), ('idle.svg', 0), ('working.svg', 0)]:
+for name, count in [('confirmation.svg', 29), ('idle.svg', 0), ('working.svg', 0)]:
     root, _ = b.read_source(name); original = deepcopy(root)
     assert b.repair_sleeve_clips(root) == count
     for before, after in zip(original.iter(), root.iter()):
@@ -85,14 +86,14 @@ test('all five business states use the supplied single-motion exports without th
   assert.equal(sources.base.sha256, latest.idle[0])
 })
 
-test('Suit Duck retains the original collection and all ten complete source actions', async () => {
+test('Suit Duck retains the original collection and the seven active source actions', async () => {
   const { FLOWS } = await import(pack + 'flow-artwork.js')
   const provenance = require('../assets/companion-suit-duck/sources.json')
-  assert.deepEqual(Object.keys(FLOWS), ['gait', 'idle', 'work', 'write', 'ask', 'happy', 'sad', 'think', 'flag', 'carry'])
+  assert.deepEqual(Object.keys(FLOWS), ['gait', 'idle', 'work', 'write', 'ask', 'happy', 'sad'])
   const collection = require('../assets/companion-suit-duck/collection.json')
   assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root,
     'assets/companion-suit-duck/source/collection.svg'))).digest('hex'), collection.sha256)
-  assert.equal(Object.values(FLOWS).reduce((sum, flow) => sum + flow.animations.length, 0), 1820)
+  assert.equal(Object.values(FLOWS).reduce((sum, flow) => sum + flow.animations.length, 0), 1488)
   for (const [kind, source] of Object.entries(provenance)) {
     const raw = fs.readFileSync(path.join(root, 'assets/companion-suit-duck/source', source.file))
     assert.equal(createHash('sha256').update(raw).digest('hex'), source.sha256)
@@ -112,7 +113,7 @@ test('Suit Duck retains the original collection and all ten complete source acti
 })
 
 test('Suit Duck finite source flows advance only through valid host steps and complete once', async () => {
-  for (const word of ['work', 'write', 'ask', 'happy', 'sad', 'think', 'flag', 'carry']) {
+  for (const word of ['work', 'write', 'ask', 'happy', 'sad']) {
     const seconds = 8
     const { state, body, calls, events } = await fixture()
     assert.equal(body.do(word), true)
@@ -158,7 +159,7 @@ from copy import deepcopy
 spec = importlib.util.spec_from_file_location('builder', 'scripts/build-suit-duck.py')
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
-for name, expected in [('walking.svg', 0), ('idle.svg', 0), ('working.svg', 188), ('writing.svg', 0), ('confirmation.svg', 0), ('success.svg', 4), ('failure.svg', 4), ('thinking.svg', 0), ('flag.svg', 0), ('carry.svg', 0)]:
+for name, expected in [('walking.svg', 0), ('idle.svg', 0), ('working.svg', 188), ('writing.svg', 0), ('confirmation.svg', 0), ('success.svg', 4), ('failure.svg', 4)]:
     root, provenance = b.read_source(name)
     original = deepcopy(root)
     assert b.repair_filter_bounds(root, provenance) == expected

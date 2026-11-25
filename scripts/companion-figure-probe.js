@@ -119,39 +119,18 @@ async function probeSuitDuck(origin, pack) {
     send({ t: 'set', state: { roam: 'off', thoughtShown: true, thinking: false,
       dialogOpen: false, listening: false, status: null } })
     if (pack) {
-      let thinking = false
-      for (let i = 0; i < 910; i++) {
-        const [message] = await tick(1)
-        if (message.layout.mode === 'idle' && message.layout.moving) { thinking = true; break }
-      }
-      if (!thinking) throw new Error('No random idle animation: ' + pack.id)
-      await tick(40)
-      send({ t: 'do', word: 'neutral' })
-      const [stopped] = await tick(1)
-      const clicks = []
-      for (const mode of ['idle', 'sleep', 'walk']) {
-        if (mode === 'sleep') send({ t: 'do', word: 'sleep' })
-        if (mode === 'walk') send({ t: 'walk', x: 750, run: false, id: 'click-walk' })
-        const [before] = await tick(2)
-        const point = before.layout.hit[0]
-        if (!point) throw new Error('No figure hit target: ' + pack.id)
-        send({ t: 'pointer', type: 'down', p: { x: point.x, y: point.y, t: 1000 } })
-        send({ t: 'pointer', type: 'up', p: { x: point.x, y: point.y, t: 1100 } })
-        const reaction = await tick(70)
-        clicks.push(reaction.every((item) => item.layout.mode === 'idle' && item.layout.moving)
-          && reaction.every((item) => item.sounds.every((sound) => sound.name !== 'poke')))
-        if (!clicks.at(-1)) throw new Error(JSON.stringify({ id: pack.id, clickMode: mode,
-          before: before.layout, modes: [...new Set(reaction.map((item) => item.layout.mode))],
-          moving: reaction.filter((item) => item.layout.moving).length,
-          sounds: reaction.flatMap((item) => item.sounds.map((sound) => sound.name)) }))
-        send({ t: 'do', word: 'neutral' })
-        await tick(1)
-      }
+      const [rest] = await tick(1)
+      const point = rest.layout.hit[0]
+      if (!point) throw new Error('Missing hit geometry for ' + pack.id)
+      send({ t: 'pointer', type: 'down', p: { ...point, t: 1000 } })
+      send({ t: 'pointer', type: 'up', p: { ...point, t: 1100 } })
+      const [clicked] = await tick(1)
+      const poked = clicked.events.some(event => event.kind === 'touch' && event.detail.kind === 'poke')
+      await tick(100)
       const hasFlows = ready.words.includes('work') && ready.words.includes('ask')
       const recoveries = hasFlows ? await probeRecovery() : []
       const activity = hasFlows ? await probeActivity() : null
-      return { id: pack.id, thinking, recoveries, activity, clickThinking: clicks.every(Boolean),
-        interrupted: !stopped.layout.moving, words: ready.words }
+      return { id: pack.id, poked, recoveries, activity, words: ready.words }
     }
     await tick(30)
     const flows = {}

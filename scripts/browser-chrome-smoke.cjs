@@ -51,6 +51,11 @@ Object.defineProperty(testElectron, 'dialog', { value: { ...electron.dialog, sho
   }
   if (options.title !== '完全磁盘访问') {
     assert.ok(['检查更新', '发现新版本', '更新失败'].includes(options.title))
+    if (options.title === '发现新版本') {
+      assert.deepEqual(options.buttons, ['应用内更新并重启', '稍后'])
+      assert.equal(options.defaultId, 0)
+      assert.equal(options.cancelId, 1)
+    }
     updateDialogs.push(options.title); return { response: updateResponse }
   }
   permissionPrompts++
@@ -144,20 +149,15 @@ async function probe() {
   const labels = electron.Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items.map(child => child.label) || [])
   assert.ok(!labels.includes('本机执行设置…'))
   assert.ok(!labels.includes('内置浏览器设置…'))
-  const permissionMenu = electron.Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items || [])
-    .find(item => item.label === '完全磁盘访问授权...')
-  assert.ok(permissionMenu, 'direct permission settings remain available from the app menu')
+  for (const removed of ['桌宠设置…', '显示桌宠', '隐藏桌宠', '完全磁盘访问授权...']) {
+    assert.ok(!labels.includes(removed), `${removed} is absent from the app menu`)
+  }
+  assert.ok(labels.includes('关于 Minduck Matter'))
+  assert.ok(labels.indexOf('设置…') < labels.indexOf('检查更新…'), 'Web settings precedes update check')
   const windowCount = BrowserWindow.getAllWindows().length
-  const openedBefore = permissionSettings.length, checksBefore = permissionChecks
-  permissionMenu.click()
-  await waitFor(() => permissionSettings.length, value => value === openedBefore + 1, 'direct System Settings navigation')
-  assert.ok(permissionChecks > checksBefore, 'menu probes again before opening Settings')
-  assert.ok(permissionSettings.every(url => url === permissions.FULL_DISK_ACCESS_SETTINGS_URL))
-  assert.equal(BrowserWindow.getAllWindows().length, windowCount, 'permission navigation creates no app window')
-  assert.equal(permissionPrompts, 0, 'permission navigation never shows an informational dialog')
   if (permissionSettingsOnly) {
     assert.equal(windowCount, 1, 'only the main app window exists')
-    console.log('PASS fresh startup does not probe FDA or open Settings, manual menu still opens exact permission page; no app permission window or dialog, real TCC unchanged')
+    console.log('PASS: startup does not probe FDA or open System Settings; removed permission/pet menu entries and Chinese About/Web settings labels verified; real TCC unchanged')
     return
   }
   assert.equal(BrowserWindow.getAllWindows().some(item => item.webContents.getURL().endsWith('/local-exec/settings.html')), false)
@@ -685,10 +685,6 @@ async function probe() {
   desktop.debugger.detach()
   updateVersion = nextVersion
   updateResponse = 0
-  await desktop.executeJavaScript('document.querySelector("#check-update").click()')
-  await waitFor(() => updateDownloads.length, count => count === 1, 'manual update opens the public installer')
-  assert.deepEqual(updateDownloads.splice(0), ['https://matter-desktop.yogeeai.com/download'])
-  updateResponse = 2
   await desktop.executeJavaScript('document.querySelector("#check-update").click()')
   await waitFor(() => desktop.executeJavaScript('minduckDesktopFrame.getState()'),
     value => value.update.phase === 'downloading' && value.update.percent === 37, 'in-app download progress')

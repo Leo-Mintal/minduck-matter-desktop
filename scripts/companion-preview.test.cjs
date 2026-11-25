@@ -2,21 +2,15 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const web = '../vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/'
 
-test('preview lists factory actions beyond the manifest without inventing unsupported actions', async () => {
+test('preview lists the active artwork and shows each task outcome just once', async () => {
   const { previewActions } = await import(web + 'minduck-preview.js')
-  const { KIT_EXPRESSIONS, KIT_MOTIONS } = await import(web + 'kit/body.js')
   const pack = require('../src/companion/figures/minduck-suit-duck/figure.json')
-  const words = [...new Set([...KIT_EXPRESSIONS, ...KIT_MOTIONS, ...pack.vocab.map(word => word.id)])]
-  const actions = previewActions(pack, words, { pointer: true, drop: true, talk: true, set: true })
-  assert.deepEqual(actions.filter(action => action.type === 'word').map(action => action.word).sort(), words.sort())
-  assert.equal(new Set(actions.map(action => action.id)).size, actions.length)
-  assert.ok(actions.some(action => action.id === 'word:love' && action.label === '喜欢'))
-  for (const id of ['task:work', 'task:ask', 'task:success', 'task:error', 'interaction:thinking',
-    'interaction:grab', 'interaction:drop', 'interaction:throw', 'state:talk', 'state:listening']) {
-    assert.ok(actions.some(action => action.id === id), id)
-  }
-  assert.deepEqual(previewActions({ id: 'custom', vocab: [{ id: 'missing' }] }, ['wave']).map(action => action.id),
-    ['auto', 'word:wave'])
+  const words = [...pack.vocab.map(word => word.id), 'love', 'sad', 'flag', 'think', 'carry']
+  const actions = previewActions(pack, words)
+  assert.deepEqual(actions.map(action => action.id), ['auto', 'word:neutral', 'word:walk', 'word:write',
+    'task:work', 'task:ask', 'task:success', 'task:error'])
+  assert.equal(actions.at(-1).label, '失败')
+  assert.deepEqual(previewActions(pack, ['neutral', 'wave']).map(action => action.id), ['auto', 'word:neutral'])
 })
 
 test('preview vocabulary from the sandbox is bounded and contains only distinct printable words', async () => {
@@ -26,44 +20,41 @@ test('preview vocabulary from the sandbox is bounded and contains only distinct 
   assert.equal(readPreviewWords(Array.from({ length: 300 }, (_, i) => `word${i}`)).length, 256)
 })
 
-test('preview uses real body actions once and maintains task, listening and mouth states locally', async () => {
+test('preview starts the selected real action once and keeps automatic roaming independent', async () => {
   const { createPreviewPlayer } = await import(web + 'minduck-preview.js')
   const calls = []
-  const body = Object.fromEntries(['set', 'do', 'talk'].map(key => [key, (...args) => calls.push([key, ...args])]))
-  const bounds = () => ({ W: 600, H: 300, floorY: 252 })
-  for (const action of [{ type: 'word', word: 'love' }, { type: 'task', kind: 'ask' },
-    { type: 'listening' }, { type: 'talk' }]) {
-    const player = createPreviewPlayer(body, action, bounds)
-    player.step(.02); player.step(.02)
+  const body = { set: state => calls.push(state), do: word => calls.push(word) }
+  for (const action of [{ type: 'word', word: 'write' }, { type: 'task', kind: 'error' }]) {
+    const player = createPreviewPlayer(body, action)
+    player.step(0); player.step(.02); player.step(.02)
   }
-  assert.equal(calls.filter(call => call[0] === 'do').length, 1)
-  assert.ok(calls.some(call => call[0] === 'do' && call[1] === 'love'))
-  assert.equal(calls.filter(call => call[1]?.matterActivity).length, 1)
-  assert.equal(calls.find(call => call[1]?.matterActivity)[1].matterActivity.kind, 'ask')
-  assert.equal(calls.filter(call => call[1]?.listening).length, 1)
-  assert.equal(calls.filter(call => call[0] === 'talk').length, 1)
-  const auto = createPreviewPlayer(body, { type: 'auto' }, bounds)
-  const before = calls.length
+  assert.equal(calls.filter(value => value === 'write').length, 1)
+  const tasks = calls.filter(value => value.matterActivity)
+  assert.equal(tasks.length, 1)
+  assert.equal(tasks[0].matterActivity.kind, 'error')
+  const auto = createPreviewPlayer(body, { type: 'auto' })
   auto.step(100)
-  assert.equal(calls.length, before)
-  assert.deepEqual(calls.at(-1), ['set', { roam: 'calm' }])
+  assert.deepEqual(calls.at(-1), { roam: 'calm' })
 })
 
-test('preview interactions wait for hit geometry and use pointer/drop paths without blocking thinking', async () => {
-  const { createPreviewPlayer } = await import(web + 'minduck-preview.js')
-  for (const kind of ['thinking', 'grab', 'drop', 'throw']) {
-    const calls = []
-    const body = { layout: null, set: state => calls.push(['set', state]),
-      pointer: (type, point) => calls.push([type, point]), drop: point => calls.push(['drop', point]) }
-    const player = createPreviewPlayer(body, { type: 'interaction', kind, seconds: 8 },
-      () => ({ floorY: 252 }))
-    player.step(.02)
-    assert.equal(calls.length, 1, 'wait for a rendered body')
-    body.layout = { hit: [{ x: 200, y: 180, r: 40 }] }
-    player.step(.02); player.step(.02)
-    assert.equal(calls.filter(call => call[0] === 'down').length, 1)
-    assert.equal(calls.some(call => call[0] === 'up'), ['thinking', 'throw'].includes(kind))
-    assert.equal(calls.some(call => call[0] === 'drop'), kind === 'drop')
-    assert.equal(calls.some(call => call[1]?.hold), kind !== 'thinking')
+test('built-in action cards use distinct real thumbnails and imported figures keep their own image', async () => {
+  const fs = require('node:fs')
+  const path = require('node:path')
+  const { previewActions, previewThumbnail } = await import(web + 'minduck-preview.js')
+  for (const id of ['minduck-duck', 'minduck-suit-duck']) {
+    const root = path.resolve(__dirname, '../src/companion/figures', id)
+    const pack = { ...require(path.join(root, 'figure.json')), base: `/packs/${id}/` }
+    const actions = previewActions(pack, pack.vocab.map(word => word.id))
+    assert.equal(previewThumbnail(pack, actions[0]), pack.base + 'previews/word-neutral.png')
+    const thumbnails = actions.slice(1).map(action => {
+      const url = previewThumbnail(pack, action)
+      const bytes = fs.readFileSync(path.join(root, url.slice(pack.base.length)))
+      assert.equal(bytes.subarray(1, 4).toString(), 'PNG')
+      return bytes.toString('base64')
+    })
+    assert.equal(new Set(thumbnails).size, thumbnails.length)
   }
+  assert.equal(previewThumbnail({ id: 'imported', base: '/packs/custom/', thumb: 'cover.webp' },
+    { id: 'task:work', type: 'task' }), '/packs/custom/cover.webp')
+  assert.equal(previewThumbnail({ id: 'imported' }, { type: 'auto' }), null)
 })

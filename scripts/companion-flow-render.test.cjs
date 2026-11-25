@@ -4,16 +4,59 @@ const assert = require('node:assert/strict')
 // The fake SVG records writes; the Electron sandbox probe checks real artwork.
 function svg() {
   const nodes = new Map()
-  const root = { writes: [], children: [], style: {}, attributes: {},
+  const symbol = { childNodes: [{}], children: [], appendChild(node) { this.children.push(node) } }
+  const root = { writes: [], children: [], style: {}, attributes: {}, nodes,
+    namespaceURI: 'http://www.w3.org/2000/svg',
     ownerDocument: { createElementNS: () => svg() },
     setAttribute(name, value) { this.attributes[name] = value; this.writes.push([name, value]) },
     appendChild(node) { this.children.push(node) },
+    append(...items) { this.children.push(...items) },
     querySelector(id) {
-      if (!nodes.has(id)) nodes.set(id, { style: {}, animate: () => ({ pause() {}, cancel() {} }) })
+      if (id.startsWith('[id$=')) return symbol
+      if (!nodes.has(id)) nodes.set(id, { style: {}, animate() { this.animated = true; return { pause() {}, cancel() {} } } })
       return id === '[data-duck-art]' ? this : nodes.get(id)
     } }
   return root
 }
+
+test('Suit Duck directional task symbols stay readable when the body faces left', async () => {
+  const { mountFlows, drawFlows } = await import('../src/companion/figures/minduck-suit-duck/flow-player.js')
+  const flows = mountFlows(svg())
+  for (const kind of ['ask', 'happy', 'sad']) {
+    drawFlows(flows, kind, 0, false, -1)
+    assert.equal(flows[kind].symbol.style.transform, 'scaleX(-1)')
+    drawFlows(flows, kind, 0.1, false, 1)
+    assert.equal(flows[kind].symbol.style.transform, '')
+  }
+})
+
+test('Suit Duck animated layers use their authored SVG origin', async () => {
+  const { mountFlows, drawFlows } = await import('../src/companion/figures/minduck-suit-duck/flow-player.js')
+  const flows = mountFlows(svg())
+  drawFlows(flows, 'work', 0.1)
+  const layers = [...flows.work.root.nodes.values()].filter(node => node.animated)
+  assert.ok(layers.length > 0)
+  assert.ok(layers.every(node => node.style.transformOrigin === '0 0'))
+})
+
+test('Suit Duck pose handoffs remain opaque between the exported visibility keyframes', async () => {
+  const { FLOWS } = await import('../src/companion/figures/minduck-suit-duck/flow-artwork.js')
+  const { opacityAt } = await import('../src/companion/figures/minduck-suit-duck/flow-player.js')
+  for (const kind of ['work', 'write', 'ask', 'happy', 'sad']) {
+    for (const track of FLOWS[kind].animations) {
+      const frames = track.keyframes
+      if (!frames.every(frame => ['0', '1'].includes(frame.opacity))) continue
+      for (let i = 1; i < frames.length; i++) {
+        const left = frames[i - 1], right = frames[i]
+        if (left.opacity === right.opacity) continue
+        if (right.offset - left.offset > .000100001) continue
+        const middle = (left.offset + right.offset) / 2
+        assert.equal(opacityAt(frames, middle), Number(left.opacity), `${kind}: ${track.id} at ${middle}`)
+        assert.equal(opacityAt(frames, right.offset), Number(right.opacity))
+      }
+    }
+  }
+})
 
 for (const id of ['minduck-duck', 'minduck-suit-duck']) {
   test(`${id} selects one opaque source at the entrance and exit without crossfading`, async () => {
@@ -38,6 +81,56 @@ for (const id of ['minduck-duck', 'minduck-suit-duck']) {
     assert.equal(flows.ask.root.attributes.opacity, '0')
     draw('work', 1)
     assert.equal(flows.work.root, root, 'returning to a source reuses its mounted artwork')
+  })
+}
+
+async function activityRenderFixture(id) {
+  const { createFlowBody } = await import(`../src/companion/figures/${id}/flow-state.js`)
+  const { FLOW_TIMING } = await import(`../src/companion/figures/${id}/flow-player.js`)
+  const { withMatterActivity } = await import('../vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-activity.js')
+  const state = { kind: null, sourceTime: 0, elapsed: 0, holdTime: 0 }, drawn = [], events = []
+  const base = { words: [...Object.keys(FLOW_TIMING), 'stand'],
+    do: () => true, stopWalk() {}, set() {}, dispose() {},
+    step() { drawn.push({ kind: state.kind ?? 'idle', time: state.sourceTime }) },
+    layout: () => ({ busy: false, mode: 'idle', pressing: false }),
+  }
+  const body = withMatterActivity(createFlowBody({ createBody: () => base },
+    { emit: (kind, detail) => events.push({ kind, ...detail }) }, {}, state))
+  return { state, drawn, events,
+    set(kind) { body.set({ matterActivity: { kind, id: kind, expiresAt: Date.now() + 10000 } }) },
+    tick(count = 1) { for (let i = 0; i < count; i++) body.step(.05) },
+  }
+}
+
+for (const id of ['minduck-duck', 'minduck-suit-duck']) {
+  test(`${id} paints the next activity on the frame that finishes stowing`, async () => {
+    const pairs = [['ask', 'work'], ['work', 'ask'],
+      ...(id === 'minduck-suit-duck' ? [['ask', 'success'], ['work', 'error']] : [])]
+    for (const [from, to] of pairs) {
+      const f = await activityRenderFixture(id)
+      f.set(from); f.tick(40); f.drawn.length = 0
+      f.set(to)
+      for (let i = 0; i < 80 && f.state.kind === from; i++) f.tick()
+      const target = { success: 'happy', error: 'sad' }[to] ?? to
+      assert.equal(f.state.kind, target)
+      assert.ok(f.drawn.length > 1, 'the original stowing sequence remains visible')
+      assert.deepEqual([...new Set(f.drawn.map(frame => frame.kind))], [from, target], 'no unrelated idle frame')
+      assert.deepEqual(f.drawn.at(-1), { kind: target, time: 0 }, 'the new source starts at its actual first frame')
+      assert.equal(f.events.filter(event => event.word === from).length, 1)
+    }
+  })
+
+  test(`${id} reads the latest target at stow completion and never paints an obsolete queued action`, async () => {
+    for (const final of ['work', 'idle']) {
+      const f = await activityRenderFixture(id)
+      f.set('work'); f.tick(40); f.drawn.length = 0
+      f.set('ask'); f.tick(3)
+      f.set('error'); f.set('idle'); f.set(final)
+      for (let i = 0; i < 80 && !f.events.some(event => event.word === 'work'); i++) f.tick()
+      assert.equal(f.drawn.at(-1).kind, final)
+      assert.ok(f.drawn.every(frame => frame.kind === 'work' || final === 'idle' && frame.kind === 'idle'))
+      assert.equal(f.events.filter(event => event.word === 'work').length, 1)
+    }
   })
 }
 

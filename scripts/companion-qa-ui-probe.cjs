@@ -5,6 +5,8 @@ const path = require('node:path')
 
 module.exports = async function probeQaUI(page, waitFor) {
   const evaluate = code => page.webContents.executeJavaScript(code)
+  const near = (actual,expected,label='CSS pixel geometry') => assert.ok(Math.abs(actual-expected)<.02,
+    `${label}: expected ${expected}, received ${actual}`)
   const root = `document.querySelector('.minduck-qa').shadowRoot`
   const frame = () => evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
   async function click(selector) {
@@ -62,10 +64,10 @@ module.exports = async function probeQaUI(page, waitFor) {
         titleHeight:title.height,descriptionHeight:desc.height,descriptionGap:desc.top-title.bottom,actionGap:buttons[0].top-desc.bottom,
         buttonHeight:buttons[0].height,gap:buttons[1].left-buttons[0].right,paddingRight:r.right-buttons[1].right};})()`)
     assert.equal(state.theme,theme);assert.equal(state.font,'14px');assert.equal(state.overflow,false)
-    assert.equal(state.width,330)
-    assert.equal(state.height,state.paddingTop+state.titleHeight+state.descriptionGap+state.descriptionHeight+state.actionGap+state.buttonHeight+state.paddingBottom,'card height follows its content and spacing')
-    assert.equal(state.titleHeight,20);assert.equal(state.descriptionHeight,20);assert.equal(state.descriptionGap,8);assert.equal(state.actionGap,12)
-    for(const [property,value] of Object.entries({paddingLeft:16,paddingTop:12,paddingBottom:12,buttonHeight:32,gap:12,paddingRight:16}))
+    near(state.width,330)
+    near(state.height,state.paddingTop+state.titleHeight+state.descriptionGap+state.descriptionHeight+state.actionGap+state.buttonHeight+state.paddingBottom,'card height follows its content and spacing')
+    near(state.titleHeight,20);near(state.descriptionHeight,20);near(state.descriptionGap,8);near(state.actionGap,12)
+    for(const [property,value] of Object.entries({paddingLeft:18,paddingTop:20,paddingBottom:20,buttonHeight:32,gap:12,paddingRight:18}))
       assert.ok(Math.abs(state[property]-value)<.02,property+': '+JSON.stringify(state))
     assert.ok(state.left>=16 && state.right<=width-15.99 && state.top>=16 && state.bottom<=600,JSON.stringify(state))
     if(width===768) await screenshot('confirm-'+theme)
@@ -78,8 +80,31 @@ module.exports = async function probeQaUI(page, waitFor) {
   for(const desc of [undefined,'  是否允许继续执行？ \n']) {
     await render({variant:'confirm',q:'是否允许继续执行？',desc,options,max_attachments:0})
     assert.equal(await evaluate(`${root}.querySelectorAll('.pet-question-desc').length`),0,'confirm never repeats the question as a description')
-    assert.equal(await evaluate(`document.querySelector('.minduck-output').getBoundingClientRect().height`),12+20+12+32+12,'missing subtitle leaves no reserved row or minimum card height')
+    near(await evaluate(`document.querySelector('.minduck-output').getBoundingClientRect().height`),20+20+12+32+20,'missing subtitle leaves no reserved row or minimum card height')
   }
+  const greetingInsets=[]
+  await render({variant:'single',q:'我是 Matter，有什么我可以帮你的吗？',options:[],custom:true,
+    input_mode:'text_or_files',max_attachments:3})
+  for(const width of [375,768,1024,1440]) for(const theme of ['light','dark']) {
+    page.setContentSize(width,600)
+    await page.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme}]})
+    await frame()
+    const inset=await evaluate(`(()=>{const s=${root},card=document.querySelector('.minduck-output').getBoundingClientRect();
+      const title=s.querySelector('.pet-question-title').getBoundingClientRect(),input=s.querySelector('textarea').getBoundingClientRect();
+      const actions=s.querySelector('.pet-qa-actions').getBoundingClientRect(),content=getComputedStyle(document.querySelector('.minduck-content'));
+      return {viewportWidth:innerWidth,top:title.top-card.top,right:card.right-input.right,bottom:card.bottom-actions.bottom,left:input.left-card.left,
+        width:card.width,height:card.height,inputHeight:input.height,buttonHeight:s.querySelector('.pet-attach').getBoundingClientRect().height,
+        shared:[content.paddingTop,content.paddingRight,content.paddingBottom,content.paddingLeft],
+        overflow:document.documentElement.scrollWidth>innerWidth};})()`)
+    for(const [key,value] of Object.entries({top:20,bottom:20,left:18,right:18,width:330,inputHeight:32,buttonHeight:32}))
+      near(inset[key],value,'greeting '+key)
+    assert.equal(inset.overflow,false)
+    assert.equal(inset.viewportWidth,width)
+    assert.deepEqual(inset.shared,['4px','2px','4px','2px'])
+    greetingInsets.push({theme,...inset})
+    if(width===768) await screenshot('greeting-padding-'+theme)
+  }
+  fs.writeFileSync(path.resolve(__dirname,'../build/companion-padding-qa.json'),JSON.stringify(greetingInsets,null,2)+'\n')
   const choiceSpec={variant:'single',q:'你希望我怎么处理？',max_attachments:0,options:[
     {key:'direct',label:'直接帮我来完成',sub:'这一轮我就把它做完交给你。'},
     {key:'team',label:'交给专业团队来完成',sub:'组一支团队来做，以后同类的事都能交给它。'},
@@ -111,10 +136,10 @@ module.exports = async function probeQaUI(page, waitFor) {
       assert.equal(style.titles,1);assert.equal(style.descriptions,0,'task detail is the same question, not a second title')
       assert.equal(style.overflow,false)
       for(const row of style.rows){
-        assert.equal(row.height,32);assert.ok(row.labelHeight<20);assert.equal(row.font,'14px')
+        near(row.height,32,'option height');assert.ok(row.labelHeight<20);assert.equal(row.font,'14px')
         assert.equal(row.whiteSpace,'nowrap');assert.equal(row.overflow,'hidden');assert.equal(row.ellipsis,'ellipsis');assert.ok(row.clipped)
         assert.equal(row.subInk,row.ink,'option descriptions use the main QA label color')
-        assert.equal(row.title,row.text);assert.equal(row.markWidth,20);assert.equal(row.markRadius,'50%')
+        assert.equal(row.title,row.text);near(row.markWidth,20,'option marker width');assert.equal(row.markRadius,'50%')
       }
       const selected=style.rows[0],unselected=style.rows[1]
       assert.equal(selected.background,theme==='dark'?'rgb(28, 28, 30)':'rgb(240, 240, 240)')
@@ -142,7 +167,7 @@ module.exports = async function probeQaUI(page, waitFor) {
     await frame()
     const layout=await evaluate(`(()=>{const s=${root},r=document.querySelector('.minduck-output').getBoundingClientRect(),t=s.querySelector('.pet-question-title').getBoundingClientRect(),d=s.querySelector('.pet-question-desc').getBoundingClientRect(),f=s.querySelector('textarea').getBoundingClientRect(),a=s.querySelector('.pet-qa-actions').getBoundingClientRect();return {height:r.height,gap:d.top-t.bottom,inputGap:f.top-d.bottom,inputHeight:f.height,footerGap:a.top-f.bottom,bottom:r.bottom-a.bottom,count:s.querySelector('.pet-page-count').textContent,action:s.querySelector('.pet-qa-go').textContent,overflow:document.documentElement.scrollWidth>innerWidth};})()`)
     for(const key of Object.keys(layout)) if(typeof layout[key]==='number') layout[key]=Math.round(layout[key]*1000)/1000
-    assert.deepEqual(layout,{height:12+20+8+20+12+32+12+32+12,gap:8,inputGap:12,inputHeight:32,footerGap:12,bottom:12,count:'2/3',action:'下一个',overflow:false})
+    assert.deepEqual(layout,{height:20+20+8+20+12+32+12+32+20,gap:8,inputGap:12,inputHeight:32,footerGap:12,bottom:20,count:'2/3',action:'下一个',overflow:false})
     if(width===768) await screenshot('spaced-input-'+theme)
   }
 
@@ -193,15 +218,16 @@ module.exports = async function probeQaUI(page, waitFor) {
         shadow=>!shadow.includes('255, 154, 46') && !shadow.includes('255, 149, 0'),'focused input has no orange outer card ring')
       const layout=await evaluate(`(() => {const s=${root},card=document.querySelector('.minduck-output').getBoundingClientRect(),field=s.querySelector('textarea').getBoundingClientRect(),go=s.querySelector('.pet-qa-go').getBoundingClientRect();
         const f=getComputedStyle(s.querySelector('textarea')),q=getComputedStyle(s.querySelector('.pet-question'));
-        return {inside:field.left>=card.left+15.95 && field.right<=card.right-15.95,above:field.bottom<go.top,buttons:s.querySelectorAll('.pet-qa-go').length,
+        return {inside:field.left>=card.left+17.95 && field.right<=card.right-17.95,above:field.bottom<go.top,buttons:s.querySelectorAll('.pet-qa-go').length,
           inputHeight:field.height,radius:parseFloat(f.borderRadius),outline:f.outlineStyle,shadow:f.boxShadow,
           padding:[q.paddingTop,q.paddingRight,q.paddingBottom,q.paddingLeft],
           bottom:card.bottom-go.bottom,right:card.right-go.right,overflow:document.documentElement.scrollWidth>innerWidth};})()`)
       assert.ok(layout.inside && layout.above && !layout.overflow,JSON.stringify(layout));assert.equal(layout.buttons,1)
-      assert.equal(layout.inputHeight,32);assert.ok(layout.radius>=16)
+      near(layout.inputHeight,32);assert.ok(layout.radius>=16)
       assert.equal(layout.outline,'none');assert.equal(layout.shadow,'none')
-      assert.deepEqual(layout.padding,['12px','16px','12px','16px'])
-      assert.ok(Math.abs(layout.right-16)<.05)
+      assert.deepEqual(layout.padding,['16px','16px','16px','16px'])
+      assert.ok(Math.abs(layout.bottom-20)<.05)
+      assert.ok(Math.abs(layout.right-18)<.05)
       await click('.pet-qa-go')
     }
     await click('textarea');await new Promise(resolve=>setTimeout(resolve,180));await screenshot('input-'+theme)
@@ -230,9 +256,9 @@ module.exports = async function probeQaUI(page, waitFor) {
     await frame();await click('.pet-custom-input')
     const layout=await evaluate(`(()=>{const s=${root},row=s.querySelector('.pet-option'),custom=s.querySelector('.pet-custom-input'),input=custom.querySelector('textarea'),mark=custom.querySelector('.pet-custom-mark'),icon=custom.querySelector('.pet-custom-icon'),a=row.getBoundingClientRect(),b=custom.getBoundingClientRect(),f=input.getBoundingClientRect(),i=icon.getBoundingClientRect(),c=getComputedStyle(custom);return {width:b.width,height:b.height,optionWidth:a.width,optionHeight:a.height,gap:b.top-s.querySelector('.pet-option:last-child').getBoundingClientRect().bottom,markOffset:mark.getBoundingClientRect().left-b.left,optionMarkOffset:row.querySelector('.pet-option-mark').getBoundingClientRect().left-a.left,icon:[i.width,i.height],mask:getComputedStyle(icon).maskImage.includes('data:image/svg+xml'),inputHeight:f.height,placeholder:input.placeholder,focused:s.activeElement===input,outline:getComputedStyle(input).outlineStyle,radius:parseFloat(c.borderRadius),background:c.backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth};})()`)
     for(const key of ['width','height','optionWidth','optionHeight','gap','markOffset','optionMarkOffset','inputHeight']) layout[key]=Math.round(layout[key]*1000)/1000
-    assert.equal(layout.width,layout.optionWidth);assert.equal(layout.height,layout.optionHeight);assert.equal(layout.height,32)
+    near(layout.width,layout.optionWidth);near(layout.height,layout.optionHeight);near(layout.height,32)
     assert.equal(layout.gap,8);assert.equal(layout.markOffset,layout.optionMarkOffset);assert.deepEqual(layout.icon,[12,12]);assert.equal(layout.mask,true)
-    assert.equal(layout.inputHeight,32);assert.equal(layout.placeholder,'其他我来说明');assert.equal(layout.focused,true);assert.equal(layout.outline,'none');assert.ok(layout.radius>=16);assert.equal(layout.overflow,false)
+    near(layout.inputHeight,32);assert.equal(layout.placeholder,'其他我来说明');assert.equal(layout.focused,true);assert.equal(layout.outline,'none');assert.ok(layout.radius>=16);assert.equal(layout.overflow,false)
     assert.equal(layout.background,theme==='dark'?'rgb(28, 28, 30)':'rgb(240, 240, 240)')
     if(width===768) await screenshot('custom-input-'+theme)
   }

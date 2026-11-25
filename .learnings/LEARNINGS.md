@@ -131,3 +131,39 @@ The user explicitly requested a fixed localhost:4179 entry without login, roles,
 - Source: user_feedback
 - Related Files: tools/invite-console/core.js, tools/invite-console/app.js, tools/invite-console/serve.cjs
 - Tags: scope, invitation, direct-access
+
+## [LRN-20261125-001] correction
+
+**Logged**: 2026-11-25
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+Use the pet reference video for interaction only and preserve the existing panel visuals.
+
+### Details
+The user rejected the glass palette change after the test package. Restore the original colors, opacity, blur, shadows and card dimensions; retain separately requested QA spacing and the two-button toolbar. Recreate the reference's actual stacked-card expansion and gathering rather than an immediate layout change with a generic entrance fade.
+
+### Metadata
+- Source: user_feedback
+- Related Files: vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-panels.js, vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-panels.css
+- Tags: companion, motion, visual-scope
+
+## [LRN-20261125-002] correction
+
+**Logged**: 2026-11-25
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+Use theme-aware overflow overlays rather than glows around individual companion cards.
+
+### Details
+The task list's top/bottom hints should appear only where additional content exists. Use a light overlay in light appearance and a dark overlay in dark appearance. Remove card/backing outer halos while preserving their neutral inset edges, dimensions and palette. Wheel gestures expand/fold the deck while normal list and nested QA scrolling remain usable.
+
+### Metadata
+- Source: user_feedback
+- Related Files: vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-panels.css, vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-panels.js
+- Tags: companion, scroll, appearance, scope

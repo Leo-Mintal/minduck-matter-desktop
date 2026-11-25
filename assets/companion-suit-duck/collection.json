@@ -13,21 +13,6 @@
       "file": "writing.svg",
       "group": "Minduck___Business__________2",
       "sha256": "9acf83608f5c0727312d76718b8ef796c61a14c9066e823bbb6c0f45a5981393"
-    },
-    "think": {
-      "file": "thinking.svg",
-      "group": "Minduck___Business__________5",
-      "sha256": "79a20b0b3b1874eaaf505ce58d0358df0c742e0ba3e1ad63f7cb5d4a17598bb8"
-    },
-    "flag": {
-      "file": "flag.svg",
-      "group": "Minduck___Business_______________",
-      "sha256": "6024ff01395f2d4d73ff378cf954a79afa9c897d05931bcbab3adbfacb41c149"
-    },
-    "carry": {
-      "file": "carry.svg",
-      "group": "Boss_Duck___Book_Carry________________________",
-      "sha256": "ffe8e24c46ee91d2c1e9312bce4253908dfe4e47dc827e613d0087e0ccac0aaa"
     }
   }
 }

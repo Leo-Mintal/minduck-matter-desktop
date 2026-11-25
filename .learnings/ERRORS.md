@@ -1643,3 +1643,122 @@ The new VM regressions first reproduced missing `crypto.randomUUID` in both real
 ## 2026-11-23 - Suit Duck dressing preview
 
 - All 53 preview choices ran on the first pass, then the appearance check timed out during the viewport sweep. Repeating the unchanged probe in a fresh disposable profile passed all four widths in both themes.
+
+## 2026-11-24 - 0.1.16 test package with activation profile
+
+- The first signed test package was accepted by Apple notary and passed DMG/ZIP integrity checks, but did not embed the desktop activation profile. A second build signed with the installed profile but notarytool reported `No Keychain password item found for profile: MinduckNotary`. Recovered the matching profile from the existing formal 0.1.16 ZIP, verified its hash against the installed profile, and retried after the Keychain notary profile became available. The final DMG/ZIP now contain the profile and both notary submissions were accepted.
+
+## 2026-11-25 - Suit Duck flash regression validation
+
+- The test wrapper used zsh's read-only `status` variable after the tests completed. Renamed the local result variable to `suite_result` and reran the wrapper successfully.
+- The macOS output-directory regression still matched only a top-level `release_dir` assignment after named test builds introduced conditional paths. Updated the test to execute the actual directory-selection block and verify formal and named-test output isolation; the full 299-test suite passed.
+
+## 2026-11-25 - Scrollable desktop conversation list
+
+- A source read assumed a `view.ts` entry; the actual companion UI sources are separate TSX components. Used the tracked file inventory before continuing.
+- The offscreen keyboard probe sent Enter without its carriage-return text, so Chromium did not activate the native button. Supplied the complete CDP key event; real keyboard folding then passed.
+- The QA theme probe still waited for the previous opaque black/white inset edge. Updated its exact expectation to the new translucent glass highlights; the complete panel regression then passed in both appearances.
+- The quality checker accepts directory targets and silently scanned zero files for a single-file target. Repeated it against an isolated directory containing the changed module and confirmed one file was scanned, with no errors or warnings.
+
+## 2026-11-25 - Desktop context menu and two bottom controls
+
+- A native preload read used the wrong filename; the package inventory identified `host/preload.cjs`.
+- The first context-menu layout probe clicked the sandbox's pre-resize coordinates. Recorded the actual input and current hit geometry, then waited for four updated sandbox frames before clicking; both appearances and all four viewport widths passed.
+- The existing native shortcut suite timed out on its unrelated main-window foreground assertion. That assertion remains strict. Native menu mouse sequences also lost their menu when macOS changed focus. Kept actual mouse delivery in the isolated offscreen UI probe and verified the real preload/Core settings and hide/reopen actions independently, without altering the native origin/IPC guards. Temporary native diagnostics were fully removed.
+- Closing the settings fixture before its first load finished logged `ERR_FAILED`. The native menu probe now waits for loading to finish and verifies the real 习惯/装扮 navigation before closing; the settings/hide/reopen check passes without that error.
+- The quality scan passed for both changed modules. Its remaining file-length warning refers to the existing large pet-page module; no unrelated module split was introduced.
+
+## 2026-11-25 - QA padding regression cleanup
+
+- The diagnostic-profile cleanup guard matched its own shell because the full target path appeared literally in the command. Constructed the path from its directory and basename before checking processes; the finished regression profile was then safely removed.
+
+## 2026-11-25 - 0.1.16 consolidated companion test package
+
+- The first isolated source snapshot omitted `native/desktop-access.mm`; native compilation stopped before signing. Included the native source directory and added an explicit input check. Retried only in isolated snapshots, fetching/rebuilding remote Web `dev` again each time; existing packages and the installed app were preserved.
+- The workspace smoke focused a renderer inside a window outside the screen, and its tooltip assertion timed out. Changed the test to send real renderer mouse movement over the same asset-navigation target, retaining its exact tooltip text and bounds assertions. The complete workspace and browser checks passed without changing production UI.
+- The new artifact verifier had an extra closing parenthesis. Corrected it and ran syntax checks before executing verification. Final signatures/tickets, 4,897 input hashes, 5,550 matching DMG/ZIP entries, 9,544 DMG blocks, activation authorization and actual native-module loading all passed.
+
+## 2026-11-25 - Companion panel motion regression fixture
+
+- The first motion assertions compared absolute panel positions while the real figure continued its idle breathing and bubble movement. Frame traces confirmed the deck followed that existing pet anchor. The motion fixture now freezes only the figure geometry while exercising the actual panel layout and compositor animation; it checks the pet-relative anchor rather than changing production breathing behavior.
+- Exact width equality also rejected Chromium's `330` versus `330.0000305` rectangle rounding. Geometry checks now allow 0.01px and still reject any visible scaling; font size and front opacity retain exact assertions. Default and Suit Duck motion/list regressions pass.
+- The quality checker excludes `node_modules`, so pointing it directly at the pinned runtime scanned zero files. Repeated against temporary copies of the touched panel and probe sources: three files scanned, no errors or warnings; informational long-line notes follow the existing compact file style. Temporary scan copies were removed.
+- An added top-edge fixture reproduced actual front-card disappearance when expanding moved the list from above the pet to below it: the final scroll viewport clipped the animated source position. During transitions the list now allows those animated cards to cross the viewport while other rows stay hidden; normal scrolling/masking returns on completion. A separate motion-state check preserves the current position when reversing outside the final viewport.
+- The transition is additionally clipped to the union of its folded/expanded viewports, preventing tall mixed-height cards from exposing off-viewport queued content while the ordinary scroll clip is suspended. The mixed-height motion fixture checks actual hit visibility beyond that combined boundary.
+- A later full panel run passed list/motion/QA checks but reached the context-menu toolbar assertion during a transient figure state. The menu fixture previously waited only for `moving=false`; it now also waits for resize/landing/press states to finish before right-clicking, retaining the exact visible-toolbar assertion and adding mode diagnostics. Its focused four-width/light-dark run passes.
+
+## 2026-11-25 - Corrected-panel test package snapshot
+
+- The isolated unit suite initially lacked `minduck-matter-chromium/scripts/config.cjs`, required by the existing prototype-launcher test. Added that source-only scripts directory to the snapshot (without copying its downloaded Chromium runtime), then reran the original suite. No application code or test assertion was changed; the failed snapshot was removed before restarting.
+- The package driver invoked `workspace-shell-smoke.cjs` directly through Electron, skipping its Node wrapper that supplies a disposable-profile argument. Stopped only that verified test process and changed the driver to invoke the existing Node entrypoint. The failed build snapshot was removed; the next attempt fetches/builds Web `dev` again. No production code or UI assertions were changed.
+- That invalid Electron invocation returned zero after termination, allowing its first driver to continue briefly. Confirmed the old process tree, stopped only its owned driver/test/package children, and confirmed completion before continuing with the fresh corrected build. Final verification additionally requires the actual workspace/browser PASS records rather than trusting process status alone; existing packages were not replaced.
+- The default `@electron/osx-sign` binary detector also selected PNG resources, confirmed from its source and the active signing target; the runtime has 490 image/font/model resources. Stopped that attempt and used an isolated-build signing hook that retains existing options/ignores and signs Mach-O files plus bundles, leaving ordinary resources covered by the application seal. The project packaging script and source package configuration remain unchanged; retry still fetches/rebuilds Web `dev` and must pass complete signature/notarization checks.
+- A read-only signing-progress probe used `os.listxattr`, which this macOS Python build does not expose. No files were changed; inspected the installed signing library and its actual child target instead.
+- The first isolated signing hook supplied an ignore array, but `@electron/osx-sign@1.3.3` normalizes arrays to `undefined`; the active child still selected PNGs. Changed the hook to one combined predicate. An integration check using the installed library's actual normalization now verifies PNG exclusion, Mach-O/bundle retention and preservation of original ignores before restarting. Both obsolete signing attempts were stopped and their owned staging bundles cleaned.
+
+## 2026-11-25 - Wheel gestures and scroll-edge overlays
+
+- The existing animation probe failed before reaching the new wheel assertions: a moving front card's center crossed the bottom green handle when the list changed from above to below the figure. Captured hit-test class `minduck-handle` while the card's opacity, clip union and visible overflow were correct. Raised only the transitioning deck to z-index 5, keeping the context menu at 6; the real animation and wheel probes then pass without weakening the visibility assertion.
+- Suit Duck's fractional native transform exposed exact-equality QA geometry checks (`32.00001525878906` / `31.999984741210938` versus `32`). QA geometry assertions now use the existing 0.02 CSS-pixel tolerance consistently; font strings, content, action payloads and non-geometry assertions remain exact. This changes test measurement handling, not widget dimensions.
+
+## 2026-11-25 - Action preview card continuation
+
+- A resumed build lookup used an absent `build.log`; the actual driver log is `metadata/packaging.log`. Stopped only that verified obsolete build tree after the user added action cards, and its temporary application staging was cleaned.
+- An initial source read included a generated one-line `flow-artwork.js` and emitted excessive output. Read renderer code and bounded metadata instead; do not print generated artwork bundles.
+
+- The previous interrupted build’s full motion check exposed a fourth card counted as visible only because of scaled native subpixel contact at the viewport boundary. Added a 0.02 CSS-pixel visibility tolerance; the real default-duck timing/wheel/list regression passes with exactly three animated rows.
+- Workspace/chrome probes against the root’s older November 24 `web-dist` failed on missing new workspace UI and the prior 24px control height. Re-run these probes on the freshly fetched/built Web dev plus the authorized overlay used by the final package; do not relax current UI assertions.
+- Some read-only lookups guessed paths absent from the local older Web branch; use the fresh isolated checkout and exact file inventory for current shared UI.
+
+- The first fresh Web settings smoke used the absent `.settings-nav` selector; the real component renders `.snav` and `.account-page`. The menu had already reached `/settings/acct`. Replaced the invented selector with the real account-name input and signed-in fixture value, adding a settings screenshot and menu evidence.
+- One overlapping root preview sweep timed out on appearance propagation. The same immutable source passed all four widths and both appearances in the isolated packaging workspace; keep that successful evidence and avoid overlapping visible preview sweeps.
+
+## 2026-11-25 - Quick-send animation transition
+
+- Initial read-only exploration guessed absent `src/companion/host-preload.cjs` and composer probe paths. Use the runtime host inventory and existing `companion-quick-chat-ui-probe.cjs`; the screenshot shows the desktop quick composer rather than the Web duck scene. No Web source was changed.
+- A new native quick-send regression intentionally failed before the fix with `ask → idle → work` (182 sampled ticks, always one opaque body and the same iframe). The native flow completion callback now selects the latest activity before drawing; the same real-click regression passes with `ask → work` and reverse `work → ask`.
+
+## 2026-11-25 - Conversation padding verification
+
+- The new native padding expectation intentionally failed before the CSS change: the real card and installed QA style both had 16px on every side. The previous package already contained that QA-specific change; ordinary/running views used their own 12px/16px rules. Apply the requested extra inset in the common measured scroll-content layer and use border-box sizing so long-card bounds include it.
+- Keep `viewportWidth` separate from card `width` in native layout evidence; the four viewport sizes all use the same 330px card. The final probe explicitly verifies and records both.
+
+## [ERR-20261125-CSS] Package CSS selector verification
+
+**Logged**: 2026-11-25T07:42:00Z
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+The final package checker matched a descendant selector before the standalone shared-content rule.
+
+### Error
+`verify-inputs.cjs` expected `padding:4px 2px` but read `cursor:pointer` from `.minduck-outputs… .minduck-content`.
+
+### Context
+Both archives had already passed signing and notarization. Native layout evidence passed eight cases with 20px/18px QA padding; all packaged byte hashes were checked before the erroneous selector assertion.
+
+### Suggested Fix
+Require exactly one standalone `.minduck-content` rule, validate its padding and border-box declarations, and rerun the entire final archive verifier. No application code or archive bytes need changing.
+
+### Metadata
+- Reproducible: yes
+- Related Files: release/0.1.16/tests/companion-padding-send-20261125/metadata/verify-inputs.cjs
+
+### Resolution
+- Standalone-selector and missing-padding fixtures passed. The full final verifier then passed on unchanged signed/notarized DMG/ZIP bytes, including 4,910 input hashes, native module loading and both archive inventories. Failed verification evidence is preserved in `metadata/attempts/02-css-selector/`.
+
+---
+
+## 2026-11-25 - Production 0.1.17 preflight
+
+- The default concurrent 304-case suite repeated the documented local-exec process-group cleanup `kill EPERM` failure (303 passed). The failed isolated build was cleaned before retry. Run the unchanged local-exec suite alone and then the full frozen suite serially; preserve the original failure log without changing Shell behavior or weakening assertions.
+- The public-manifest web tool returned no content; the client-side read-only fetch retrieved both actual HTTPS update manifests with HTTP 200 and version 0.1.16. The existing version-selection helper chose 0.1.17. Raw responses and timestamps are retained in `release/0.1.17/metadata/`.
+- Resolved: all 25 isolated local-exec tests and all 304 serial full-suite tests passed unchanged. The subsequent full native UI/companion regressions, signed/notarized 0.1.17 archives and final verification passed. Both attempted build snapshots and all package/verification staging resources were cleaned; failure evidence remains in `metadata/attempts/01-shell-cleanup/`.
+
+## 2026-11-25 - In-app update default regression
+
+- The focused default-action regression intentionally failed against the original three-button dialog: browser DMG download was primary and in-app update was third. Its dialog assertions are checked after the action so the controller's own error dialog cannot mask the original mismatch.
+- The standalone updater smoke reached its stale native `disabled` assertion after exercising real HTTP/ZIP integrity paths. Current UI uses `aria-disabled` with a focusable button and an SVG progress ring (as already verified by the full browser-chrome probe). Updated this source probe to verify that current accessible state, ring offset/value, progress label, focusability and clipping; no UI behavior or integrity assertion was relaxed. This stale probe had previously been corrected only in a disposable packaging snapshot.
+- Resolved: all 304 unit tests, the real MacUpdater HTTP/SHA-512/authenticated-handoff probe and full client browser-chrome regression pass. The default dialog now goes directly to in-app download; browser launching remains forbidden in both unit and native UI evidence. Native installation is stubbed in these probes, and no application was installed or published.

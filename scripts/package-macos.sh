@@ -60,7 +60,16 @@ fi
 
 version="$(node -p "require('$project_dir/package.json').version")"
 node -e 'require(process.argv[1]).parseVersion(process.argv[2])' "$project_dir/src/updateCheck.cjs" "$version"
-release_dir="$project_dir/release/$version"
+test_build_name="${MINDUCK_MACOS_TEST_BUILD_NAME:-}"
+if [[ -n "$test_build_name" ]]; then
+  if [[ ! "$test_build_name" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ || "$test_build_name" == *..* ]]; then
+    echo "MINDUCK_MACOS_TEST_BUILD_NAME must be a simple build name." >&2
+    exit 1
+  fi
+  release_dir="$project_dir/release/$version/tests/$test_build_name"
+else
+  release_dir="$project_dir/release/$version"
+fi
 metadata_dir="$release_dir/metadata"
 activation_profile="${MINDUCK_DESKTOP_ACCESS_PROFILE:-}"
 if [[ "${MINDUCK_DESKTOP_ACCESS_REQUIRED:-0}" == "1" && -z "$activation_profile" ]]; then
