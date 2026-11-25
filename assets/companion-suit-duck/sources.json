@@ -85,35 +85,5 @@
     "repairedSleeveOutlines": 49,
     "duration": 8.0,
     "tracks": 168
-  },
-  "think": {
-    "file": "thinking.svg",
-    "sha256": "79a20b0b3b1874eaaf505ce58d0358df0c742e0ba3e1ad63f7cb5d4a17598bb8",
-    "paths": 31,
-    "filters": 4,
-    "repairedFilterRegions": 0,
-    "repairedSleeveClips": 0,
-    "duration": 8.0,
-    "tracks": 10
-  },
-  "flag": {
-    "file": "flag.svg",
-    "sha256": "6024ff01395f2d4d73ff378cf954a79afa9c897d05931bcbab3adbfacb41c149",
-    "paths": 400,
-    "filters": 8,
-    "repairedFilterRegions": 0,
-    "repairedSleeveClips": 0,
-    "duration": 8.0,
-    "tracks": 170
-  },
-  "carry": {
-    "file": "carry.svg",
-    "sha256": "ffe8e24c46ee91d2c1e9312bce4253908dfe4e47dc827e613d0087e0ccac0aaa",
-    "paths": 499,
-    "filters": 12,
-    "repairedFilterRegions": 0,
-    "repairedSleeveClips": 29,
-    "duration": 8.0,
-    "tracks": 152
   }
 }

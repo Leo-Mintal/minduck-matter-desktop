@@ -51,7 +51,7 @@ module.exports = async function probeSuitPose(url) {
     await send({ t: 'set', state: { roam: 'off', thoughtShown: true } })
     const idleLayout = await tick(30)
     assert.equal(idleLayout.animating, true, 'authored idle requests the configured animation rate')
-    assert.equal(idleLayout.moving, false, 'idle animation does not block random thinking or pretend to walk')
+    assert.equal(idleLayout.moving, false, 'idle animation does not claim physical movement')
     assert.deepEqual((await measure()).flows, ['idle'])
     await capture('idle')
     await send({ t: 'do', word: 'love' })
@@ -61,9 +61,61 @@ module.exports = async function probeSuitPose(url) {
     assert.deepEqual((await measure()).flows, [], 'love exercises the procedural pose, not a full source clip')
     await send({ t: 'do', word: 'neutral' })
     await tick(1)
+    // Sample the sub-millisecond pose handoffs that the ordinary 50ms ticks miss.
+    await frame.executeJavaScript(`(async()=>{
+      const {mountFlows,seekFlow}=await import('${origin}/packs/minduck-suit-duck/flow-player.js');
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('viewBox','-15 -10 90 75');
+      svg.style='position:fixed;inset:0;width:100%;height:100%;background:#202020;z-index:9999';
+      document.body.append(svg);
+      const flows=mountFlows(svg);
+      seekFlow(flows.work,1.35);
+      flows.work.root.style.display='';flows.work.root.setAttribute('opacity','1');
+      window.flashProbe={svg,flows,seekFlow};
+    })()`)
+    await capture('flash-work-handoff')
+    const handoffs = await frame.executeJavaScript(`(()=>{
+      const {svg,flows,seekFlow}=flashProbe;let samples=0;
+      try{
+        for(const kind of ['work','write','ask','happy','sad']){
+          const flow=flows[kind];seekFlow(flow,0);
+          const poses=flow.opacityTracks.filter(t=>t.frames.every((f,i)=>['0','1'].includes(f.opacity)
+            &&(!i||f.opacity===t.frames[i-1].opacity||f.offset-t.frames[i-1].offset<=.000100001)));
+          const bodies=[...flow.root.querySelectorAll('path[fill="#FDD200"]')];
+          const times=new Set();
+          for(const track of poses)for(let i=1;i<track.frames.length;i++){
+            const left=track.frames[i-1],right=track.frames[i];
+            if(left.opacity!==right.opacity){
+              times.add((left.offset+right.offset)/2);times.add(right.offset);
+            }
+          }
+          for(const fps of [60,120])for(let i=0;i<=8*fps;i++)times.add(i/fps/8);
+          for(const time of times){
+            seekFlow(flow,time*flow.source.duration);
+            for(const track of poses){
+              const opacity=Number(getComputedStyle(track.element).opacity);samples++;
+              if(opacity!==0&&opacity!==1)return {samples,kind,id:track.element.id,time,opacity};
+            }
+            const cache=new Map();
+            const coverage=bodies.reduce((total,path)=>{
+              let opacity=1;
+              for(let node=path;node!==flow.root;node=node.parentElement){
+                if(!cache.has(node))cache.set(node,Number(getComputedStyle(node).opacity));
+                opacity*=cache.get(node);
+              }
+              return total+opacity;
+            },0);
+            if(Math.abs(coverage-1)>1e-6)return {samples,kind,id:'body coverage',time,coverage};
+          }
+        }
+        return {samples};
+      }finally{for(const flow of Object.values(flows))flow.animations?.forEach(a=>a.cancel());svg.remove();delete window.flashProbe;}
+    })()`)
+    assert.ok(!handoffs.id, 'pose handoffs must not expose the background: ' + JSON.stringify(handoffs))
+    console.log('PASS: opaque pose handoffs and body coverage at 60/120fps: ' + handoffs.samples + ' samples')
     let comparisons = 0
     const sources = { gait: 'walking', idle: 'idle', work: 'working', write: 'writing',
-      ask: 'confirmation', happy: 'success', sad: 'failure', think: 'thinking', flag: 'flag', carry: 'carry' }
+      ask: 'confirmation', happy: 'success', sad: 'failure' }
     const compare = async (word, time) => {
       const raw = fs.readFileSync(path.resolve(__dirname, '../assets/companion-suit-duck/source', sources[word] + '.svg'), 'utf8')
       // Shadow DOM isolates original IDs and keyframe names from the compiled pack.
@@ -164,7 +216,7 @@ module.exports = async function probeSuitPose(url) {
         assert.equal(layout.gesture, null)
         assert.deepEqual((await measure()).flows, ['idle'])
       }
-      for (const word of ['write', 'think', 'flag', 'carry']) {
+      for (const word of ['write']) {
         await send({ t: 'do', word })
         let layout
         for (let i = 0; i < 20; i++) {
@@ -187,7 +239,7 @@ module.exports = async function probeSuitPose(url) {
       }
     }
     // The extra callable prop actions retain the same drag/landing contract as work and ask.
-    for (const word of ['write', 'flag', 'carry']) {
+    for (const word of ['write']) {
       await send({ t: 'do', word }); let layout = await tick(40)
       const point = layout.hit[0]
       await send({ t: 'pointer', type: 'down', p: { x: point.x, y: point.y, t: 1000 } })
@@ -252,23 +304,14 @@ module.exports = async function probeSuitPose(url) {
       await capture('walk' + (facing === -1 ? '-left' : ''))
       await send({ t: 'do', word: 'stand' }); await tick(1)
     }
-    // Short clicks use the complete pack-owned thinking clip, never the generic overlay.
-    await tick(5, false)
-    layout = await tick(1, false)
+    layout = await tick(1)
     const tap = layout.hit[0]
-    await send({ t: 'pointer', type: 'down', p: { x: tap.x, y: tap.y, t: 1000 } })
-    await send({ t: 'pointer', type: 'up', p: { x: tap.x, y: tap.y, t: 1100 } })
-    await tick(65, false)
-    value = await measure()
-    assert.deepEqual(value.flows, ['think'])
-    await checkControls('click thinking', layout.facing)
-    assert.equal(await frame.executeJavaScript("document.querySelectorAll('[data-minduck-thinking]').length"), 0)
-    await capture('thinking')
-    const thinkingTime = value.times[0]
-    await new Promise(resolve => setTimeout(resolve, 100))
-    assert.equal((await measure()).times[0], thinkingTime)
-    await tick(100, false)
-    assert.deepEqual((await measure()).flows, ['idle'])
-    console.log('PASS: Suit Duck ten source actions, opaque boundaries, no hidden-body writes, idle frame-rate signal, continuous activity holds, both facings, host-only clock and drag recovery:', comparisons, 'property comparisons')
+    await send({ t: 'pointer', type: 'down', p: { ...tap, t: 1000 } })
+    await send({ t: 'pointer', type: 'up', p: { ...tap, t: 1100 } })
+    layout = await tick(1)
+    assert.ok(['happy', 'wink', 'surprised', 'love', 'angry'].includes(layout.expression), 'native poke face')
+    assert.deepEqual((await measure()).flows, [], 'poke uses the procedural face')
+    assert.equal(await frame.executeJavaScript("document.querySelectorAll('[data-minduck-thinking], [data-flow=think], [data-flow=flag], [data-flow=carry]').length"), 0)
+    console.log('PASS: Suit Duck seven source actions, opaque boundaries, no hidden-body writes, idle frame-rate signal, continuous activity holds, both facings, host-only clock and drag recovery:', comparisons, 'property comparisons')
   } finally { page.destroy() }
 }

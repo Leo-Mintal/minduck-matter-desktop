@@ -87,20 +87,17 @@ export function createSuitFigure(state) {
     draw(petGroup, face, frame) {
       nodes ??= mount(petGroup);
       const walking = !state.kind && (frame.mode === 'walk' || frame.mode === 'run');
-      const thinking = !state.kind && state.thinkingTime != null;
       const idle = !state.kind && frame.mode === 'idle' && (!frame.face || frame.face === 'neutral')
-        && !thinking && !frame.gesture && !(frame.talk > .01) && !frame.status;
+        && !frame.gesture && !(frame.talk > .01) && !frame.status;
       idleStart = idle ? idleStart ?? frame.t : null;
-      const kind = state.kind ?? (thinking ? 'think' : walking ? 'gait' : idle ? 'idle' : null);
-      const time = state.kind ? state.sourceTime : thinking ? state.thinkingTime
-        : walking ? gaitTime(frame.modeT, frame.mode === 'run') : frame.t - (idleStart ?? frame.t);
-      const blend = drawFlows(nodes.flows, kind, time, idle || walking);
+      const kind = state.kind ?? (walking ? 'gait' : idle ? 'idle' : null);
+      const time = state.kind ? state.sourceTime : walking ? gaitTime(frame.modeT, frame.mode === 'run') : frame.t - (idleStart ?? frame.t);
+      const blend = drawFlows(nodes.flows, kind, time, idle || walking, frame.facing);
       if (nodes.covered !== Boolean(blend)) {
         nodes.base.style.display = blend ? 'none' : '';
         nodes.covered = Boolean(blend);
       }
-      this.extent = kind === 'think' ? [-20, -150, 490, 259]
-        : state.kind ? [-50, -80, 360, 259] : [16, 12, 232, 259];
+      this.extent = state.kind ? [-50, -80, 360, 259] : [16, 12, 232, 259];
       this.hits = state.kind ? [...HITS, [250, 150, 42]] : HITS;
       // Complete source artwork owns this frame, including its original entrance/exit.
       if (blend) return;
@@ -117,6 +114,6 @@ export function createSuitFigure(state) {
 }
 
 export function createSuitDuckBody(_base, { kit, host }) {
-  const state = { kind: null, elapsed: 0, sourceTime: 0, thinkingTime: null };
+  const state = { kind: null, elapsed: 0, sourceTime: 0 };
   return createFlowBody(kit, host, createSuitFigure(state), state);
 }

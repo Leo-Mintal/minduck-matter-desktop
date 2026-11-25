@@ -22,7 +22,11 @@ const root = path.resolve(__dirname, '..')
 process.env.MINDUCK_USER_DATA_DIR = path.join(temporary, 'profile')
 app.setAppPath(root)
 let settingsOpened = 0
-const companion = { start: async () => {}, stop: async () => {}, setTaskOutput() {},
+let access, finishActivation, accessFailure, gateShows = 0, petStarts = 0, petStops = 0
+const companion = { start: async () => {
+  assert.equal(access.snapshot().status, 'active', 'the pet starts only after activation is confirmed')
+  petStarts++
+}, stop: async () => { petStops++ }, setTaskOutput() {},
   openSettings() { settingsOpened++ }, show: async () => {}, hide: async () => {} }
 const user = { id: 'user_workspace_fixture', name: '导航测试用户', email: 'workspace@example.invalid', locale: 'zh-CN' }
 const organization = { id: 'org_workspace_fixture', name: '导航测试用户', kind: 'personal', owner_user_id: user.id, status: 'active', role: 'owner' }
@@ -63,6 +67,17 @@ async function run() {
   Object.defineProperty(testElectron, 'BrowserWindow', { value: TestWindow })
   require('node:module')._load = function (request, ...args) {
     if (request.endsWith('/companion/index.cjs')) return { createCompanion: () => companion }
+    if (request === './desktop-access/service.cjs') return { createService: () => ({
+      policy: async () => true,
+      restore: async () => { throw Object.assign(new Error('Fixture unactivated'), { code: 'device_unactivated' }) },
+      activate: () => new Promise(resolve => { finishActivation = resolve }),
+      renew: async () => { if (accessFailure) throw accessFailure },
+      prepareAuth: request => request, runtimeProof: async () => undefined,
+    }) }
+    if (request === './desktop-access/gate.cjs') return { createGate: options => {
+      access = options.controller
+      return { show() { gateShows++ }, dispose() {} }
+    } }
     if (request === './client-runtime.cjs') {
       const runtime = originalLoad.call(this, request, ...args)
       return { ...runtime, createClientRuntime: options => runtime.createClientRuntime({ ...options, bridgePort: 0 }) }
@@ -70,6 +85,28 @@ async function run() {
     return request === 'electron' ? testElectron : originalLoad.call(this, request, ...args)
   }
   try { require('../src/main.cjs') } finally { require('node:module')._load = originalLoad }
+  await waitFor(() => access?.snapshot().status, value => value === 'unactivated', 'unactivated startup')
+  const appMenu = electron.Menu.getApplicationMenu().items[0].submenu.items
+  const settingsMenu = appMenu.find(item => item.label === '设置…')
+  assert.ok(settingsMenu && settingsMenu.accelerator === 'CmdOrCtrl+,')
+  assert.ok(appMenu.findIndex(item => item.label === '设置…') < appMenu.findIndex(item => item.label === '检查更新…'))
+  assert.ok(appMenu.some(item => item.role === 'about' && item.label === '关于 Minduck Matter'))
+  for (const label of ['桌宠设置…', '显示桌宠', '隐藏桌宠', '完全磁盘访问授权...']) {
+    assert.ok(!appMenu.some(item => item.label === label), `${label} removed`)
+  }
+  settingsMenu.click()
+  app.emit('activate')
+  assert.ok(gateShows >= 2, 'settings and Dock activation return to the gate')
+  assert.equal(BrowserWindow.getAllWindows().length, 0)
+  assert.equal(petStarts, 0, 'an unactivated client creates no pet')
+  const activation = access.activate('ABC234')
+  await waitFor(() => finishActivation, Boolean, 'fixture activation pending')
+  assert.equal(access.snapshot().status, 'checking')
+  assert.equal(petStarts, 0, 'the pet stays absent while activation is pending')
+  finishActivation()
+  await activation
+  await waitFor(() => petStarts, value => value === 1, 'pet starts after confirmed activation')
+  console.log('PASS: no pet or business window before activation; pending activation stays hidden; confirmed activation starts the pet exactly once')
   const matter = await waitFor(() => webContents.getAllWebContents().find(item => item.getURL().startsWith(origin)), Boolean, 'Matter view')
   const execute = matter.executeJavaScript.bind(matter)
   matter.executeJavaScript = async (source, userGesture = false) => {
@@ -306,9 +343,13 @@ async function run() {
     await matter.executeJavaScript('document.body.click()')
     await waitFor(() => matter.executeJavaScript('!!document.querySelector(".acct-menu")'), value => !value, 'account menu closed')
   }
-  window.focus()
-  matter.focus()
-  await matter.executeJavaScript('document.activeElement?.blur(); document.querySelector(".desktop-workspace-navigation [aria-label=资产]").focus()')
+  const tooltipAnchor = await matter.executeJavaScript(`(() => {
+    document.activeElement?.blur();
+    const r=document.querySelector('.desktop-workspace-navigation [aria-label=资产]').getBoundingClientRect();
+    return {x:r.x+r.width/2,y:r.y+r.height/2};
+  })()`)
+  matter.sendInputEvent({type:'mouseMove',x:2,y:2})
+  matter.sendInputEvent({type:'mouseMove',x:Math.round(tooltipAnchor.x),y:Math.round(tooltipAnchor.y)})
   await waitFor(() => matter.executeJavaScript('document.querySelector("[role=tooltip]")?.textContent'), value => value === '资产', 'shared tooltip')
   const tooltip = await matter.executeJavaScript(`(() => { const r = document.querySelector('[role=tooltip]').getBoundingClientRect();
     return { left: r.left, right: r.right, width: innerWidth }; })()`)
@@ -322,6 +363,28 @@ async function run() {
   await waitFor(() => matter.executeJavaScript('location.pathname'), value => value === '/settings/acct', 'account settings')
   assert.ok(await matter.executeJavaScript('!!document.querySelector(".desktop-workspace-navigation .fn-row")'), 'global navigation persists in settings')
   assert.ok(await matter.executeJavaScript(`!!document.querySelector('.side-primary .settings-nav') || getComputedStyle(document.querySelector('.side-primary')).visibility === 'visible'`), 'account settings retain their own secondary navigation')
+  await matter.executeJavaScript("history.pushState(null,'','/new-chat');dispatchEvent(new PopStateEvent('popstate'))")
+  settingsMenu.click()
+  await waitFor(() => matter.executeJavaScript('location.pathname'), value => value === '/settings/acct', 'native menu opens real Web account settings')
+  await waitFor(() => matter.executeJavaScript('document.querySelector(".account-page .account-name-input")?.value'),
+    value => value === user.name, 'real Web account settings loads the signed-in user')
+  fs.writeFileSync(path.join(temporary, 'native-web-settings.png'), (await matter.capturePage()).toPNG())
+  fs.writeFileSync(path.join(temporary, 'application-menu.json'), JSON.stringify(appMenu.map(item => ({
+    label: item.label, role: item.role, accelerator: item.accelerator,
+  })), null, 2) + '\n')
+  assert.equal(settingsOpened, 1, 'native settings menu does not open pet settings')
+  accessFailure = Object.assign(new Error('Fixture network outage'), { code: 'desktop_access_unavailable' })
+  await access.check()
+  assert.equal(petStarts, 1, 'a transient check does not start a duplicate pet')
+  assert.equal(petStops, 0, 'an already activated session survives a transient outage')
+  accessFailure = Object.assign(new Error('Fixture revoked'), { code: 'device_revoked' })
+  await access.check()
+  assert.equal(access.snapshot().status, 'revoked')
+  assert.equal(petStops, 1, 'revocation stops the pet')
+  app.emit('activate'); settingsMenu.click()
+  assert.equal(petStarts, 1, 'blocked menu/Dock actions cannot restart the pet')
+  assert.equal(BrowserWindow.getAllWindows().length, 0)
+  console.log('PASS: Chinese About and Web settings menu, Cmd+, real settings route, removed pet/FDA entries, outage retention and revoked pet shutdown')
   console.log('PASS: real workspace/SPA routes/account panel/shared Tooltip/native UI bridge; 4 widths × 2 themes. Evidence:', temporary)
 }
 function finish(code) {

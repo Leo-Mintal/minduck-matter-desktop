@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
     const fixtures = process.env.MINDUCK_COMPANION_TEST_PACKS
     if (fixtures) fs.cpSync(fixtures, path.join(data, 'home/companion/data/figures'), { recursive: true })
     let onMatterAction = () => {}
-    const actionsOnly = process.env.MINDUCK_COMPANION_ACTIONS_ONLY === '1'
+    const actionsOnly = process.env.MINDUCK_COMPANION_ACTIONS_ONLY === '1' || process.env.MINDUCK_COMPANION_CONTEXT_ACTIONS_ONLY === '1'
     const tasksOnly = process.env.MINDUCK_COMPANION_TASKS_ONLY === '1'
     const qaOnly = process.env.MINDUCK_COMPANION_QA_ONLY === '1'
     const windowOnly = process.env.MINDUCK_COMPANION_WINDOW_ONLY === '1'
@@ -95,7 +95,7 @@ app.whenReady().then(async () => {
       return
     }
     if (actionsOnly) {
-      await require('./companion-actions-probe.cjs')({ data, state, waitFor,
+      await require('./companion-actions-probe.cjs')({ companion, data, state, waitFor,
         setHandler: (handler) => { onMatterAction = handler } })
       return
     }
@@ -167,10 +167,9 @@ app.whenReady().then(async () => {
         modelData, scheme: pack.presets[0]?.id ?? '' }
       const compatible = await settings.webContents.executeJavaScript(
         probeSource + '\nprobeSuitDuck(' + JSON.stringify(petOrigin) + ',' + JSON.stringify(descriptor) + ')')
-      assert.ok(compatible.thinking && compatible.interrupted, pack.id + ': idle thinking and interruption')
-      assert.ok(compatible.clickThinking, pack.id + ': click thinking')
+      if (['minduck-duck', 'minduck-suit-duck'].includes(pack.id)) assert.ok(compatible.poked, pack.id + ': native poke')
       if (compatible.activity !== null) assert.ok(compatible.activity, pack.id + ': automatic Matter activity')
-      console.log('PASS: official sandbox idle/click thinking + cancellation:', pack.id)
+      console.log('PASS: official sandbox pointer and activity:', pack.id)
     }
     const saved = await settings.webContents.executeJavaScript(`fetch('/api/config', {
       method: 'POST', headers: { 'content-type': 'application/json' },

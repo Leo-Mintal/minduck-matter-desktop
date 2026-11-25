@@ -73,7 +73,7 @@ async function verifyDownload(mode) {
   updater.autoDownload = false; updater.autoInstallOnAppQuit = false
   updater.disableDifferentialDownload = true; updater.logger = logger
   const controller = createDesktopUpdater({ updater, nativeUpdater: native, currentVersion: version, logger,
-    showDialog: async options => ({ response: options.title === '发现新版本' ? 2 : 0 }), prepareToQuit: async () => lifecycle.push('stop') })
+    showDialog: async options => ({ response: options.defaultId ?? 0 }), prepareToQuit: async () => lifecycle.push('stop') })
   try {
     await controller.run()
     if (mode === 'corrupt') {
@@ -106,16 +106,24 @@ async function verifyInterface() {
           const result = await window.webContents.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => {
             const button = document.querySelector('#check-update'), progress = document.querySelector('#update-progress');
             const bounds = button.getBoundingClientRect(), value = progress.getBoundingClientRect();
-            resolve({ phase: button.dataset.phase, disabled: button.disabled, label: button.title,
-              progress: progress.textContent, visible: !progress.hidden,
+            resolve({ phase: button.dataset.phase, disabled: button.getAttribute('aria-disabled') === 'true',
+              focusable: !button.disabled && button.tabIndex === 0, label: button.title,
+              progress: progress.getAttribute('aria-valuenow'), text: progress.textContent.trim(),
+              offset: progress.querySelector('.update-progress-value').getAttribute('stroke-dashoffset'),
+              visible: !progress.hidden,
               clipped: value.left < bounds.left || value.right > bounds.right,
               overflow: document.documentElement.scrollWidth > innerWidth });
           }))`)
           assert.equal(result.phase, phase)
           assert.equal(result.disabled, ['checking', 'downloading', 'preparing', 'installing'].includes(phase))
+          assert.equal(result.focusable, true)
           assert.ok(!result.overflow, JSON.stringify(result))
           if (phase === 'downloading') {
-            assert.equal(result.progress, '100%'); assert.ok(result.visible && !result.clipped)
+            assert.equal(result.progress, '100')
+            assert.equal(result.text, '')
+            assert.equal(result.offset, '0')
+            assert.equal(result.label, '正在下载 100%')
+            assert.ok(result.visible && !result.clipped)
             if (width === 375) fs.writeFileSync(path.join(previews, `progress-${theme}.png`),
               (await window.webContents.capturePage()).toPNG())
           }

@@ -18,7 +18,8 @@ for (const id of ['minduck-duck', 'minduck-suit-duck']) {
   const manifest = JSON.parse(fs.readFileSync(path.join(figureRoot, 'figure.json'), 'utf8'))
   if (manifest.api !== 2 || manifest.id !== id) throw new Error(`Invalid figure manifest: ${id}`)
   for (const file of [manifest.entry, manifest.thumb, 'artwork.js', 'flow-player.js', 'flow-state.js', 'LICENSE-Coopanion.txt',
-    'flow-artwork.js']) {
+    'flow-artwork.js', ...['word-neutral', 'word-walk', 'task-work', 'task-ask', 'task-success', 'task-error',
+      ...(id === 'minduck-suit-duck' ? ['word-write'] : [])].map(action => `previews/${action}.png`)]) {
     if (!fs.existsSync(path.join(figureRoot, file))) throw new Error(`Missing figure asset: ${id}/${file}`)
   }
 }

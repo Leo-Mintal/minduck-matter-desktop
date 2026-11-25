@@ -68,7 +68,7 @@ export function createFlowBody(kit, host, figure, state) {
       if (!body.words.includes(word)) return false;
       return MOTIONS.has(word) ? afterFlow(() => body.do(word)) : body.do(word);
     },
-    finishFlow() { return state.repeat ? afterFlow(() => {}) : false; },
+    finishFlow(onComplete = () => {}) { return state.repeat ? afterFlow(onComplete) : false; },
     step(dt) {
       if (!(dt > 0 && Number.isFinite(dt))) return;
       if (state.kind) {

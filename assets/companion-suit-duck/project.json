@@ -53,27 +53,6 @@
       "scale": 1.0,
       "x": -167.15502621,
       "y": -55.30686086
-    },
-    "think": {
-      "file": "thinking.svg",
-      "group": "Minduck___Business__________5",
-      "scale": 1.0,
-      "x": -66.93710504,
-      "y": -804.97697711
-    },
-    "flag": {
-      "file": "flag.svg",
-      "group": "Minduck___Business_______________",
-      "scale": 1.0,
-      "x": -66.93614183,
-      "y": -912.98665452
-    },
-    "carry": {
-      "file": "carry.svg",
-      "group": "Boss_Duck___Book_Carry________________________",
-      "scale": 0.9999873954,
-      "x": -68.70321908,
-      "y": -1017.98664687
     }
   }
 }

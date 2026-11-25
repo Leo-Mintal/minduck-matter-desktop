@@ -6,7 +6,7 @@ const { app, BrowserWindow } = require('electron')
 const { DevToolsClient, devToolsPort } = require('./devtools-test-client.cjs')
 const { activateMatterWindow } = require('../src/companion/matter-actions.cjs')
 
-module.exports = async function probeActions({ data, state, waitFor, setHandler }) {
+module.exports = async function probeActions({ companion, data, state, waitFor, setHandler }) {
   const server = http.createServer((request, response) => {
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
     const id = request.url === '/c/conv-one' ? 'turn-one' : 'turn-two'
@@ -44,9 +44,13 @@ module.exports = async function probeActions({ data, state, waitFor, setHandler 
     }
     await waitFor(() => evaluate('!!document.querySelector(".minduck-action:not([disabled])")'), Boolean, 'enabled native pet actions')
     const click = (action) => evaluate(`document.querySelector('[data-action="${action}"]').click(); true`)
+    if (process.env.MINDUCK_COMPANION_CONTEXT_ACTIONS_ONLY === '1') {
+      await require('./companion-context-actions-probe.cjs')({ companion, client, evaluate, waitFor })
+      return
+    }
 
     await evaluate(`import('/web/pet-app.js').then(({panels}) => panels.setNotificationCount(2))`)
-    await click('open-app')
+    await evaluate("petHost.matterAction('open-app')")
     await waitFor(() => actions.length, (count) => count === 1, 'hidden Matter window activation')
     await waitFor(() => window.isFocused(), Boolean, 'Matter is the foreground window')
     assert.ok(window.isVisible())
@@ -55,7 +59,7 @@ module.exports = async function probeActions({ data, state, waitFor, setHandler 
 
     window.minimize()
     await waitFor(() => window.isMinimized(), Boolean, 'Matter minimized')
-    await click('open-app')
+    await evaluate("petHost.matterAction('open-app')")
     await waitFor(() => actions.length, (count) => count === 2, 'minimized Matter window activation')
     await waitFor(() => !window.isMinimized() && window.isFocused(), Boolean, 'Matter restored and focused')
     assert.equal(await contents.executeJavaScript('window.retainedState'), 'keep-current-page')
@@ -88,6 +92,7 @@ module.exports = async function probeActions({ data, state, waitFor, setHandler 
     await waitFor(() => actions.length, count => count === 6, 'same conversation shortcut')
     assert.equal(await contents.executeJavaScript('window.retainedState'), 'keep-current-turn')
     assert.equal(await evaluate(`petHost.matterAction('open-conversation',{conversationId:'../bad'})`), false)
+    await require('./companion-context-actions-probe.cjs')({ companion, client, evaluate, waitFor })
     console.log('PASS: real native shortcuts activate hidden/minimized Matter, preserve pages, open new chat and route each capsule to its own conversation/message without reloading the current conversation')
   } finally {
     client?.close()

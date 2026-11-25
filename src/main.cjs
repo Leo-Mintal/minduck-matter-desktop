@@ -54,10 +54,6 @@ const {
   normalizeMatterOrigin,
   resolveMatterOrigin,
 } = require('./matterService.cjs')
-const {
-  hasFullDiskAccess,
-  FULL_DISK_ACCESS_SETTINGS_URL,
-} = require('./fullDiskAccess.cjs')
 const { createDesktopUpdater, macUpdateRuntime } = require('./desktopUpdater.cjs')
 const { createKeyProvider } = require('./desktop-access/keys.cjs')
 const { createService: createDesktopAccessService } = require('./desktop-access/service.cjs')
@@ -859,18 +855,6 @@ async function useDefaultMatterService() {
   restartApplication()
 }
 
-async function openFullDiskAccessSettings() {
-  if (process.platform !== 'darwin') return false
-  try {
-    hasFullDiskAccess()
-    await shell.openExternal(FULL_DISK_ACCESS_SETTINGS_URL)
-    return true
-  } catch (error) {
-    console.error('Failed to open Full Disk Access settings:', error)
-    return false
-  }
-}
-
 function showUpdateDialog(options) {
   return mainWindow && !mainWindow.isDestroyed()
     ? dialog.showMessageBox(mainWindow, options)
@@ -885,7 +869,6 @@ function getDesktopUpdater() {
   desktopUpdater ??= createDesktopUpdater({ ...(stylePreviewOnly
     ? { unavailableReason: '本地样式预览不安装更新。' } : macUpdateRuntime(app)), currentVersion: app.getVersion(),
     showDialog: showUpdateDialog,
-    openExternal: url => shell.openExternal(url),
     onState: (state) => {
       desktopUpdate = state
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -999,23 +982,29 @@ function configureIPC() {
   })
 }
 
+async function openWebSettings() {
+  if (!businessAllowed) { activationGate?.show(); return }
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+  const window = mainWindow, contents = matterTab.view.webContents
+  await activateMatterWindow({ app, window, contents, origin: matterOrigin }, 'open-app')
+  if (!businessAllowed || mainWindow !== window || contents.isDestroyed()) return
+  await contents.loadURL(new URL('/settings/acct', matterOrigin).href)
+}
+
 function createMenu() {
+  app.setAboutPanelOptions({ applicationName: 'Minduck Matter' })
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
         label: app.getName(),
         submenu: [
-          { role: 'about' },
+          { role: 'about', label: '关于 Minduck Matter' },
+          { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => void openWebSettings().catch(console.error) },
           { label: '检查更新…', click: () => void checkForDesktopUpdate() },
           { type: 'separator' },
           { label: '配置 Matter 服务地址...', click: openMatterServiceSettings },
           { label: '使用默认 Matter 服务', click: () => void useDefaultMatterService() },
-          { label: '桌宠设置…', accelerator: 'CmdOrCtrl+,', click: () => companion?.openSettings() },
-          { label: '显示桌宠', click: () => void companion?.show().catch(console.error) },
-          { label: '隐藏桌宠', click: () => void companion?.hide().catch(console.error) },
-          ...(process.platform === 'darwin'
-            ? [{ label: '完全磁盘访问授权...', click: () => void openFullDiskAccessSettings() }, { type: 'separator' }]
-            : []),
+          { type: 'separator' },
           { role: 'quit' },
         ],
       },
@@ -1208,9 +1197,13 @@ async function startDesktopBusiness() {
   }
   matterPresenceTimer = setInterval(() => { void updateMatterPresence(); publishDesktopFrameState() }, 1_000)
   createWindow()
-  if (stylePreviewOnly) return
+}
+
+async function startDesktopCompanion() {
+  if (stylePreviewOnly || !businessAllowed || companion || desktopAccess?.snapshot().status !== 'active') return
   try {
     companion = createCompanion({ onMatterAction: (action, target) => {
+      if (!businessAllowed) throw new Error('Desktop activation required')
       if (action.startsWith('chat-') || action === 'qa-answer' || action === 'qa-upload') return handleMatterQa({ bridge:matterTasks, dialog }, action, target)
       if (!mainWindow || mainWindow.isDestroyed()) createWindow()
       return activateMatterWindow({ app, window: mainWindow,
@@ -1250,7 +1243,11 @@ app.whenReady().then(async () => {
   configureIPC()
   createMenu()
   desktopAccess = createAccessController({ service: desktopAccessService,
-    onChange: publishDesktopFrameState,
+    onChange: state => {
+      publishDesktopFrameState()
+      // The controller has confirmed activation and can now dismiss its native gate.
+      if (state.status === 'active') void startDesktopCompanion()
+    },
     onActive: async () => { businessAllowed = true; await startDesktopBusiness() },
     onBlocked: stopDesktopBusiness })
   activationGate = createGate({ app, dialog, controller: desktopAccess })

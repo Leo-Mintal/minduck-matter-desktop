@@ -71,17 +71,19 @@ test('packaging output keeps installers, sidecars and manifests inside their own
   const source = fs.readFileSync(path.join(__dirname, 'package-macos.sh'), 'utf8')
   const outputStart = source.indexOf('\nnode "$script_dir/macos-update-artifacts.cjs"')
   assert.ok(outputStart > 0)
+  const directoryStart = source.indexOf('\ntest_build_name=')
+  const directoryEnd = source.indexOf('\nactivation_profile=', directoryStart)
+  assert.ok(directoryStart > 0 && directoryEnd > directoryStart)
   // Exercise the actual output section without building, signing or uploading.
   const outputScript = [
     'set -euo pipefail',
-    source.match(/^release_dir=.*$/m)[0],
-    source.match(/^metadata_dir=.*$/m)[0],
+    source.slice(directoryStart, directoryEnd),
     'mkdir -p "$metadata_dir"',
     source.slice(outputStart),
   ].join('\n')
   let previous
-  for (const version of ['0.1.10', '0.1.11']) {
-    const stage = path.join(project, `stage-${version}`)
+  for (const [version, testBuild] of [['0.1.10', ''], ['0.1.11', ''], ['0.1.11', 'suit-duck-test']]) {
+    const stage = path.join(project, `stage-${version}-${testBuild}`)
     fs.mkdirSync(stage)
     const dmg = artifactName(version), zip = artifactName(version, 'zip')
     for (const name of [dmg, zip, `${dmg}.blockmap`, `${zip}.blockmap`]) {
@@ -91,18 +93,21 @@ test('packaging output keeps installers, sidecars and manifests inside their own
     const result = spawnSync('bash', ['-c', outputScript], { encoding: 'utf8', env: {
       ...process.env, project_dir: project, version, stage_dir: stage, script_dir: __dirname,
       artifact: dmg, update_archive: zip, sign_release: '0',
+      MINDUCK_MACOS_TEST_BUILD_NAME: testBuild,
     } })
     assert.equal(result.status, 0, result.stderr)
     const files = localReleasePaths(version, path.join(project, 'release'))
-    assert.equal(verifyUpdateArtifacts(files.directory, files.manifestPath, version).version, version)
+    const directory = testBuild ? path.join(files.directory, 'tests', testBuild) : files.directory
+    const manifest = path.join(directory, 'metadata/latest-mac.yml')
+    assert.equal(verifyUpdateArtifacts(directory, manifest, version).version, version)
     for (const name of [dmg, zip]) {
-      assert.equal(fs.readFileSync(path.join(files.directory, name), 'utf8'), `${name} fixture`)
-      const metadata = path.join(files.directory, 'metadata')
+      assert.equal(fs.readFileSync(path.join(directory, name), 'utf8'), `${name} fixture`)
+      const metadata = path.join(directory, 'metadata')
       assert.equal(fs.readFileSync(path.join(metadata, `${name}.blockmap`), 'utf8'), `${name}.blockmap fixture`)
-      execFileSync('shasum', ['-a', '256', '-c', path.join(metadata, `${name}.sha256`)], { cwd: files.directory })
+      execFileSync('shasum', ['-a', '256', '-c', path.join(metadata, `${name}.sha256`)], { cwd: directory })
     }
     if (previous) assert.equal(fs.readFileSync(previous.path, 'utf8'), previous.text)
-    previous = { path: files.manifestPath, text: fs.readFileSync(files.manifestPath, 'utf8') }
+    previous = { path: manifest, text: fs.readFileSync(manifest, 'utf8') }
   }
   assert.deepEqual(fs.readdirSync(path.join(project, 'release')).sort(), ['0.1.10', '0.1.11'])
 })

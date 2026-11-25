@@ -1,6 +1,6 @@
 {
   "name": "minduck-matter-desktop",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "private": true,
   "description": "Electron desktop app bundling the shared Matter web frontend.",
   "main": "src/main.cjs",

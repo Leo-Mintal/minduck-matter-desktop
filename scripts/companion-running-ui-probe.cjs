@@ -42,7 +42,7 @@ module.exports=async function probeRunning(page,waitFor){
       } finally {panels.setScale(1);panels.layout(body)}
     })`)
     const near=(actual,expected)=>Math.abs(actual-expected)<.05
-    assert.ok(near(state.top,12*scale) && near(state.bottom,12*scale) && near(state.height,72*scale)
+    assert.ok(near(state.top,16*scale) && near(state.bottom,16*scale) && near(state.height,80*scale)
       && state.scroll===0 && state.onScreen && state.clear,`top-edge running card at ${scale}: ${JSON.stringify(state)}`)
   }
   for(const scale of [.8,1,1.5])await checkTopEdge(scale)
@@ -51,11 +51,11 @@ module.exports=async function probeRunning(page,waitFor){
     await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme}]});await frame()
     const state=await evaluate(`(()=>{const s=${root},r=document.querySelector('.minduck-output').getBoundingClientRect(),a=s.querySelector('.pet-running-append').getBoundingClientRect(),b=s.querySelector('.pet-running-stop').getBoundingClientRect(),lines=[...s.querySelectorAll('.pet-running-message span')].map(e=>e.getBoundingClientRect());return {w:r.width,h:r.height,buttons:[a.width,a.height,b.width,b.height],gap:b.left-a.right,right:r.right-b.right,top:a.top-r.top,textGap:lines[1].top-lines[0].bottom,font:getComputedStyle(s.querySelector('.pet-running-message')).fontSize,theme:s.host.dataset.theme,overflow:document.documentElement.scrollWidth>innerWidth};})()`)
     state.right=Math.round(state.right*1000)/1000
-    assert.deepEqual(state,{w:330,h:12+20+8+20+12,buttons:[32,32,32,32],gap:8,right:16,top:20,textGap:8,font:'14px',theme,overflow:false})
+    assert.deepEqual(state,{w:330,h:16+20+8+20+16,buttons:[32,32,32,32],gap:8,right:18,top:24,textGap:8,font:'14px',theme,overflow:false})
     if(width===768)fs.writeFileSync(path.resolve(__dirname,'../build/companion-running-'+theme+'.png'),(await page.webContents.capturePage()).toPNG())
   }
   await update({...task,detail:''})
-  assert.equal(await evaluate(`document.querySelector('.minduck-output').getBoundingClientRect().height`),12+32+12,'single-line running card fits its action buttons without a reserved subtitle')
+  assert.equal(await evaluate(`document.querySelector('.minduck-output').getBoundingClientRect().height`),16+32+16,'single-line running card fits its action buttons without a reserved subtitle')
   await update()
   await click('.pet-running-append')
   await waitFor(()=>evaluate(`${root}.querySelector('textarea')?.disabled===false`),Boolean,'queue editor ready')

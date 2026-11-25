@@ -56,21 +56,13 @@ export function createFlowBody(kit, host, figure, state) {
   }
   return {
     ...body,
-    recoverableFlows: ['work', 'ask', 'write', 'flag', 'carry'],
-    createIdleThinkingView() {
-      return {
-        seconds: FLOW_TIMING.think.seconds,
-        draw(seconds) { state.thinkingTime = seconds; },
-        hide() { state.thinkingTime = null; },
-        dispose() { state.thinkingTime = null; },
-      };
-    },
+    recoverableFlows: ['work', 'ask', 'write'],
     do(word, { repeat = false } = {}) {
       if (Object.hasOwn(FLOW_TIMING, word)) return start(word, repeat && ['work', 'ask'].includes(word));
       if (!body.words.includes(word)) return false;
       return afterFlow(() => body.do(word));
     },
-    finishFlow() { return state.repeat ? afterFlow(() => {}) : false; },
+    finishFlow(onComplete = () => {}) { return state.repeat ? afterFlow(onComplete) : false; },
     step(dt) {
       if (!(dt > 0 && Number.isFinite(dt))) return;
       if (state.kind) {
@@ -95,7 +87,7 @@ export function createFlowBody(kit, host, figure, state) {
         : state.sourceTime < spec.enter - TIME_EPSILON ? 'pulling' : state.kind === 'work' ? 'typing' : 'waiting';
       return {
         ...layout, work: state.kind === 'work' ? phase : null, ask: state.kind === 'ask' ? phase : null,
-        recoverableFlow: ['work', 'ask', 'write', 'flag', 'carry'].includes(state.kind) ? state.kind : null,
+        recoverableFlow: ['work', 'ask', 'write'].includes(state.kind) ? state.kind : null,
         gesture: state.kind ?? layout.gesture,
         // Source clips and procedural faces both keep breathing/blinking and effects in motion.
         animating: true,

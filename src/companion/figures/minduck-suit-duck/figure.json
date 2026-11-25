@@ -205,27 +205,6 @@
       "seconds": 8
     },
     {
-      "id": "think",
-      "kind": "motion",
-      "names": { "zh": ["思考", "想一想"] },
-      "about": { "zh": "播放完整 8 秒思考与气泡动作" },
-      "seconds": 8
-    },
-    {
-      "id": "flag",
-      "kind": "motion",
-      "names": { "zh": ["文件与红旗", "举旗"] },
-      "about": { "zh": "播放完整 8 秒文件与红旗动作" },
-      "seconds": 8
-    },
-    {
-      "id": "carry",
-      "kind": "motion",
-      "names": { "zh": ["抱资料", "抱文件等待"] },
-      "about": { "zh": "播放完整 8 秒抱资料等待动作" },
-      "seconds": 8
-    },
-    {
       "id": "ask",
       "kind": "motion",
       "names": {

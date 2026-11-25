@@ -16,16 +16,14 @@ module.exports = async ({ appOutDir, packager }) => {
   assertRuntime(path.join(resources, 'companion-runtime'))
   for (const file of ['node_modules/koffi/package.json', 'node_modules/ws/package.json',
     'node_modules/sherpa-onnx-node/package.json', 'build/cortico/src/extensions/runtime.ts',
-    'node_modules/cortico-world-desktop-pet/web/minduck-thinking/idle.js',
-    'node_modules/cortico-world-desktop-pet/web/minduck-thinking/view.js',
+    'node_modules/cortico-world-desktop-pet/web/minduck-preview.js',
     'node_modules/cortico-world-desktop-pet/web/minduck-panels.js',
     'node_modules/cortico-world-desktop-pet/web/minduck-panels.css',
     'node_modules/cortico-world-desktop-pet/web/minduck-qa/view.js',
     'node_modules/cortico-world-desktop-pet/web/minduck-qa/styles.js',
     'node_modules/cortico-world-desktop-pet/web/minduck-qa/SOURCE.json',
     'node_modules/cortico-world-desktop-pet/web/minduck-qa/LICENSES.txt',
-    'node_modules/cortico-world-desktop-pet/web/kit/body.js',
-    'node_modules/cortico-world-desktop-pet/web/minduck-thinking/artwork.js']) {
+    'node_modules/cortico-world-desktop-pet/web/kit/body.js']) {
     if (!fs.existsSync(path.join(resources, 'companion-runtime', file))) {
       throw new Error(`Packaged companion dependency is missing: ${file}`)
     }
@@ -35,7 +33,8 @@ module.exports = async ({ appOutDir, packager }) => {
     const manifest = JSON.parse(fs.readFileSync(figure, 'utf8'))
     if (manifest.api !== 2 || manifest.id !== id) throw new Error(`Invalid packaged API 2 figure: ${id}`)
     for (const file of [manifest.entry, manifest.thumb, 'flow-player.js', 'flow-state.js', 'LICENSE-Coopanion.txt',
-      'artwork.js', 'flow-artwork.js']) {
+      'artwork.js', 'flow-artwork.js', ...['word-neutral', 'word-walk', 'task-work', 'task-ask', 'task-success', 'task-error',
+        ...(id === 'minduck-suit-duck' ? ['word-write'] : [])].map(action => `previews/${action}.png`)]) {
       if (!fs.existsSync(path.join(path.dirname(figure), file))) throw new Error(`Missing packaged figure asset: ${id}/${file}`)
     }
   }

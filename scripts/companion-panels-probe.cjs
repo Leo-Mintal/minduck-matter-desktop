@@ -9,6 +9,7 @@ const desktopFixture = `
   window.petHost = {
     setInteractive(on) { panelProbe.interactive = on; },
     setLanguage() {}, focus() {}, grabFocus() {}, releaseFocus() {},
+    hide() { panelProbe.hideCalls=(panelProbe.hideCalls || 0)+1; },
     matterAction: async (action, target) => {
       panelProbe.actions.push(action); panelProbe.targets.push(target);
       if (panelProbe.pause) await new Promise(resolve => {panelProbe.release=resolve});
@@ -40,6 +41,7 @@ const setTask = (page, active, notificationCount = 0) => page.webContents.execut
   status:'running', contextId:'quick-context', conversationId:'conv-current', turnId:'turn-current', text:'小鸭子们开始工作啦', detail:'正在思考…'})`)
 
 async function probeActionPaths(page) {
+  await setTask(page, true)
   for (const [index, side] of ['left', 'right'].entries()) {
     const hit = await page.webContents.executeJavaScript('panelProbe.layout.hit[0]')
     await moveMouse(page, hit.x, hit.y)
@@ -78,8 +80,10 @@ async function probeActionPaths(page) {
       assert.equal(await page.webContents.executeJavaScript('document.querySelector(".minduck-actions").classList.contains("is-composing")'),false);
     }
   }
-  assert.deepEqual(await page.webContents.executeJavaScript('panelProbe.actions'), ['chat-context', 'open-app'],
-    'both buttons accept real mouse clicks after traversing the hover area')
+  assert.deepEqual(await page.webContents.executeJavaScript('panelProbe.actions'), ['chat-context'],
+    'only the chat button dispatches a Matter action')
+  assert.equal(await page.webContents.executeJavaScript('document.querySelector("[data-action=toggle-tasks]").getAttribute("aria-expanded")'), 'true', 'the second button expands tasks')
+  await page.webContents.executeJavaScript('document.querySelector("[data-action=toggle-tasks]").click();void 0')
   await page.webContents.executeJavaScript('panelProbe.actions = [];panelProbe.targets = []')
 }
 
@@ -126,8 +130,24 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
     await waitFor(() => page.webContents.executeJavaScript(`Boolean(window.panelProbe?.layout?.mode === 'idle' &&
       !panelProbe.layout.moving && panelProbe.layout.box &&
       document.querySelector('.minduck-actions'))`), Boolean, 'desktop panels and original figure')
+    if(process.env.MINDUCK_COMPANION_SEND_MOTION_ONLY==='1') {
+      await require('./companion-send-motion-probe.cjs')(page,waitFor)
+      return
+    }
     if(process.env.MINDUCK_COMPANION_RUNNING_ONLY==='1') {
       await require('./companion-running-ui-probe.cjs')(page,waitFor)
+      return
+    }
+    if(process.env.MINDUCK_COMPANION_QA_UI_ONLY==='1') {
+      await require('./companion-qa-ui-probe.cjs')(page,waitFor)
+      return
+    }
+    if(process.env.MINDUCK_COMPANION_TASK_LIST_ONLY==='1') {
+      await require('./companion-task-list-probe.cjs')(page,waitFor)
+      return
+    }
+    if(process.env.MINDUCK_COMPANION_CONTEXT_MENU_ONLY==='1') {
+      await require('./companion-context-menu-probe.cjs')(page,waitFor)
       return
     }
 
@@ -186,7 +206,7 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
         const state = await checkPanels(page, width, theme)
         assert.equal(state.font, '14px')
         assert.equal(state.color, theme === 'light' ? 'rgb(13, 13, 13)' : 'rgb(240, 240, 240)')
-        assert.deepEqual([state.output.w,state.output.h],[330,12+20+8+20+12], 'message height follows two text rows, spacing and padding')
+        assert.deepEqual([state.output.w,state.output.h],[330,16+20+8+20+16], 'message height follows two text rows, spacing and padding')
         assert.equal(state.outputHidden || state.actionsHidden, false, JSON.stringify(state))
         assert.equal(state.overflow, false)
         assert.equal(state.oldMenu && state.oldTools, true)
@@ -197,7 +217,7 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
         for (const r of [state.output, state.actions]) {
           assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= width && r.y + r.h <= 600, 'panels stay on screen')
         }
-        assert.deepEqual(state.buttons.map(button => button.name), ['和 Matter 聊天', '打开 Minduck Matter'])
+        assert.deepEqual(state.buttons.map(button => button.name), ['和 Matter 聊天', '展开任务会话'])
         assert.ok(state.buttons.every(button => button.disabled === 'false' && Math.abs(button.icon.w - 18) < .01
           && Math.abs(button.icon.h - 18) < .01 && button.stroke === '1.2px'))
         const away = await checkPanels(page, width, theme, false)
@@ -210,24 +230,24 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
     for(const detail of ['需要你确认当前内容','']) {
       await page.webContents.executeJavaScript(`panelProbe.output({active:true,status:'waiting',conversationId:'auto-height',turnId:'spacing',text:'等待确认',detail:${JSON.stringify(detail)}})`)
       const state=await checkPanels(page,375,'light',false)
-      assert.equal(state.output.h,12+20+(detail ? 8+20 : 0)+12,'ordinary messages shrink naturally when the subtitle is absent')
+      assert.equal(state.output.h,16+20+(detail ? 8+20 : 0)+16,'ordinary messages shrink naturally when the subtitle is absent')
     }
 
     console.log('Panel probe: checking notification states')
-    const arrow = await page.webContents.executeJavaScript(`document.querySelector('[data-action="open-app"] path').getAttribute('d')`)
+    const arrow = await page.webContents.executeJavaScript(`document.querySelector('[data-action="toggle-tasks"] path').getAttribute('d')`)
     for (const count of [1, 2, 12, 1000, 0]) {
       await setTask(page, false, count)
       await checkPanels(page, 768, 'light')
       const notification = await page.webContents.executeJavaScript(`(() => {
-        const button=document.querySelector('[data-action="open-app"]'), badge=button.querySelector('.minduck-notification-badge');
+        const button=document.querySelector('[data-action="toggle-tasks"]'), badge=button.querySelector('.minduck-notification-badge');
         return { hidden:badge.hidden, text:badge.textContent, label:button.getAttribute('aria-label'),
           icon:button.querySelector('path').getAttribute('d'), outputHidden:document.querySelector('.minduck-output').hidden };
       })()`)
       assert.equal(notification.hidden, !count)
       assert.equal(notification.text, count > 99 ? '99+' : count ? String(count) : '')
-      assert.equal(notification.icon === arrow, !count, 'zero notifications restores the original arrow')
+      assert.equal(notification.icon === arrow, true, 'notification counts retain the fold arrow')
       assert.equal(notification.outputHidden, true, 'notifications alone do not create a task capsule')
-      assert.equal(notification.label, '打开 Minduck Matter' + (count ? `，${count} 个会话通知` : ''))
+      assert.equal(notification.label, '展开任务会话' + (count ? `，${count} 个会话通知` : ''))
     }
     await setTask(page, true, 2)
     for (const width of [375, 768, 1024, 1440]) for (const theme of ['light', 'dark']) {
@@ -257,11 +277,11 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
         turnId:'turn-'+i, text:'会话'+i+'正在执行', detail:'独立的任务输出内容' }))))`)
     for (const width of [375, 768, 1024, 1440]) for (const theme of ['light', 'dark']) {
       await checkPanels(page, width, theme, false)
-      const cards = await page.webContents.executeJavaScript(`[...document.querySelectorAll('.minduck-output')].map(el => {
+      const cards = await page.webContents.executeJavaScript(`[...document.querySelectorAll('.minduck-output:not([hidden])')].map(el => {
         const r=el.getBoundingClientRect(); return { y:r.y, bottom:r.bottom, hidden:el.hidden,
           font:getComputedStyle(el).fontSize, color:getComputedStyle(el).color };
       })`)
-      assert.equal(cards.length, 1, 'multiple active tasks render at most one capsule')
+      assert.equal(cards.length, 1, 'folded tasks expose one capsule')
       assert.ok(cards.every(card => !card.hidden && card.y >= 16 && card.font === '14px'))
       const stack = await page.webContents.executeJavaScript(`(() => {const front=document.querySelector('.minduck-output').getBoundingClientRect();
         return [...document.querySelectorAll('.minduck-stack-layer:not([hidden])')].map(el=>{const r=el.getBoundingClientRect();return {
@@ -287,11 +307,11 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
         })()`)
         await checkPanels(page, 768, theme, false)
         assert.deepEqual(await page.webContents.executeJavaScript(
-          `[...document.querySelectorAll('.minduck-output')].map(el=>el.dataset.conversationId)`),
+          `[...document.querySelectorAll('.minduck-output:not([hidden])')].map(el=>el.dataset.conversationId)`),
         ['conv-' + i], 'only the selected primary conversation remains, even when tasks start with another one')
         const point = await page.webContents.executeJavaScript(`(() => {
           const r=document.querySelector('[data-conversation-id="conv-${i}"]').getBoundingClientRect();
-          return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`)
+          return {x:r.x+r.width/2,y:r.y+r.height/2,shadow:getComputedStyle(document.querySelector('.minduck-output')).boxShadow}; })()`)
         await moveMouse(page, point.x, point.y)
         await new Promise(resolve => setTimeout(resolve, 200))
         const hover = await page.webContents.executeJavaScript(`(() => {
@@ -299,12 +319,16 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
           const el=document.querySelector('[data-conversation-id="conv-${i}"]');
           return { shadow:getComputedStyle(el).boxShadow, interactive:panelProbe.interactive }; })()`)
         assert.equal(hover.interactive, true, 'the selected capsule accepts native pointer input')
-        assert.ok(hover.shadow.endsWith((theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)')+' 0px 0px 0px 1px inset'),
-          'hover keeps the neutral card edge: '+hover.shadow)
+        assert.equal(hover.shadow,point.shadow,'hover keeps the neutral glass card edge')
         if (i === 1) fs.writeFileSync(path.resolve(__dirname, '../build/companion-conversation-hover-' + theme + '.png'),
           (await page.webContents.capturePage()).toPNG())
         for (const type of ['mousePressed','mouseReleased']) await page.webContents.debugger.sendCommand(
           'Input.dispatchMouseEvent', {type,...point,button:'left',buttons:type==='mousePressed'?1:0,clickCount:1})
+        // The first click unfolds; a second click opens that row's conversation.
+        await waitFor(() => page.webContents.executeJavaScript('!document.querySelector(".minduck-outputs").classList.contains("is-transitioning")'), Boolean, 'card unfolding completes before routing')
+        const row=await page.webContents.executeJavaScript(`(() => {const r=document.querySelector('[data-conversation-id="conv-${i}"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`)
+        for (const type of ['mousePressed','mouseReleased']) await page.webContents.debugger.sendCommand(
+          'Input.dispatchMouseEvent', {type,...row,button:'left',buttons:type==='mousePressed'?1:0,clickCount:1})
         assert.equal(await page.webContents.executeJavaScript(`getComputedStyle(document.querySelector('.minduck-output')).boxShadow`),hover.shadow,
           'click/focus does not introduce an orange card outline')
       }
@@ -356,10 +380,12 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
     const scrolling = await page.webContents.executeJavaScript(`(() => {
       const el=document.querySelector('.minduck-outputs'), r=el.getBoundingClientRect();
       panelProbe.cursor({x:r.x+10, y:r.y+10});
-      return { count:el.children.length, height:el.clientHeight, content:el.scrollHeight,
+      return { count:el.querySelectorAll('.minduck-output').length, visible:el.querySelectorAll('.minduck-output:not([hidden])').length,
+        height:el.clientHeight, content:el.scrollHeight,
         x:r.x+40, y:r.y+r.height/2, interactive:panelProbe.interactive, top:r.y, bottom:r.bottom };
     })()`)
-    assert.equal(scrolling.count, 3, 'twelve queued conversations render one card and two compact back layers')
+    assert.equal(scrolling.count, 12, 'all conversations retain their row state for expansion')
+    assert.equal(scrolling.visible, 1, 'folded conversations expose one card and two compact back layers')
     assert.ok(scrolling.content <= scrolling.height && scrolling.top >= 15.99 && scrolling.bottom <= 600,
       JSON.stringify(scrolling))
     assert.equal(scrolling.interactive, true, 'the single capsule retains native input')
@@ -384,9 +410,10 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
         url:location.href, panelsVisible:!document.querySelector('.minduck-actions').hidden,
         actions:panelProbe.actions };
     })()`)
-    assert.ok(activated.bubbleHidden && activated.menuHidden && activated.panelsVisible, 'Matter controls do not open upstream chat/menu')
+    assert.ok(activated.bubbleHidden && !activated.menuHidden && activated.panelsVisible, 'right-click opens only the compact pet menu')
     assert.deepEqual(activated.actions, [], 'context menu does not dispatch a Matter action')
     assert.equal(activated.url, url)
+    await page.webContents.executeJavaScript('dispatchEvent(new Event("blur"))')
 
     // Task data is injected only in the test preview; production has no placeholder task.
     console.log('Panel probe: capturing previews')
@@ -408,6 +435,8 @@ module.exports = async function probePanels(url, waitFor, coreOrigin) {
     await require('./companion-quick-chat-ui-probe.cjs')(page, waitFor)
     await require('./companion-running-ui-probe.cjs')(page, waitFor)
     await require('./companion-qa-ui-probe.cjs')(page, waitFor)
+    await require('./companion-task-list-probe.cjs')(page, waitFor)
+    await require('./companion-context-menu-probe.cjs')(page, waitFor)
     console.log('PASS: collapsed handle/body hover, keyboard, diagonal paths, native polling, real clicks and outside click-through; notification arrow/bell/badge, task-only output, 4 widths × light/dark and original figure')
   } catch(error) {
     if(!page.isDestroyed())fs.writeFileSync(path.resolve(__dirname,'../build/companion-panel-failure.png'),(await page.webContents.capturePage()).toPNG())
