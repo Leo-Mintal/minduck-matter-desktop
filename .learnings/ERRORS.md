@@ -3,7 +3,8 @@
 ## 2026-11-26 - Invite console deploy script
 
 - An absolute-path patch lookup failed to resolve the existing invite-console README. Re-applied the same change using the repository-relative path; no project content was lost.
-- The first remote deployment uploaded the page, then the configured Nginx reload failed because `sudo nginx` was not found. Updated the script to detect Nginx/Caddy and a known systemd service, and added an explicit override for other serving units. Remote service identity still needs confirmation if auto-detection finds none.
+- The first remote deployment uploaded the page, then the configured Nginx reload failed because `sudo nginx` was not found. Added Nginx/Caddy/systemd detection, exact Docker bind-mount matching, and explicit service/container overrides. Remote container identity remains unknown until the server's mount list is available.
+- The first auto-detection retry passed its restart script on SSH stdin with one `-t`; OpenSSH declined PTY allocation because the local stdin was piped, and the server reported no interactive sudo context. Changed restart delivery to a quoted remote `bash -c` command with `-tt` so sudo can prompt on the remote terminal.
 
 ## 2026-11-23 - Chat attachment uploads with active event streams
 

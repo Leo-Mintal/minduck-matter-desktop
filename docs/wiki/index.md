@@ -28,7 +28,7 @@
 
 ## Recent Updates
 
-- 2026-11-26：新增 `scripts/deploy-invite-console.sh`，通过 SSH 更新发码页静态文件并生成 API 模式配置；默认部署到 `192.168.11.70:/home/yogee/matter-invite-console`，自动检测 Nginx、Caddy 或指定 systemd 服务重载/重启。首次部署前需配置同源 API 反代。
+- 2026-11-26：新增 `scripts/deploy-invite-console.sh`，通过 SSH 更新发码页静态文件并生成 API 模式配置；默认部署到 `192.168.11.70:/home/yogee/matter-invite-console`，自动检测 Nginx、Caddy、systemd 服务或绑定目标目录的 Docker 容器重载/重启。首次部署前需配置同源 API 反代。
 
 - 2026-11-26：邀请码页记录列表新增 5 秒自动刷新，页面重新显示时立即同步，隐藏时暂停；保留当前筛选、搜索和已加载分页范围。独立 H5 README 补充 HTTPS 静态站点与同源 API 反代部署步骤。
 
