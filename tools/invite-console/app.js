@@ -72,6 +72,15 @@
     await refreshHistory();
   }
 
+  function refreshVisibleHistory() {
+    if (!state.authenticated || state.busy || state.loading || document.visibilityState !== 'visible') return;
+    void refreshHistory(false, true);
+  }
+
+  window.setInterval(refreshVisibleHistory, 5000);
+  window.addEventListener('focus', refreshVisibleHistory);
+  document.addEventListener('visibilitychange', refreshVisibleHistory);
+
   $('password-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     if ($('login-button').disabled) return;
@@ -293,18 +302,29 @@
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }
 
-  async function refreshHistory(append = false) {
+  async function refreshHistory(append = false, refreshLoaded = false) {
     if (!adapter || state.busy || !state.authenticated) return;
     const generation = ++listGeneration;
+    const loadedCount = state.items.length;
     state.loading = true;
     state.listError = false;
     $('history-error').hidden = true;
     renderHistory();
     try {
-      const page = await adapter.listPage({ status: state.filter, query: state.query, cursor: append ? state.nextCursor : '' });
+      let page = await adapter.listPage({ status: state.filter, query: state.query, cursor: append ? state.nextCursor : '' });
       if (generation !== listGeneration) return;
-      state.items = append ? [...state.items, ...page.items.filter((item) => !state.items.some((entry) => entry.id === item.id))] : page.items;
-      state.nextCursor = page.nextCursor;
+      const refreshedItems = [...page.items];
+      let nextCursor = page.nextCursor;
+      while (refreshLoaded && refreshedItems.length < loadedCount && nextCursor) {
+        page = await adapter.listPage({ status: state.filter, query: state.query, cursor: nextCursor });
+        if (generation !== listGeneration) return;
+        refreshedItems.push(...page.items.filter((item) => !refreshedItems.some((entry) => entry.id === item.id)));
+        nextCursor = page.nextCursor;
+      }
+      state.items = append
+        ? [...state.items, ...page.items.filter((item) => !state.items.some((entry) => entry.id === item.id))]
+        : refreshedItems;
+      state.nextCursor = nextCursor;
       state.ready = true;
       if (state.current) {
         const currentPage = await adapter.listPage({ status: 'all', query: state.current.code });

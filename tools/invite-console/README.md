@@ -36,6 +36,54 @@ INVITE_API_ORIGIN=http://127.0.0.1:8080 node tools/invite-console/serve.cjs
 
 修复后的摇码请求编号优先使用 `crypto.randomUUID()`，不可用时回退到 `crypto.getRandomValues()` 生成 UUID；后者在普通 HTTP 页面仍可用。因此 LAN HTTP 不会因为浏览器缺少 `randomUUID` 而无法发码，刷新/超时重试也继续复用同一个请求编号。H5 通过相对路径请求同源 API，反代在服务器内连接 `127.0.0.1:8080`，无需另配 CORS。手机浏览器不要直接请求 `127.0.0.1:8080`，该地址指向手机自己。`navigator.clipboard` 在 HTTP 下通常不可用，复制会使用兼容回退；不同手机浏览器可能要求用户确认或手动复制。
 
+### 测试/正式站点部署
+
+发码页是独立静态页面，不需要构建。把整个 `tools/invite-console/` 目录上传到 Nginx 等静态站点目录，并将部署副本中的 `config.js` 改为 API 模式：
+
+```js
+window.InviteConsoleConfig = Object.freeze({
+  mode: 'api',
+  apiBasePath: '/api/desktop-access/invites',
+});
+```
+
+让页面和 `/api/desktop-access/invites` 使用同一个 HTTPS 域名。Nginx 示例配置如下，将 `server_name`、证书路径和 API 上游地址替换为目标环境的实际值：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name invite.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/invite.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/invite.example.com/privkey.pem;
+    root /srv/minduck/invite-console;
+    index index.html;
+
+    location = /config.js {
+        default_type application/javascript;
+        add_header Cache-Control no-store;
+        return 200 "window.InviteConsoleConfig = Object.freeze({ mode: 'api', apiBasePath: '/api/desktop-access/invites' });";
+    }
+
+    location ^~ /api/desktop-access/invites {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+```
+
+Nginx 默认转发 Cookie、`Origin`、`X-Invite-Console`、`Idempotency-Key` 和查询字符串；`Host` 与 HTTPS 协议信息按上例显式传递。若 API 不在同一台服务器，将 `proxy_pass` 上游改为 API 内网地址。反向代理到 API 的路径必须原样保留，不能剥掉 `/api/desktop-access/invites` 前缀。
+
+部署前先在目标后端应用 138、139 数据库迁移，配置管理员密码、Redis、数据库和持久化邀请码存储密钥，再部署支持独立发码会话接口的 API。确认 API 经 HTTPS 页面域名同源代理可响应后，再开放页面地址。更新静态文件后执行 `nginx -t` 和 `nginx -s reload`，浏览器打开 `https://invite.example.com/` 验证登录、发码、已使用状态刷新、备注及作废/吊销。发码页没有直接访问 API 的跨域配置，也不能在生产部署中保留 `mode: 'demo'`。
+
+页面每 5 秒刷新一次当前可见的记录列表，切回页面时立即同步；自动刷新会沿用当前状态筛选、搜索条件及已加载的分页范围。隐藏页面时暂停轮询。
+
 上线前仍要先部署后端分支、应用 138/139 迁移，设置 `MATTER_DESKTOP_ACCESS=on`、`PUBLIC_API_BASE_URL=http://192.168.11.70:8080`、两把独立持久化的 32 字节邀请码存储密钥，以及 `MATTER_DESKTOP_INVITE_ADMIN_PASSWORD`。邀请码模块默认复用 `PUBLIC_API_BASE_URL`，自动去除末尾 `/`；`MATTER_DESKTOP_ACCESS_ORIGIN` 可留空，仅需独立覆盖时填写无末尾 `/` 的精确 origin。后端须从服务端环境读取数据库/Redis，不应把数据库地址、邀请码加密密钥放入静态文件。最终签名地址必须是客户端实际访问的 API origin，不含路径、查询或 fragment；若页面使用独立端口，不要误填页面端口。
 
 **安全边界：**发码、查询、备注、作废和吊销均由服务端校验密码会话，不能通过绕过页面直接匿名调用。测试服内网 HTTP 可使用，但不能加密网络传输；手机在外网访问使用正式 HTTPS 站点。当前 `/api/desktop-access/policy` 为 404 时必须先部署兼容后端，H5 自身不能补上缺失的 API。
@@ -50,6 +98,7 @@ INVITE_API_ORIGIN=http://127.0.0.1:8080 node tools/invite-console/serve.cjs
 - 浅色/深色主题切换，记住本地选择；默认跟随系统主题。
 - 一键复制，剪贴板不可用时提供兼容复制/选中文本。
 - 发码记录、状态筛选、邀请码与备注的模糊搜索、刷新、作废/吊销前确认。输入任意连续片段即可匹配，不区分英文字母大小写；“作废／吊销”为红色胶囊按钮，手机保留可点击尺寸。
+- 当前筛选与搜索结果每 5 秒自动同步一次，切回页面时立即更新，并暂停隐藏页面的轮询。
 - 点击邀请码下方的“添加备注”或已有备注，可添加、编辑、清空最多 200 个 Unicode 字符的备注。所有状态均可备注，真实模式保存到当前后端数据库，刷新后保留；只改备注，不改变邀请码或设备状态。手机保持原四列表格，长备注单行截断，点击查看全文。
 - 默认“当前”隐藏已作废邀请码和过期设备资格；“已使用”仅显示仍有效的设备，“已作废”集中显示两种失效记录，分别标注“已作废”和“已过期”。未使用码提供“作废”，已使用码提供“吊销”，操作成功后刷新列表补齐当前页。
 - 吊销不删除本机钥匙串，而是让服务端资格过期；卸载重装不能自行恢复，但允许同一设备密钥输入一枚新的有效邀请码重新激活。原邀请码始终不能再使用，二次确认说明需要新码。
