@@ -6,6 +6,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { createHash } = require('node:crypto')
 const { verifyUpdateArtifacts } = require('./macos-update-artifacts.cjs')
+const { readReleaseNotes } = require('./release-notes.cjs')
 const {
   LATEST_DMG_URL,
   LEGACY_UPDATE_DOWNLOAD_BASE_URL,
@@ -250,6 +251,7 @@ function publish(requestedVersion, { uploadOnly = false } = {}) {
   const remote = remoteLatestRelease()
   const version = selectReleaseVersion({ currentVersion: packageJson.version, latestVersion: remote.version,
     requestedVersion, uploadOnly })
+  if (!uploadOnly) readReleaseNotes(path.join(PROJECT_DIR, 'CHANGELOG.md'), version)
   console.log(`准备${uploadOnly ? '上传' : '发布'} ${version}（本地 ${packageJson.version}，线上 ${remote.version}）`)
   const remoteTarget = `${REMOTE_USER}@${REMOTE_HOST}`
   const ssh = openReleaseSSH(remoteTarget)

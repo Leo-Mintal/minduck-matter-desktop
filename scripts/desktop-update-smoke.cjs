@@ -20,7 +20,8 @@ const version = require('../package.json').version
 const nextVersion = version.replace(/\d+$/, value => String(Number(value) + 1))
 const filename = `MinduckMatter-${nextVersion}-arm64.zip`
 const bytes = crypto.randomBytes(128 * 1024)
-const info = { version: nextVersion, files: [{ url: filename, size: bytes.length,
+const releaseNotes = '- 新增：更新说明。\n- 修复：桌宠点击抖动。'
+const info = { version: nextVersion, releaseNotes, files: [{ url: filename, size: bytes.length,
   sha512: crypto.createHash('sha512').update(bytes).digest('base64') }] }
 const logger = { info() {}, warn() {}, error() {}, debug() {} }
 const server = http.createServer((request, response) => {
@@ -72,10 +73,15 @@ async function verifyDownload(mode) {
   updater.setFeedURL({ provider: 'generic', url: `http://127.0.0.1:${server.address().port}/${mode}/` })
   updater.autoDownload = false; updater.autoInstallOnAppQuit = false
   updater.disableDifferentialDownload = true; updater.logger = logger
+  const dialogs = []
   const controller = createDesktopUpdater({ updater, nativeUpdater: native, currentVersion: version, logger,
-    showDialog: async options => ({ response: options.defaultId ?? 0 }), prepareToQuit: async () => lifecycle.push('stop') })
+    showDialog: async options => { dialogs.push(options); return { response: options.defaultId ?? 0 } },
+    prepareToQuit: async () => lifecycle.push('stop') })
   try {
     await controller.run()
+    const confirmation = dialogs.find(item => item.title === '发现新版本')
+    assert.ok(confirmation.detail.includes(releaseNotes), 'real HTTP feed notes reach the update dialog')
+    assert.equal(confirmation.defaultId, 0)
     if (mode === 'corrupt') {
       assert.equal(controller.snapshot().phase, 'error')
       assert.deepEqual(lifecycle, [], 'checksum failure never reaches native installation or child shutdown')

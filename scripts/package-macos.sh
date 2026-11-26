@@ -78,6 +78,11 @@ if [[ "${MINDUCK_DESKTOP_ACCESS_REQUIRED:-0}" == "1" && -z "$activation_profile"
 fi
 artifact="MinduckMatter-${version}-arm64.dmg"
 update_archive="MinduckMatter-${version}-arm64.zip"
+release_notes_file=""
+if [[ -z "$test_build_name" ]]; then
+  release_notes_file="$stage_dir/release-notes.md"
+  node "$script_dir/release-notes.cjs" "$project_dir/CHANGELOG.md" "$version" > "$release_notes_file"
+fi
 sign_release="${MINDUCK_MACOS_SIGN:-1}"
 if [[ -n "$activation_profile" && "$sign_release" != "1" ]]; then
   echo "A desktop activation provisioning profile requires a signed macOS build." >&2
@@ -284,7 +289,11 @@ buildBlockMap(file, 'gzip', `${file}.blockmap`).then(({ size }) => {
 NODE
 fi
 
-node "$script_dir/macos-update-artifacts.cjs" "$stage_dir" "$version"
+node "$script_dir/macos-update-artifacts.cjs" "$stage_dir" "$version" "${release_notes_file:-}"
+
+if [[ -n "${release_notes_file:-}" ]]; then
+  mv "$release_notes_file" "$metadata_dir/release-notes.md"
+fi
 
 mv "$stage_dir/$artifact" "$release_dir/$artifact"
 mv "$stage_dir/$artifact.blockmap" "$metadata_dir/$artifact.blockmap"

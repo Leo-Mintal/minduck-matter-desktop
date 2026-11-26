@@ -70,6 +70,35 @@ test('default confirmation offers only in-app update and downloads without openi
   assert.equal(f.controller.snapshot().phase, 'installing')
 })
 
+test('the update dialog shows the selected version notes and clears them for a later note-less release', async () => {
+  const f = fixture({ showDialog: async options => { f.dialogs.push(options); return { response: 1 } } })
+  const notes = '- 新增：更新说明。\n- 修复：桌宠点击抖动。'
+  f.updater.checkForUpdates = async () => ({ isUpdateAvailable: true, updateInfo: { ...updateInfo(), releaseNotes: notes } })
+  await f.controller.check()
+  assert.deepEqual(f.dialogs, [], 'silent checks never prompt')
+  await f.controller.run()
+  assert.equal(f.dialogs[0].detail, `本次更新：\n${notes}\n\n将在应用内下载更新，完成校验后重启安装。`)
+  assert.equal(f.dialogs[0].defaultId, 0)
+  f.updater.checkForUpdates = async () => ({ isUpdateAvailable: true, updateInfo: updateInfo('0.1.9') })
+  await f.controller.check()
+  assert.equal(f.controller.snapshot().releaseNotes, '')
+})
+
+test('missing or malformed release notes keep the existing update flow and long notes are bounded', async () => {
+  for (const releaseNotes of [undefined, null, 42, {}, [], ' ']) {
+    const f = fixture()
+    f.updater.checkForUpdates = async () => ({ isUpdateAvailable: true, updateInfo: { ...updateInfo(), releaseNotes } })
+    await f.controller.run()
+    assert.equal(f.dialogs[0].detail, '将在应用内下载更新，完成校验后重启安装。')
+    assert.equal(f.controller.snapshot().phase, 'installing')
+  }
+  const f = fixture()
+  f.updater.checkForUpdates = async () => ({ isUpdateAvailable: true,
+    updateInfo: { ...updateInfo(), releaseNotes: 'x'.repeat(3000) } })
+  await f.controller.check()
+  assert.equal(f.controller.snapshot().releaseNotes.length, 2000)
+})
+
 test('one explicit in-app update downloads, verifies natively, stops children, then installs once', async () => {
   const f = fixture()
   const first = f.controller.run()

@@ -64,7 +64,7 @@ function prepareNativeUpdate(nativeUpdater, timeoutMs = NATIVE_PREPARE_TIMEOUT_M
 function createDesktopUpdater(options) {
   const { updater, nativeUpdater, unavailableReason, currentVersion, showDialog,
     onState = () => {}, hasActiveTasks = () => false, prepareToQuit = async () => {}, logger = console } = options
-  let state = { phase: 'idle', checking: false, available: false, error: false, percent: 0 }
+  let state = { phase: 'idle', checking: false, available: false, error: false, percent: 0, releaseNotes: '' }
   let checking, action, nativeReady = false
   const publish = (patch) => { state = { ...state, ...patch }; onState({ ...state }); return { ...state } }
   const fail = (error) => {
@@ -93,7 +93,9 @@ function createDesktopUpdater(options) {
           && compareVersions(result.updateInfo.version, currentVersion) > 0
         if (available) validateUpdateInfo(result.updateInfo)
         return publish({ phase: available ? 'available' : 'idle', checking: false, available,
-          version: available ? result.updateInfo.version : '', error: false })
+          version: available ? result.updateInfo.version : '', error: false,
+          releaseNotes: available && typeof result.updateInfo.releaseNotes === 'string'
+            ? result.updateInfo.releaseNotes.trim().slice(0, 2000) : '' })
       } catch (error) { return fail(error) }
       finally { checking = undefined }
     })()
@@ -137,7 +139,8 @@ function createDesktopUpdater(options) {
     }
     const confirmation = await showDialog({ type: 'info', title: '发现新版本',
       message: `发现新版本 ${state.version}`,
-      detail: '将在应用内下载更新，完成校验后重启安装。',
+      detail: (state.releaseNotes ? `本次更新：\n${state.releaseNotes}\n\n` : '')
+        + '将在应用内下载更新，完成校验后重启安装。',
       buttons: ['应用内更新并重启', '稍后'], defaultId: 0, cancelId: 1, noLink: true })
     if (confirmation.response !== 0) return
     nativeReady = false

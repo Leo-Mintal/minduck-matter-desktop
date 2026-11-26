@@ -14,10 +14,14 @@ test('final manifest covers final stapled DMG bytes and the unchanged update ZIP
   fs.writeFileSync(path.join(root, dmg), 'final stapled dmg')
   const manifest = path.join(root, 'latest-mac.yml')
   fs.writeFileSync(manifest, JSON.stringify({ version, files: [], releaseDate: '2026-11-12T00:00:00Z' }))
-  refreshUpdateManifest(root, version)
+  const notes = '- 新增：更新说明。\n- 修复：桌宠点击抖动。'
+  refreshUpdateManifest(root, version, notes)
   const info = readUpdateManifest(manifest)
   assert.equal(info.path, zip)
   assert.equal(info.releaseDate, '2026-11-12T00:00:00Z')
+  assert.equal(info.releaseNotes, notes)
+  refreshUpdateManifest(root, version)
+  assert.equal(readUpdateManifest(manifest).releaseNotes, notes, 'refreshing hashes preserves the frozen version notes')
   for (const entry of info.files) {
     const bytes = fs.readFileSync(path.join(root, entry.url))
     assert.equal(entry.sha512, crypto.createHash('sha512').update(bytes).digest('base64'))

@@ -1775,3 +1775,7 @@ Require exactly one standalone `.minduck-content` rule, validate its padding and
 - The abandoned no-reaction probe sampled an existing startup happy face, and its first focused setup sent `/api/config` to the pet-page port rather than Core. Those fixtures were removed with the superseded interpretation. Current regressions retain all native click feedback and measure actual body x against its unshaken position. No user profile or installed application was changed.
 - The new native position assertion initially compared raw model x to the SVG transform without the kit's existing `f()` formatter, which rounds to 0.1px. Compare the rendered translation to that documented rounded coordinate, with only a 0.001px SVG numeric tolerance; the former 1.4px shake still fails the regression. A read-only lookup also guessed a nonexistent `kit/math.js`; the formatter is exported directly from `kit/body.js`.
 - Resolved: the narrowed regression failed only on actual lateral shaking before the fix; all five focused tests, all 309 unit tests, the real Suit Duck position probe and full companion regression pass. Native click event/face/sound assertions remain intact. No package or installed app was changed.
+
+## 2026-11-26 - Release-notes implementation
+
+- A read-only command used a guessed `scripts/update-artifacts.test.cjs` path after listing the actual file. The existing test is `scripts/macos-update-artifacts.test.cjs`; subsequent reads and focused tests used that exact inventory entry. No source or artifact was affected by the failed lookup.

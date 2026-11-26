@@ -90,16 +90,25 @@ test('packaging output keeps installers, sidecars and manifests inside their own
       fs.writeFileSync(path.join(stage, name), `${name} fixture`)
     }
     fs.writeFileSync(path.join(stage, 'latest-mac.yml'), JSON.stringify({ version, files: [] }))
+    const notes = testBuild ? '' : `- 新增：版本 ${version} 的更新说明。`
+    const notesFile = notes ? path.join(stage, 'release-notes.md') : ''
+    if (notesFile) fs.writeFileSync(notesFile, notes + '\n')
     const result = spawnSync('bash', ['-c', outputScript], { encoding: 'utf8', env: {
       ...process.env, project_dir: project, version, stage_dir: stage, script_dir: __dirname,
       artifact: dmg, update_archive: zip, sign_release: '0',
       MINDUCK_MACOS_TEST_BUILD_NAME: testBuild,
+      release_notes_file: notesFile,
     } })
     assert.equal(result.status, 0, result.stderr)
     const files = localReleasePaths(version, path.join(project, 'release'))
     const directory = testBuild ? path.join(files.directory, 'tests', testBuild) : files.directory
     const manifest = path.join(directory, 'metadata/latest-mac.yml')
-    assert.equal(verifyUpdateArtifacts(directory, manifest, version).version, version)
+    const info = verifyUpdateArtifacts(directory, manifest, version)
+    assert.equal(info.version, version)
+    assert.equal(info.releaseNotes, notes || undefined)
+    const archivedNotes = path.join(directory, 'metadata/release-notes.md')
+    assert.equal(fs.existsSync(archivedNotes), Boolean(notes))
+    if (notes) assert.equal(fs.readFileSync(archivedNotes, 'utf8').trim(), notes)
     for (const name of [dmg, zip]) {
       assert.equal(fs.readFileSync(path.join(directory, name), 'utf8'), `${name} fixture`)
       const metadata = path.join(directory, 'metadata')

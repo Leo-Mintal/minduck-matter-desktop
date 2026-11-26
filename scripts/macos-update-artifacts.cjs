@@ -22,7 +22,7 @@ function verifyUpdateArtifacts(directory, manifestFile, version) {
   return info
 }
 
-function refreshUpdateManifest(directory, version) {
+function refreshUpdateManifest(directory, version, releaseNotes) {
   parseVersion(version)
   const manifestFile = path.join(directory, 'latest-mac.yml')
   const original = yaml.load(fs.readFileSync(manifestFile, 'utf8'))
@@ -34,14 +34,15 @@ function refreshUpdateManifest(directory, version) {
     return { ...generated, url: name,
       sha512: crypto.createHash('sha512').update(bytes).digest('base64'), size: bytes.length }
   })
-  const info = validateUpdateInfo({ ...original, files, path: files[0].url, sha512: files[0].sha512 })
+  const info = validateUpdateInfo({ ...original, ...(releaseNotes === undefined ? {} : { releaseNotes }),
+    files, path: files[0].url, sha512: files[0].sha512 })
   fs.writeFileSync(manifestFile, yaml.dump(info, { lineWidth: -1 }))
   return info
 }
 
 if (require.main === module) {
-  const [directory, version] = process.argv.slice(2)
-  refreshUpdateManifest(directory, version)
+  const [directory, version, notesFile] = process.argv.slice(2)
+  refreshUpdateManifest(directory, version, notesFile ? fs.readFileSync(notesFile, 'utf8').trim() : undefined)
   console.log('Refreshed macOS update manifest for final ZIP/DMG bytes.')
 }
 
