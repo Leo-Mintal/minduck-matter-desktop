@@ -5,6 +5,7 @@
 - An absolute-path patch lookup failed to resolve the existing invite-console README. Re-applied the same change using the repository-relative path; no project content was lost.
 - The first remote deployment uploaded the page, then the configured Nginx reload failed because `sudo nginx` was not found. Added Nginx/Caddy/systemd detection, exact Docker bind-mount matching, and explicit service/container overrides. Remote container identity remains unknown until the server's mount list is available.
 - The first auto-detection retry passed its restart script on SSH stdin with one `-t`; OpenSSH declined PTY allocation because the local stdin was piped, and the server reported no interactive sudo context. Changed restart delivery to a quoted remote `bash -c` command with `-tt` so sudo can prompt on the remote terminal.
+- macOS Bash 3.2 expanded a remote restart-script heredoc while building the SSH command, causing `container_name: unbound variable`. Moved the remote logic into `scripts/deploy-invite-console-remote.sh` and send its base64-encoded contents as the SSH command, avoiding local heredoc expansion and preserving the remote TTY.
 
 ## 2026-11-23 - Chat attachment uploads with active event streams
 
