@@ -3,6 +3,7 @@
 ## 2026-11-26 - Invite console deploy script
 
 - An absolute-path patch lookup failed to resolve the existing invite-console README. Re-applied the same change using the repository-relative path; no project content was lost.
+- The first remote deployment uploaded the page, then the configured Nginx reload failed because `sudo nginx` was not found. Updated the script to detect Nginx/Caddy and a known systemd service, and added an explicit override for other serving units. Remote service identity still needs confirmation if auto-detection finds none.
 
 ## 2026-11-23 - Chat attachment uploads with active event streams
 
