@@ -1,5 +1,9 @@
 # Unexpected Errors
 
+## 2026-11-26 - Invite console deploy script
+
+- An absolute-path patch lookup failed to resolve the existing invite-console README. Re-applied the same change using the repository-relative path; no project content was lost.
+
 ## 2026-11-23 - Chat attachment uploads with active event streams
 
 - A file-picker upload succeeded against an idle HTTP/1.1 fixture but timed out with six simultaneous foreground and companion subscriptions. Closing conversations in isolation released their backend connections. Keep subscriptions open for the upload regression, verify the received bytes, then wait for the backend close events during cleanup.
