@@ -134,6 +134,22 @@ async function run() {
     await new Promise(resolve => setTimeout(resolve, 32))
     await matter.executeJavaScript('document.documentElement.getBoundingClientRect().width')
   }
+  const capture = async name => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const image = await matter.capturePage()
+        assert.ok(!image.isEmpty(), `${name} must contain a rendered frame`)
+        fs.writeFileSync(path.join(temporary, `${name}.png`), image.toPNG())
+        return
+      } catch (error) {
+        // Chromium's compositor may still hold the frame from before a native resize.
+        if (error.message !== 'UnknownVizError' || attempt === 4) {
+          throw new Error(`Screenshot failed: ${name}`, { cause: error })
+        }
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+    }
+  }
   const settle = async () => {
     // Reapply after native view visibility changes so occlusion cannot freeze CSS transitions.
     matter.setBackgroundThrottling(false)
@@ -178,7 +194,7 @@ async function run() {
       await frame()
       const errors = await matter.executeJavaScript(`JSON.parse(localStorage.getItem('matter.render-errors.v1') || '[]').map(({message, componentStack}) => ({message,componentStack}))`)
       assert.deepEqual(errors, [], 'preview pages must render successfully')
-      fs.writeFileSync(path.join(temporary, `${name}.png`), (await matter.capturePage()).toPNG())
+      await capture(name)
     }
     await capturePreview('preview-home')
     await matter.executeJavaScript('document.querySelector(".side-foot").click()')
@@ -292,7 +308,7 @@ async function run() {
     const conversationColor = await matter.executeJavaScript(`getComputedStyle(document.querySelector('.app')).backgroundColor`)
     assert.equal(await newTab.executeJavaScript(`getComputedStyle(document.querySelector('.browser-new-tab')).backgroundColor`),
       conversationColor, 'browser start page matches the actual conversation background')
-    fs.writeFileSync(path.join(temporary, `browser-open-${theme}.png`), (await matter.capturePage()).toPNG())
+    await capture(`browser-open-${theme}`)
   }
   await chrome.executeJavaScript('minduckBrowserShell.command({type:"close-panel"})')
   await panelSettled(false)
@@ -304,8 +320,13 @@ async function run() {
   await panelSettled(false)
   assert.equal((await browserState()).activeTabId, opened.activeTabId, 'manual collapse retains the tab without reopening it')
   window.setMinimumSize(0, 0)
+  const { rightPanelLayout, workspaceFrameBounds } = require('../src/rightPanelLayout.cjs')
   for (const width of [375, 768, 1024, 1440]) for (const theme of ['light', 'dark']) {
     window.setContentSize(width, 800)
+    const expectedWidth = workspaceFrameBounds(rightPanelLayout(width, 800, false).matter, true).width
+    await waitFor(async () => ({ native: matterFrame.getBounds().width,
+      viewport: await matter.executeJavaScript('innerWidth') }),
+    value => value.native === expectedWidth && value.viewport === expectedWidth, 'native and renderer resize settled')
     await matter.executeJavaScript(`document.documentElement.dataset.theme = '${theme}'`)
     await frame()
     await matter.executeJavaScript('document.querySelector(".side-foot").click()')
@@ -338,7 +359,7 @@ async function run() {
     await frame()
     if (width === 1440) {
       await settle()
-      fs.writeFileSync(path.join(temporary, `workspace-${theme}.png`), (await matter.capturePage()).toPNG())
+      await capture(`workspace-${theme}`)
     }
     await matter.executeJavaScript('document.body.click()')
     await waitFor(() => matter.executeJavaScript('!!document.querySelector(".acct-menu")'), value => !value, 'account menu closed')
@@ -348,7 +369,10 @@ async function run() {
     const r=document.querySelector('.desktop-workspace-navigation [aria-label=资产]').getBoundingClientRect();
     return {x:r.x+r.width/2,y:r.y+r.height/2};
   })()`)
+  window.focus()
+  matter.focus()
   matter.sendInputEvent({type:'mouseMove',x:2,y:2})
+  await frame()
   matter.sendInputEvent({type:'mouseMove',x:Math.round(tooltipAnchor.x),y:Math.round(tooltipAnchor.y)})
   await waitFor(() => matter.executeJavaScript('document.querySelector("[role=tooltip]")?.textContent'), value => value === '资产', 'shared tooltip')
   const tooltip = await matter.executeJavaScript(`(() => { const r = document.querySelector('[role=tooltip]').getBoundingClientRect();
@@ -368,7 +392,7 @@ async function run() {
   await waitFor(() => matter.executeJavaScript('location.pathname'), value => value === '/settings/acct', 'native menu opens real Web account settings')
   await waitFor(() => matter.executeJavaScript('document.querySelector(".account-page .account-name-input")?.value'),
     value => value === user.name, 'real Web account settings loads the signed-in user')
-  fs.writeFileSync(path.join(temporary, 'native-web-settings.png'), (await matter.capturePage()).toPNG())
+  await capture('native-web-settings')
   fs.writeFileSync(path.join(temporary, 'application-menu.json'), JSON.stringify(appMenu.map(item => ({
     label: item.label, role: item.role, accelerator: item.accelerator,
   })), null, 2) + '\n')
