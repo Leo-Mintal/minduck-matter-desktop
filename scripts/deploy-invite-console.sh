@@ -4,7 +4,7 @@ set -Eeuo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_dir="$repo_root/tools/invite-console"
 deploy_host="${INVITE_CONSOLE_SSH_HOST:-yogee@192.168.11.70}"
-remote_dir="${INVITE_CONSOLE_REMOTE_DIR:-/home/yogee/matter-invite-console}"
+remote_dir="${INVITE_CONSOLE_REMOTE_DIR:-/home/yogee/matter-invite-console/site}"
 ssh_port="${INVITE_CONSOLE_SSH_PORT:-22}"
 restart_service="${INVITE_CONSOLE_RESTART_SERVICE:-auto}"
 

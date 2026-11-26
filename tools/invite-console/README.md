@@ -84,7 +84,7 @@ Nginx 默认转发 Cookie、`Origin`、`X-Invite-Console`、`Idempotency-Key` �
 
 页面每 5 秒刷新一次当前可见的记录列表，切回页面时立即同步；自动刷新会沿用当前状态筛选、搜索条件及已加载的分页范围。隐藏页面时暂停轮询。
 
-客户端仓库提供重复部署脚本 `scripts/deploy-invite-console.sh`。默认通过 SSH 上传到 `yogee@192.168.11.70:/home/yogee/matter-invite-console`，生成 API 模式 `config.js` 并运行页面测试，然后检测 Nginx、Caddy、`matter-invite-console.service`，或绑定挂载该目录的运行中 Docker 容器并重载/重启。脚本只上传页面运行所需的 HTML、CSS、JavaScript 和图片/字体，不复制测试、README 或 Node 本地预览服务，也不会重启 Docker daemon。首次部署前，静态站点根目录必须已指向该目录，并已配置同源 API 反代；脚本不会改写站点配置。
+客户端仓库提供重复部署脚本 `scripts/deploy-invite-console.sh`。默认通过 SSH 上传到 `yogee@192.168.11.70:/home/yogee/matter-invite-console/site`，生成 API 模式 `config.js` 并运行页面测试，然后重启绑定该目录的运行中 Docker 容器。测试服已确认该目录映射到 Caddy 容器的 `/srv`，容器发布 4179 端口。其他环境仍会检测 Nginx、Caddy 或 systemd 服务。脚本只上传页面运行所需的 HTML、CSS、JavaScript 和图片/字体，不复制测试、README 或 Node 本地预览服务，也不会重启 Docker daemon。
 
 在客户端仓库根目录运行：
 
@@ -96,7 +96,7 @@ bash scripts/deploy-invite-console.sh
 
 ```sh
 INVITE_CONSOLE_SSH_HOST=yogee@192.168.11.70 \
-INVITE_CONSOLE_REMOTE_DIR=/home/yogee/matter-invite-console \
+INVITE_CONSOLE_REMOTE_DIR=/home/yogee/matter-invite-console/site \
 INVITE_CONSOLE_SSH_PORT=22 \
 bash scripts/deploy-invite-console.sh
 ```
