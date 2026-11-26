@@ -496,6 +496,12 @@
       "upstreamSha256": "f7e51fe0b3173f270b9c93dfddfda6b1dc6cad9366289052367ac1f143d26aba",
       "integratedSha256": "6d4c40eec5da26ab1969741b886d9a4189d1d83370ac628b38f1b7eed97057aa",
       "reason": "Add 4px vertical and 2px horizontal inset to the shared measured conversation content so ordinary, running and shadow-root QA/review views all gain the same extra space. Preserve 330px card width and include padding in scroll-height limits."
+    },
+    {
+      "file": "node_modules/cortico-world-desktop-pet/web/kit/body.js",
+      "upstreamSha256": "5a93f455c8877bc3b5a7cdc3bcf63f9d7a73505b202a697b937aef28eb554322",
+      "integratedSha256": "ac37907373889856c2283938a5e8e57ff083da15b728ed403c52ed744f8f5608",
+      "reason": "Suppress only lateral body shake attached to a click-selected expression; preserve native random faces, hop probability, spring feedback, sound, poke events, wake, drag and explicit action animations."
     }
   ]
 }

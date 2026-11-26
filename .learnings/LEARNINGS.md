@@ -167,3 +167,8 @@ The task list's top/bottom hints should appear only where additional content exi
 - Source: user_feedback
 - Related Files: vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-panels.css, vendor/coopanion/runtime/node_modules/cortico-world-desktop-pet/web/minduck-panels.js
 - Tags: companion, scroll, appearance, scope
+
+## [LRN-20261126-001] correction
+
+- 用户要求删除点击产生的“抖动动作”时，只调整该运动效果；不能一并关闭点击事件、随机表情或小跳。
+- 按实际渲染位移验证抖动，并保留原有点击反馈的正向断言。相关文件：`web/kit/body.js`、`scripts/companion-click.test.cjs`。

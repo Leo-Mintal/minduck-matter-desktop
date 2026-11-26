@@ -306,11 +306,21 @@ module.exports = async function probeSuitPose(url) {
     }
     layout = await tick(1)
     const tap = layout.hit[0]
-    await send({ t: 'pointer', type: 'down', p: { ...tap, t: 1000 } })
-    await send({ t: 'pointer', type: 'up', p: { ...tap, t: 1100 } })
-    layout = await tick(1)
-    assert.ok(['happy', 'wink', 'surprised', 'love', 'angry'].includes(layout.expression), 'native poke face')
-    assert.deepEqual((await measure()).flows, [], 'poke uses the procedural face')
+    await frame.executeJavaScript('window.pokeRandom = Math.random; Math.random = () => .99')
+    try {
+      await send({ t: 'pointer', type: 'down', p: { ...tap, t: 1000 } })
+      await send({ t: 'pointer', type: 'up', p: { ...tap, t: 1100 } })
+      for (let i = 0; i < 20; i++) {
+        layout = await tick(1)
+        assert.equal(layout.expression, 'angry', 'the original clicked face remains available')
+        const x = await frame.executeJavaScript("document.querySelector('svg.kit').children[1].transform.baseVal.getItem(0).matrix.e")
+        // The kit exports SVG translations to one decimal place; account for that formatting only.
+        const expectedX = Math.round(layout.x * 10) / 10
+        assert.ok(Math.abs(x - expectedX) < .001, 'click-selected face has no lateral shake: '
+          + JSON.stringify({ x, expectedX, modelX: layout.x }))
+      }
+      assert.deepEqual((await measure()).flows, [], 'poke uses the procedural face')
+    } finally { await frame.executeJavaScript('Math.random = pokeRandom; delete window.pokeRandom') }
     assert.equal(await frame.executeJavaScript("document.querySelectorAll('[data-minduck-thinking], [data-flow=think], [data-flow=flag], [data-flow=carry]').length"), 0)
     console.log('PASS: Suit Duck seven source actions, opaque boundaries, no hidden-body writes, idle frame-rate signal, continuous activity holds, both facings, host-only clock and drag recovery:', comparisons, 'property comparisons')
   } finally { page.destroy() }
